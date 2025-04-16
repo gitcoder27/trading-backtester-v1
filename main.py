@@ -7,7 +7,7 @@ import os
 import sys
 from backtester.data_loader import load_csv
 from backtester.engine import BacktestEngine
-from backtester.metrics import total_return, sharpe_ratio, max_drawdown, win_rate
+from backtester.metrics import total_return, sharpe_ratio, max_drawdown, win_rate, profit_factor, largest_winning_trade, largest_losing_trade, average_holding_time, max_consecutive_wins, max_consecutive_losses
 from backtester.reporting import plot_equity_curve, plot_trades_on_price, save_trade_log
 from strategies.ema10_scalper import EMA10ScalperStrategy
 
@@ -38,6 +38,13 @@ def main():
     print(f"Max Drawdown: {max_drawdown(equity_curve)*100:.2f}%")
     print(f"Win Rate: {win_rate(trade_log)*100:.2f}%")
     print(f"Total Trades: {len(trade_log)}")
+    print(f"Profit Factor: {profit_factor(trade_log):.2f}")
+    print(f"Largest Winning Trade: {largest_winning_trade(trade_log):.2f}")
+    print(f"Largest Losing Trade: {largest_losing_trade(trade_log):.2f}")
+    avg_hold = average_holding_time(trade_log)
+    print(f"Average Holding Time: {avg_hold:.2f} min" if avg_hold==avg_hold else "Average Holding Time: N/A")
+    print(f"Max Consecutive Wins: {max_consecutive_wins(trade_log)}")
+    print(f"Max Consecutive Losses: {max_consecutive_losses(trade_log)}")
 
     # Trade stats
     long_trades = trade_log[trade_log['direction'].str.lower().isin(['buy', 'long'])]
