@@ -34,13 +34,16 @@ def plot_trades_on_candlestick_plotly(data, trades, indicators=None, indicator_c
                 ))
     for _, trade in trades.iterrows():
         color = 'green' if trade['pnl'] > 0 else 'red'
+        trade_id_str = str(trade['trade_id']) if 'trade_id' in trade else str(_)
         fig.add_trace(go.Scatter(
             x=[trade['entry_time']],
             y=[trade['entry_price']],
             mode='markers',
             marker=dict(color=color, symbol='triangle-up', size=10),
             name='Entry' if trade['direction'].lower() == 'buy' else 'Short Entry',
-            showlegend=False
+            showlegend=False,
+            customdata=[[trade_id_str]],
+            hovertemplate='Entry<br>Time: %{x}<br>Price: %{y}<extra></extra>'
         ))
         fig.add_trace(go.Scatter(
             x=[trade['exit_time']],
@@ -48,7 +51,9 @@ def plot_trades_on_candlestick_plotly(data, trades, indicators=None, indicator_c
             mode='markers',
             marker=dict(color=color, symbol='x', size=10),
             name='Exit',
-            showlegend=False
+            showlegend=False,
+            customdata=[[trade_id_str]],
+            hovertemplate='Exit<br>Time: %{x}<br>Price: %{y}<extra></extra>'
         ))
         fig.add_trace(go.Scatter(
             x=[trade['entry_time'], trade['exit_time']],
@@ -56,7 +61,9 @@ def plot_trades_on_candlestick_plotly(data, trades, indicators=None, indicator_c
             mode='lines',
             line=dict(color=color, width=2, dash='dot'),
             name='Trade',
-            showlegend=False
+            showlegend=False,
+            customdata=[[trade_id_str], [trade_id_str]],
+            hovertemplate='Trade<br>Entry: %{x[0]}, Exit: %{x[1]}<extra></extra>'
         ))
     fig.update_layout(
         title=title,

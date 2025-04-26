@@ -31,11 +31,11 @@ class BacktestEngine:
         equity_curve = []
         last_signal = 0
 
-        for idx, row in df.iterrows():
-            signal = row['signal']
-            price = row['close']
-            # Reference indicator value for exit logic
-            ref = row[exit_col] if exit_col and exit_col in row else None
+        for row in df.itertuples(index=True):
+            idx = row.Index
+            signal = row.signal
+            price = row.close
+            ref = getattr(row, exit_col) if exit_col and hasattr(row, exit_col) else None
 
             # Entry logic
             if position is None:
@@ -44,7 +44,7 @@ class BacktestEngine:
                     entry_price = price
                     entry_idx = idx
                     trade = {
-                        'entry_time': row['timestamp'],
+                        'entry_time': row.timestamp,
                         'entry_price': price,
                         'direction': 'long',
                         'exit_time': None,
@@ -57,7 +57,7 @@ class BacktestEngine:
                     entry_price = price
                     entry_idx = idx
                     trade = {
-                        'entry_time': row['timestamp'],
+                        'entry_time': row.timestamp,
                         'entry_price': price,
                         'direction': 'short',
                         'exit_time': None,
@@ -72,11 +72,11 @@ class BacktestEngine:
                 exit_now, exit_reason = self.strategy.should_exit(position, row, entry_price)
                 if exit_now:
                     if position == 'long':
-                        trade['exit_time'] = row['timestamp']
+                        trade['exit_time'] = row.timestamp
                         trade['exit_price'] = price
                         trade['pnl'] = price - entry_price
                     else:
-                        trade['exit_time'] = row['timestamp']
+                        trade['exit_time'] = row.timestamp
                         trade['exit_price'] = price
                         trade['pnl'] = entry_price - price
                     trade['exit_reason'] = exit_reason
@@ -96,7 +96,7 @@ class BacktestEngine:
                                 entry_price = price
                                 entry_idx = idx
                                 trade = {
-                                    'entry_time': row['timestamp'],
+                                    'entry_time': row.timestamp,
                                     'entry_price': price,
                                     'direction': 'long',
                                     'exit_time': None,
@@ -109,7 +109,7 @@ class BacktestEngine:
                                 entry_price = price
                                 entry_idx = idx
                                 trade = {
-                                    'entry_time': row['timestamp'],
+                                    'entry_time': row.timestamp,
                                     'entry_price': price,
                                     'direction': 'short',
                                     'exit_time': None,
@@ -123,12 +123,12 @@ class BacktestEngine:
         # If trade is still open at the end, close at last price
         if position is not None and trade is not None:
             last_row = df.iloc[-1]
-            trade['exit_time'] = last_row['timestamp']
-            trade['exit_price'] = last_row['close']
+            trade['exit_time'] = last_row.timestamp
+            trade['exit_price'] = last_row.close
             if position == 'long':
-                trade['pnl'] = last_row['close'] - entry_price
+                trade['pnl'] = last_row.close - entry_price
             else:
-                trade['pnl'] = entry_price - last_row['close']
+                trade['pnl'] = entry_price - last_row.close
             trade['exit_reason'] = 'End of Data'
             trade_log.append(trade)
             equity += trade['pnl']

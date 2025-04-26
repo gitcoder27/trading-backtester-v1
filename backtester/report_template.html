@@ -1,0 +1,128 @@
+<!-- Jinja2 template for the backtest HTML report -->
+<html>
+<head>
+    <meta charset='utf-8'>
+    <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
+    <title>Backtest Report</title>
+    <style>
+        .trade-log-container { width: 100%; overflow-x: auto; margin: 0 auto 2em auto; box-sizing: border-box; }
+        .trade-log-table { width: 100%; border-collapse: collapse; font-family: 'Segoe UI', Arial, sans-serif; font-size: 15px; background: #23272e; color: #eaeaea; box-shadow: 0 2px 12px rgba(0,0,0,0.09); border-radius: 8px; overflow: hidden; }
+        .trade-log-table th, .trade-log-table td { padding: 0.6em 1em; text-align: center; }
+        .trade-log-table th { background: #2c313a; color: #ffd700; font-weight: 600; border-bottom: 2px solid #444; }
+        .trade-log-table tr:nth-child(even) { background: #262b33; }
+        .trade-log-table tr:nth-child(odd) { background: #23272e; }
+        .trade-log-table tr:hover { background: #39414f; color: #fff; cursor: pointer; }
+        tr.selected { background-color: #ffe066 !important; color: #23272e !important; }
+        @media (max-width: 700px) { .trade-log-table th, .trade-log-table td { font-size: 13px; padding: 0.4em 0.5em; } }
+    </style>
+</head>
+<body>
+<h1>Backtest Report</h1>
+<h2>Performance Metrics</h2>
+{{ metrics_table|safe }}
+<h2>Equity Curve</h2>
+{{ eq_div|safe }}
+<h2>Trades on Candlestick Chart</h2>
+{{ trade_div|safe }}
+<h2>Trade Log</h2>
+<div class="trade-log-container">
+<table class="trade-log-table" id="trade_log_table">
+    <thead>
+        <tr>
+        {% for col in trade_log_columns %}
+            <th>{{ col }}</th>
+        {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in trade_log %}
+        <tr data-tradeid="{{ row['trade_id'] }}">
+        {% for col in trade_log_columns %}
+            <td>{{ row[col] }}</td>
+        {% endfor %}
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+<script>
+(function() {
+    const rows = document.querySelectorAll('#trade_log_table tbody tr');
+    let lastSelected = null;
+    let lastTraces = [];
+    const chart = document.getElementById('trade_chart');
+    if (!chart) return;
+    const plotlyData = chart.data;
+    const tradeIdToTraces = {};
+    const traceOrigStyles = {};
+    plotlyData.forEach((trace, idx) => {
+        if (trace.customdata && trace.customdata.length > 0) {
+            const ids = Array.isArray(trace.customdata[0]) ? trace.customdata.map(cd => cd[0]) : trace.customdata;
+            ids.forEach(trade_id => {
+                if (trade_id !== undefined) {
+                    if (!tradeIdToTraces[trade_id]) tradeIdToTraces[trade_id] = [];
+                    tradeIdToTraces[trade_id].push(idx);
+                }
+            });
+            traceOrigStyles[idx] = {
+                marker: { size: trace.marker ? trace.marker.size : 10, color: trace.marker ? trace.marker.color : null },
+                line: { width: trace.line ? trace.line.width : 2, color: trace.line ? trace.line.color : null, dash: trace.line ? trace.line.dash : 'dot' }
+            };
+        }
+    });
+    function highlightTrade(trade_id) {
+        const highlightColor = '#FFD700';
+        // Restore previous highlights
+        if (lastTraces.length > 0) {
+            const sizes = [], colors = [], widths = [], lineColors = [], dashes = [];
+            lastTraces.forEach(idx => {
+                const orig = traceOrigStyles[idx];
+                sizes.push(orig.marker.size);
+                colors.push(orig.marker.color);
+                widths.push(orig.line.width);
+                lineColors.push(orig.line.color);
+                dashes.push(orig.line.dash);
+            });
+            Plotly.restyle(chart, {
+                'marker.size': sizes,
+                'marker.color': colors,
+                'line.width': widths,
+                'line.color': lineColors,
+                'line.dash': dashes
+            }, lastTraces);
+        }
+        // Highlight new selection
+        const newTraces = tradeIdToTraces[trade_id] || [];
+        if (newTraces.length > 0) {
+            const sizes = [], colors = [], widths = [], lineColors = [], dashes = [];
+            newTraces.forEach(idx => {
+                const orig = traceOrigStyles[idx];
+                sizes.push((orig.marker.size || 10) * 1.8);
+                colors.push(highlightColor);
+                widths.push((orig.line.width || 2) * 2.5);
+                lineColors.push(highlightColor);
+                dashes.push(orig.line.dash);
+            });
+            Plotly.restyle(chart, {
+                'marker.size': sizes,
+                'marker.color': colors,
+                'line.width': widths,
+                'line.color': lineColors,
+                'line.dash': dashes
+            }, newTraces);
+        }
+        lastTraces = newTraces;
+    }
+    rows.forEach(row => {
+        row.addEventListener('click', function() {
+            if (lastSelected) lastSelected.classList.remove('selected');
+            this.classList.add('selected');
+            lastSelected = this;
+            const trade_id = this.getAttribute('data-tradeid');
+            highlightTrade(trade_id);
+        });
+    });
+})();
+</script>
+</body>
+</html>

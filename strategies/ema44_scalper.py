@@ -8,8 +8,8 @@ from backtester.strategy_base import StrategyBase
 
 class EMA44ScalperStrategy(StrategyBase):
     def should_exit(self, position, row, entry_price):
-        price = row['close']
-        ema = row['ema']
+        price = row.close
+        ema = row.ema
         if position == 'long':
             if price < ema:
                 return True, 'EMA exit'

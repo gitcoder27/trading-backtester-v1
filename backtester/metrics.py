@@ -101,12 +101,13 @@ def max_consecutive_losses(trade_log):
     return _max_consecutive_count(loss_mask)
 
 def _max_consecutive_count(mask):
-    # Helper for counting max consecutive 1s in a Series
-    max_count = count = 0
-    for val in mask:
-        if val:
-            count += 1
-            max_count = max(max_count, count)
-        else:
-            count = 0
-    return max_count
+    # Vectorized helper for counting max consecutive 1s in a Series
+    # mask should be a pandas Series or 1D numpy array of 0/1
+    mask = pd.Series(mask)
+    if mask.empty:
+        return 0
+    # Find runs of 1s
+    is_one = mask == 1
+    group = (is_one != is_one.shift()).cumsum()
+    runs = is_one.groupby(group).sum()
+    return runs.max() if not runs.empty else 0
