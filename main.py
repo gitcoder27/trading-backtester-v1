@@ -9,6 +9,7 @@ from backtester.data_loader import load_csv
 from backtester.engine import BacktestEngine
 from backtester.metrics import total_return, sharpe_ratio, max_drawdown, win_rate, profit_factor, largest_winning_trade, largest_losing_trade, average_holding_time, max_consecutive_wins, max_consecutive_losses
 from backtester.reporting import plot_equity_curve, plot_trades_on_price, save_trade_log, generate_html_report
+from strategies.bbands_scalper import BBandsScalperStrategy
 from strategies.ema44_scalper import EMA44ScalperStrategy
 import argparse
 import pandas as pd
@@ -49,6 +50,7 @@ def main():
 
     # Initialize strategy
     strategy = EMA44ScalperStrategy()
+    # strategy = BBandsScalperStrategy()
 
     # Run backtest
     engine = BacktestEngine(data, strategy)
@@ -114,6 +116,8 @@ def main():
             'Winning Long Trades': len(win_long_trades),
             'Winning Short Trades': len(win_short_trades)
         }
+        # Attach indicator configuration for HTML report
+        results_metrics['indicator_cfg'] = strategy.indicator_config()
         os.makedirs("results", exist_ok=True)
         report_path = os.path.join("results","report.html")
         generate_html_report(equity_curve, data, trade_log, indicators, results_metrics, report_path)
@@ -124,9 +128,13 @@ def main():
         cmd = input("Enter command ([t]rades plot, [e]quity curve, [q]uit): ").strip().lower()
         if cmd == "t":
             from backtester.reporting import plot_trades_on_candlestick_plotly
-            plot_trades_on_candlestick_plotly(data, trade_log, indicators=indicators, title="Trades on Candlestick Chart")
+            plot_trades_on_candlestick_plotly(
+                data, trade_log, indicators=indicators, indicator_cfg=strategy.indicator_config(), title="Trades on Candlestick Chart"
+            )
         elif cmd == "e":
-            plot_equity_curve(equity_curve, trades=trade_log, indicators=indicators, title="EMA-10 Scalper Equity Curve", interactive=True)
+            plot_equity_curve(
+                equity_curve, trades=trade_log, indicators=indicators, title="EMA-10 Scalper Equity Curve", interactive=True
+            )
         elif cmd == "q":
             print("Exiting program.")
             sys.exit(0)

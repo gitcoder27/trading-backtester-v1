@@ -7,9 +7,41 @@ import pandas as pd
 from backtester.strategy_base import StrategyBase
 
 class EMA44ScalperStrategy(StrategyBase):
+    def should_exit(self, position, row, entry_price):
+        price = row['close']
+        ema = row['ema']
+        if position == 'long':
+            if price < ema:
+                return True, 'EMA exit'
+            elif price >= entry_price + 30:
+                return True, 'Target'
+            elif price <= entry_price - 20:
+                return True, 'Stop Loss'
+        elif position == 'short':
+            if price > ema:
+                return True, 'EMA exit'
+            elif price <= entry_price - 30:
+                return True, 'Target'
+            elif price >= entry_price + 20:
+                return True, 'Stop Loss'
+        return False, ''
     def __init__(self, params=None):
         super().__init__(params)
         self.ema_period = 44
+
+    def indicator_config(self):
+        """
+        Returns a list of indicator configs for plotting.
+        """
+        return [
+            {
+                "column": "ema",
+                "label": f"EMA({self.ema_period})",
+                "plot": True,
+                "color": "orange",
+                "type": "solid"
+            }
+        ]
 
     def generate_signals(self, data):
         """

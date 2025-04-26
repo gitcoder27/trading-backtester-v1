@@ -13,3 +13,11 @@ class StrategyBase:
         Must be implemented by all strategies.
         """
         raise NotImplementedError("generate_signals must be implemented by the strategy.")
+
+    def should_exit(self, position, row, entry_price):
+        """
+        Given current position ('long' or 'short'), current row, and entry price,
+        return (exit_now: bool, exit_reason: str) for this bar.
+        Must be implemented by all strategies.
+        """
+        raise NotImplementedError("should_exit must be implemented by the strategy.")

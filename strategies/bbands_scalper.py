@@ -2,10 +2,56 @@ from backtester.strategy_base import StrategyBase
 import pandas as pd
 
 class BBandsScalperStrategy(StrategyBase):
+    def should_exit(self, position, row, entry_price):
+        price = row['close']
+        mid = row['mid']
+        if position == 'long':
+            if price < mid:
+                return True, 'Mid exit'
+            elif price >= entry_price + 30:
+                return True, 'Target'
+            elif price <= entry_price - 20:
+                return True, 'Stop Loss'
+        elif position == 'short':
+            if price > mid:
+                return True, 'Mid exit'
+            elif price <= entry_price - 30:
+                return True, 'Target'
+            elif price >= entry_price + 20:
+                return True, 'Stop Loss'
+        return False, ''
     def __init__(self, params=None):
         super().__init__(params)
         self.length = 20
         self.stddev = 2
+
+    def indicator_config(self):
+        """
+        Returns a list of indicator configs for plotting.
+        """
+        return [
+            {
+                "column": "mid",
+                "label": f"BB-Mid({self.length})",
+                "plot": True,
+                "color": "orange",
+                "type": "solid"
+            },
+            {
+                "column": "upper",
+                "label": f"BB-Upper({self.length},{self.stddev})",
+                "plot": True,
+                "color": "green",
+                "type": "dash"
+            },
+            {
+                "column": "lower",
+                "label": f"BB-Lower({self.length},{self.stddev})",
+                "plot": True,
+                "color": "red",
+                "type": "dash"
+            }
+        ]
 
     def generate_signals(self, data):
         """

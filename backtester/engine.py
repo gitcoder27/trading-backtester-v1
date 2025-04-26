@@ -17,6 +17,12 @@ class BacktestEngine:
         Returns: dict with equity_curve, trade_log, indicators
         """
         df = self.strategy.generate_signals(self.data)
+        # Dynamic indicator support based on strategy metadata
+        indicator_cfg = []
+        if hasattr(self.strategy, 'indicator_config'):
+            indicator_cfg = self.strategy.indicator_config() or []
+        indicator_cols = [cfg.get('column') for cfg in indicator_cfg if cfg.get('column')]
+        exit_col = indicator_cols[0] if indicator_cols else None
         equity = self.initial_cash
         position = None  # None, 'long', 'short'
         entry_price = 0
@@ -28,7 +34,8 @@ class BacktestEngine:
         for idx, row in df.iterrows():
             signal = row['signal']
             price = row['close']
-            ema = row['ema']
+            # Reference indicator value for exit logic
+            ref = row[exit_col] if exit_col and exit_col in row else None
 
             # Entry logic
             if position is None:
@@ -61,82 +68,30 @@ class BacktestEngine:
                 else:
                     trade = None
             else:
-                # Exit logic for long
-                if position == 'long':
-                    # Condition 1: EMA exit
-                    if price < ema:
-                        exit_reason = 'EMA exit'
-                        exit_now = True
-                    # Condition 2: Point target
-                    elif price >= entry_price + 30:
-                        exit_reason = 'Target'
-                        exit_now = True
-                    # Condition 3: Stop loss
-                    elif price <= entry_price - 20:
-                        exit_reason = 'Stop Loss'
-                        exit_now = True
-                    else:
-                        exit_now = False
-
-                    if exit_now:
+                # Use strategy-specific exit logic
+                exit_now, exit_reason = self.strategy.should_exit(position, row, entry_price)
+                if exit_now:
+                    if position == 'long':
                         trade['exit_time'] = row['timestamp']
                         trade['exit_price'] = price
                         trade['pnl'] = price - entry_price
-                        trade['exit_reason'] = exit_reason
-                        trade_log.append(trade)
-                        equity += trade['pnl']
-                        position = None
-                        entry_price = 0
-                        entry_idx = None
-                        trade = None
-
-                        # Immediate re-entry if EMA exit and signal flips
-                        if exit_reason == 'EMA exit':
-                            if price < ema and signal == -1:
-                                position = 'short'
-                                entry_price = price
-                                entry_idx = idx
-                                trade = {
-                                    'entry_time': row['timestamp'],
-                                    'entry_price': price,
-                                    'direction': 'short',
-                                    'exit_time': None,
-                                    'exit_price': None,
-                                    'pnl': None,
-                                    'exit_reason': None
-                                }
-                # Exit logic for short
-                elif position == 'short':
-                    # Condition 1: EMA exit
-                    if price > ema:
-                        exit_reason = 'EMA exit'
-                        exit_now = True
-                    # Condition 2: Point target
-                    elif price <= entry_price - 30:
-                        exit_reason = 'Target'
-                        exit_now = True
-                    # Condition 3: Stop loss
-                    elif price >= entry_price + 20:
-                        exit_reason = 'Stop Loss'
-                        exit_now = True
                     else:
-                        exit_now = False
-
-                    if exit_now:
                         trade['exit_time'] = row['timestamp']
                         trade['exit_price'] = price
                         trade['pnl'] = entry_price - price
-                        trade['exit_reason'] = exit_reason
-                        trade_log.append(trade)
-                        equity += trade['pnl']
-                        position = None
-                        entry_price = 0
-                        entry_idx = None
-                        trade = None
+                    trade['exit_reason'] = exit_reason
+                    trade_log.append(trade)
+                    equity += trade['pnl']
+                    position = None
+                    entry_price = 0
+                    entry_idx = None
+                    trade = None
 
-                        # Immediate re-entry if EMA exit and signal flips
-                        if exit_reason == 'EMA exit':
-                            if price > ema and signal == 1:
+                    # Immediate re-entry if exit was indicator-based and signal flips
+                    # (Optional: can be customized per strategy)
+                    if exit_reason.lower().endswith('exit'):
+                        if position is None and signal != 0:
+                            if signal == 1:
                                 position = 'long'
                                 entry_price = price
                                 entry_idx = idx
@@ -149,6 +104,20 @@ class BacktestEngine:
                                     'pnl': None,
                                     'exit_reason': None
                                 }
+                            elif signal == -1:
+                                position = 'short'
+                                entry_price = price
+                                entry_idx = idx
+                                trade = {
+                                    'entry_time': row['timestamp'],
+                                    'entry_price': price,
+                                    'direction': 'short',
+                                    'exit_time': None,
+                                    'exit_price': None,
+                                    'pnl': None,
+                                    'exit_reason': None
+                                }
+
             equity_curve.append(equity)
 
         # If trade is still open at the end, close at last price
@@ -173,8 +142,11 @@ class BacktestEngine:
 
         trade_log_df = pd.DataFrame(trade_log)
 
-        return {
+        result = {
             'equity_curve': equity_curve_df,
             'trade_log': trade_log_df,
-            'indicators': df[['timestamp', 'ema']]
         }
+        # Include all configured indicators
+        if indicator_cols:
+            result['indicators'] = df[['timestamp'] + indicator_cols]
+        return result
