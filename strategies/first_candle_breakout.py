@@ -16,8 +16,8 @@ class FirstCandleBreakoutStrategy(StrategyBase):
         Returns a list of indicator configs for plotting. Plots signal candle high/low if present.
         """
         return [
-            {"column": "signal_high", "label": "Signal High", "plot": True, "color": "purple", "type": "dash"},
-            {"column": "signal_low", "label": "Signal Low", "plot": True, "color": "brown", "type": "dash"}
+            {"column": "signal_high", "label": "Signal High", "plot": True, "color": "purple", "type": "dash", "panel": 1},
+            {"column": "signal_low", "label": "Signal Low", "plot": True, "color": "brown", "type": "dash", "panel": 1}
         ]
 
     def generate_signals(self, data):

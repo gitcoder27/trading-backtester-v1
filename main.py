@@ -12,6 +12,7 @@ from backtester.reporting import plot_equity_curve, plot_trades_on_price, save_t
 from strategies.bbands_scalper import BBandsScalperStrategy
 from strategies.ema44_scalper import EMA44ScalperStrategy
 from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
+from strategies.rsi_cross_strategy import RSICrossStrategy
 import argparse
 import pandas as pd
 
@@ -62,7 +63,8 @@ def main():
     # strategy = EMA44ScalperStrategy()
     # strategy = BBandsScalperStrategy()
     strategy_params = {'debug': args.debug}
-    strategy = FirstCandleBreakoutStrategy(params=strategy_params)
+    # strategy = FirstCandleBreakoutStrategy(params=strategy_params)
+    strategy = RSICrossStrategy(params=strategy_params)
 
     # Run backtest
     engine = BacktestEngine(data, strategy)
