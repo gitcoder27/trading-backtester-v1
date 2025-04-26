@@ -24,6 +24,20 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Debug Logging
+
+You can enable detailed debug logging for strategy internals (signal prices, entries, exits, SL/TP) by passing the `--debug` flag to the script:
+
+```sh
+python main.py -f data/yourfile.csv -s 2024-12-24 -e 2024-12-30 --debug
+```
+
+When enabled, logs will show signal candle high/low, entry/exit points, SL/TP, and reasons for exits.
+
+### Plotting Signal Candle Lines
+
+For the First Candle Breakout strategy, the signal candle's high/low are plotted as indicator lines on the chart for easy visual debugging.
+
 Run the main program using your Python interpreter:
 
 ```bash
@@ -44,14 +58,25 @@ tradeEnv\Scripts\python.exe main.py [OPTIONS]
 | `-s`, `--start`    | Start date (YYYY-MM-DD)                        | `-s 2024-01-01`                |
 | `-e`, `--end`      | End date (YYYY-MM-DD)                          | `-e 2024-01-31`                |
 | `-r`, `--report`   | Generate HTML report (saved in `results/`)     | `-r`                           |
+| `-t`, `--timeframe`| Timeframe for resampling (e.g. `1T`, `2T`, `5T`, `10T`, `15T`, or `1min`, `2min`, etc.). Default is `1T` (1 minute). | `-t 5T`                        |
 
 All arguments are optional. If no file is provided, you will be prompted to select a CSV from the `data/` directory.
 
-#### Example: Full Run
+#### Example: Full Run (Default 1-Minute Data)
 
 ```bash
 python main.py -f data/nifty_2024_1min_22Dec_14Jan.csv -s 2024-01-01 -e 2024-01-10 -r
 ```
+
+#### Example: Run on 2-Minute or 5-Minute Candles
+
+```bash
+python main.py -f data/nifty_2024_1min_22Dec_14Jan.csv -s 2024-12-24 -e 2024-12-25 -r -t 2T
+python main.py -f data/nifty_2024_1min_22Dec_14Jan.csv -t 5T
+```
+
+- The `-t` / `--timeframe` option lets you resample your 1-minute historical data to any higher timeframe supported by pandas offset aliases (e.g. `2T` for 2 minutes, `5T` for 5 minutes, or `10min` for 10 minutes).
+- If you see a warning about `'T'` being deprecated, you can use `'min'` instead (e.g. `2min`).
 
 ---
 

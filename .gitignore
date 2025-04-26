@@ -1,0 +1,6 @@
+# Ignore Python cache and compiled files
+__pycache__/
+*.pyc
+
+# Ignore results directory
+results/

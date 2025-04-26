@@ -11,6 +11,7 @@ from backtester.metrics import total_return, sharpe_ratio, max_drawdown, win_rat
 from backtester.reporting import plot_equity_curve, plot_trades_on_price, save_trade_log, generate_html_report
 from strategies.bbands_scalper import BBandsScalperStrategy
 from strategies.ema44_scalper import EMA44ScalperStrategy
+from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
 import argparse
 import pandas as pd
 
@@ -21,7 +22,16 @@ def main():
     parser.add_argument('-s','--start',help='Start date (YYYY-MM-DD)',default=None)
     parser.add_argument('-e','--end',help='End date (YYYY-MM-DD)',default=None)
     parser.add_argument('-r','--report',help='Generate HTML report',action='store_true')
+    parser.add_argument('-t','--timeframe',help="Timeframe for resampling (e.g. '1T'=1min, '2T'=2min, '5T'=5min, '10T'=10min)",default='1T')
+    parser.add_argument('--debug', action='store_true', help='Enable debug/info logging for strategy internals')
     args = parser.parse_args()
+
+    # Set up logging for debug/info output
+    import logging
+    if args.debug:
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
+    else:
+        logging.basicConfig(level=logging.WARNING)
 
     # Load data
     if args.file:
@@ -32,7 +42,7 @@ def main():
         for i,f in enumerate(files): print(f"{i}: {f}")
         idx = int(input("Select file index: "))
         data_path = os.path.join("data",files[idx])
-    data = load_csv(data_path)
+    data = load_csv(data_path, timeframe=args.timeframe)
 
     # Filter by date range (handle tz-naive vs tz-aware)
     if args.start:
@@ -49,8 +59,10 @@ def main():
         data = data[data['timestamp'] <= end_dt]
 
     # Initialize strategy
-    strategy = EMA44ScalperStrategy()
+    # strategy = EMA44ScalperStrategy()
     # strategy = BBandsScalperStrategy()
+    strategy_params = {'debug': args.debug}
+    strategy = FirstCandleBreakoutStrategy(params=strategy_params)
 
     # Run backtest
     engine = BacktestEngine(data, strategy)
@@ -59,7 +71,7 @@ def main():
     # Calculate metrics
     equity_curve = results['equity_curve']
     trade_log = results['trade_log']
-    indicators = results['indicators']
+    indicators = results['indicators'] if 'indicators' in results else None
 
     print("Performance Metrics:")
     start_amount = equity_curve['equity'].iloc[0]
