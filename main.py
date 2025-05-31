@@ -13,6 +13,7 @@ from strategies.bbands_scalper import BBandsScalperStrategy
 from strategies.ema44_scalper import EMA44ScalperStrategy
 from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
 from strategies.rsi_cross_strategy import RSICrossStrategy
+from strategies.ema50_scalper import EMA50ScalperStrategy # Import new strategy
 import argparse
 import pandas as pd
 
@@ -60,11 +61,12 @@ def main():
         data = data[data['timestamp'] <= end_dt]
 
     # Initialize strategy
+    strategy_params = {'debug': args.debug}
     # strategy = EMA44ScalperStrategy()
     # strategy = BBandsScalperStrategy()
-    strategy_params = {'debug': args.debug}
     # strategy = FirstCandleBreakoutStrategy(params=strategy_params)
-    strategy = RSICrossStrategy(params=strategy_params)
+    # strategy = RSICrossStrategy(params=strategy_params)
+    strategy = EMA50ScalperStrategy(params=strategy_params) # Use new strategy
 
     # Run backtest
     engine = BacktestEngine(data, strategy)
@@ -107,7 +109,9 @@ def main():
     for col in ['entry_price', 'exit_price', 'pnl', 'final_pnl', 'day_pnl']:
         if col in trade_log.columns:
             trade_log[col] = trade_log[col].round(2)
-    save_trade_log(trade_log, os.path.join("results", "ema44_scalper_trades.csv"))
+    # Ensure the filename is specific to the strategy
+    strategy_name = strategy.__class__.__name__.lower().replace("strategy", "")
+    save_trade_log(trade_log, os.path.join("results", f"{strategy_name}_trades.csv"))
 
     # Generate HTML report if requested
     if args.report:
@@ -131,7 +135,11 @@ def main():
             'Winning Short Trades': len(win_short_trades)
         }
         # Attach indicator configuration for HTML report
-        results_metrics['indicator_cfg'] = strategy.indicator_config()
+        if hasattr(strategy, 'indicator_config'): # Check if method exists
+            results_metrics['indicator_cfg'] = strategy.indicator_config()
+        else:
+            results_metrics['indicator_cfg'] = {} # Default empty config
+
         os.makedirs("results", exist_ok=True)
         report_path = os.path.join("results","report.html")
         generate_html_report(equity_curve, data, trade_log, indicators, results_metrics, report_path)
@@ -142,12 +150,13 @@ def main():
         cmd = input("Enter command ([t]rades plot, [e]quity curve, [q]uit): ").strip().lower()
         if cmd == "t":
             from backtester.reporting import plot_trades_on_candlestick_plotly
+            indicator_cfg = strategy.indicator_config() if hasattr(strategy, 'indicator_config') else {}
             plot_trades_on_candlestick_plotly(
-                data, trade_log, indicators=indicators, indicator_cfg=strategy.indicator_config(), title="Trades on Candlestick Chart"
+                data, trade_log, indicators=indicators, indicator_cfg=indicator_cfg, title="Trades on Candlestick Chart"
             )
         elif cmd == "e":
             plot_equity_curve(
-                equity_curve, trades=trade_log, indicators=indicators, title="EMA-10 Scalper Equity Curve", interactive=True
+                equity_curve, trades=trade_log, indicators=indicators, title=f"{strategy.__class__.__name__} Equity Curve", interactive=True
             )
         elif cmd == "q":
             print("Exiting program.")
