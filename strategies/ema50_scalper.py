@@ -32,11 +32,11 @@ class EMA50ScalperStrategy(StrategyBase):
         """
         if position == 'long':
             # Exit if price closes below EMA
-            if row['close'] < row['ema']:
+            if row.close < row.ema:  # Changed from row['close'] < row['ema']
                 return True, 'close_below_ema'
 
             # Exit if profit target is reached
-            if row['high'] >= entry_price + self.profit_target_points:
+            if row.high >= entry_price + self.profit_target_points:  # Changed from row['high']
                 return True, 'profit_target'
 
         return False, ''
