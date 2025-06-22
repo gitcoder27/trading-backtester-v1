@@ -5,10 +5,13 @@ A modular backtesting framework for algorithmic trading strategies on historical
 ---
 
 ## Features
-- Run backtests on historical CSV data
-- Modular strategy interface (add your own strategies easily)
-- Performance metrics (Sharpe, drawdown, profit factor, etc.)
-- Interactive plots and HTML reporting (Plotly, Matplotlib)
+- Run backtests on historical CSV data using various strategies (e.g., EMA Crossover, Bollinger Bands, RSI, First Candle Breakout).
+- Modular strategy interface (add your own strategies easily).
+- Detailed performance metrics (Sharpe, drawdown, profit factor, etc.).
+- Interactive plots (Plotly) and comprehensive HTML reporting.
+- Customizable timeframe resampling for historical data.
+- Debug logging for in-depth strategy analysis.
+- Indicator configurations included in HTML reports for better reproducibility.
 
 ---
 
@@ -59,8 +62,11 @@ tradeEnv\Scripts\python.exe main.py [OPTIONS]
 | `-e`, `--end`      | End date (YYYY-MM-DD)                          | `-e 2024-01-31`                |
 | `-r`, `--report`   | Generate HTML report (saved in `results/`)     | `-r`                           |
 | `-t`, `--timeframe`| Timeframe for resampling (e.g. `1T`, `2T`, `5T`, `10T`, `15T`, or `1min`, `2min`, etc.). Default is `1T` (1 minute). | `-t 5T`                        |
+| `--debug`          | Enable detailed debug logging for strategy internals. | `--debug`                      |
 
 All arguments are optional. If no file is provided, you will be prompted to select a CSV from the `data/` directory.
+
+*Note: To use a specific strategy, you currently need to modify `main.py` to instantiate the desired strategy class. By default, it uses `EMA50ScalperStrategy`.*
 
 #### Example: Full Run (Default 1-Minute Data)
 
@@ -90,15 +96,25 @@ After running a backtest, you can enter the following commands at the prompt:
 ---
 
 ## Adding New Strategies
-- Add your strategy as a new Python file in the `strategies/` directory.
-- Inherit from `StrategyBase` and implement `generate_signals(self, data)`.
-- Register/import your strategy in `main.py` or your own runner script.
+- Add your strategy as a new Python file in the `strategies/` directory (e.g., `my_strategy.py`).
+- Your strategy class should inherit from `StrategyBase` (from `backtester.strategy_base`).
+- Implement the `generate_signals(self, data)` method. This method should return a DataFrame with a 'signal' column (1 for buy, -1 for sell, 0 for hold).
+- Optionally, implement an `indicator_config(self)` method to return a dictionary describing indicators to be plotted (see existing strategies for examples). This helps in visualizing strategy parameters on charts and in reports.
+- To use your new strategy, import it in `main.py` and instantiate it, assigning it to the `strategy` variable.
+
+Example of importing and using a custom strategy in `main.py`:
+```python
+# In main.py
+# from strategies.my_strategy import MyStrategy # Import your strategy
+...
+# strategy = MyStrategy(params={'debug': args.debug}) # Instantiate your strategy
+```
 
 ---
 
 ## Output
-- Trade logs are saved in `results/` as CSV files.
-- HTML reports (if `-r` is used) are saved in `results/report.html`.
+- **Trade Logs**: Saved in the `results/` directory as CSV files. The filename will be specific to the strategy used (e.g., `ema50scalper_trades.csv`, `mycustomstrategy_trades.csv`).
+- **HTML Reports**: If the `-r` option is used, a comprehensive HTML report named `report.html` is saved in `results/`. This report includes performance metrics, equity curves, trade lists, and potentially strategy indicator configurations.
 
 ---
 
