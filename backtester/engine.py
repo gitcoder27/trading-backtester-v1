@@ -135,10 +135,22 @@ class BacktestEngine:
             equity_curve.append(equity)
 
         # Build equity curve DataFrame
-        equity_curve_df = pd.DataFrame({
-            'timestamp': df['timestamp'],
-            'equity': equity_curve[:len(df)]
-        })
+        # Ensure timestamps align with the full equity_curve list.
+        # If a trade was closed at end_of_data, equity_curve might be one longer than df.
+        timestamps_for_equity = df['timestamp'].tolist()
+        if len(equity_curve) > len(df) and not df.empty:
+            # This happens if a position was closed at the very end.
+            # The last equity value corresponds to the timestamp of the last data point.
+            timestamps_for_equity.append(df['timestamp'].iloc[-1])
+
+        # Ensure equity_curve is not empty before trying to build DataFrame
+        if not equity_curve:
+            equity_curve_df = pd.DataFrame(columns=['timestamp', 'equity'])
+        else:
+            equity_curve_df = pd.DataFrame({
+                'timestamp': timestamps_for_equity[:len(equity_curve)], # Ensure timestamps match equity_curve length
+                'equity': equity_curve
+            })
 
         trade_log_df = pd.DataFrame(trade_log)
 

@@ -5,3 +5,5 @@ seaborn
 plotly
 tqdm
 jinja2
+pytest
+pytest-cov

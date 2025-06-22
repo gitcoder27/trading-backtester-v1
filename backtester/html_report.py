@@ -6,6 +6,7 @@ import plotly.graph_objs as go
 import pandas as pd
 from typing import Any
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from backtester.plotting import plot_trades_on_candlestick_plotly # Changed from relative to absolute
 
 def generate_html_report(equity_curve: pd.DataFrame, data: pd.DataFrame, trades: pd.DataFrame, indicators: pd.DataFrame, metrics: dict, filepath: str) -> None:
     """
