@@ -1,146 +1,224 @@
 from __future__ import annotations
 import pandas as pd
 import streamlit as st
+import importlib.util
 
-try:
-    from streamlit_lightweight_charts import renderLightweightCharts
-    _HAS_LWC = True
-except Exception:
-    _HAS_LWC = False
+_HAS_ECHARTS = importlib.util.find_spec('streamlit_echarts') is not None
+
+
+def _to_iso_utc(ts_series: pd.Series) -> pd.Series:
+    s = pd.to_datetime(ts_series, utc=True)
+    return s.dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def _to_epoch_seconds(ts_series: pd.Series) -> pd.Series:
+    """Return integer seconds since epoch (UTC)."""
+    s = pd.to_datetime(ts_series, utc=True)
+    return (s.view('int64') // 10**9).astype(int)
 
 
 def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, indicators):
-    """
-    Advanced, ultra-smooth interactive chart using TradingView Lightweight Charts
-    via streamlit-lightweight-charts. This is isolated from ui_sections to keep
-    UI code lean and maintainable.
-    """
+    """Advanced chart using a high-performance renderer (ECharts)."""
     st.subheader("Advanced Chart (Beta)")
     if data is None or len(data) == 0:
         st.info("No price data to chart.")
         return
-    if not _HAS_LWC:
-        st.warning("streamlit-lightweight-charts not installed. Please pip install it to view this chart.")
-        return
+    # We support multiple renderers (Plotly, Lightweight, ECharts); don't require any single one.
 
     ts_col = 'timestamp'
     df = data.copy()
     if not pd.api.types.is_datetime64_any_dtype(df[ts_col]):
         df[ts_col] = pd.to_datetime(df[ts_col])
-    # epoch seconds, sorted
-    df['time'] = (df[ts_col].astype('int64') // 10**9).astype(int)
+    # Use UTCTimestamp seconds for maximum compatibility
+    df['time'] = _to_epoch_seconds(df[ts_col])
     df = df.sort_values('time').reset_index(drop=True)
 
-    candles = df[['time', 'open', 'high', 'low', 'close']].astype(
-        {'open': 'float64', 'high': 'float64', 'low': 'float64', 'close': 'float64'}
-    ).to_dict('records')
+    # Drop rows with invalid OHLC or time; enforce sane bounds
+    df = df.dropna(subset=['open', 'high', 'low', 'close', 'time'])
+    # Ensure numeric
+    for c in ['open', 'high', 'low', 'close']:
+        df[c] = pd.to_numeric(df[c], errors='coerce')
+    df = df.dropna(subset=['open', 'high', 'low', 'close'])
+    # Keep only finite numbers
+    import numpy as np
+    df = df[np.isfinite(df[['open','high','low','close']]).all(axis=1)]
+    # Filter out rows with inverted highs/lows
+    df = df[df['high'] >= df['low']]
+    # Deduplicate time (keep last)
+    df = df.drop_duplicates(subset=['time'], keep='last')
 
-    # Overlays (only panel=1 indicators)
+    # Candlesticks
+    price_cols = ['open', 'high', 'low', 'close']
+    for pc in price_cols:
+        if pc not in df.columns:
+            st.warning("Chart data missing required OHLC columns.")
+            return
+    # Cast to native Python types for JSON serialization safety
+    candles = [
+        {
+            'time': int(r['time']),
+            'open': float(r['open']),
+            'high': float(r['high']),
+            'low': float(r['low']),
+            'close': float(r['close']),
+        }
+        for _, r in df[['time'] + price_cols].iterrows()
+    ]
+
+    # Build overlays (panel=1)
     overlays = []
     indicator_cfg = strategy.indicator_config() if hasattr(strategy, 'indicator_config') else []
     if indicators is not None and len(indicator_cfg):
         indf = indicators.copy()
         if not pd.api.types.is_datetime64_any_dtype(indf[ts_col]):
             indf[ts_col] = pd.to_datetime(indf[ts_col])
-        indf['time'] = (indf[ts_col].astype('int64') // 10**9).astype(int)
+        indf['time'] = _to_epoch_seconds(indf[ts_col])
         for cfg in indicator_cfg:
             col = cfg.get('column')
             if cfg.get('plot', True) and col in indf.columns and cfg.get('panel', 1) == 1:
                 color = cfg.get('color', '#cccccc')
+                od = indf[['time', col]].dropna().copy()
                 overlays.append({
                     'type': 'Line',
-                    'data': [{'time': int(r['time']), 'value': float(r[col])}
-                             for _, r in indf.iterrows() if pd.notnull(r[col])],
+                    'data': [{'time': int(t), 'value': float(v)} for t, v in zip(od['time'], od[col])],
                     'options': {
                         'color': color,
                         'lineWidth': 1,
                         'priceLineVisible': False,
                         'lastValueVisible': False,
                     },
+                    'priceScaleId': 'right',
                 })
 
-    # Markers (kept, but can be toggled if needed)
-    trade_markers = []
-    if trades is not None and not trades.empty and 'entry_time' in trades and 'exit_time' in trades:
-        tdf = trades.copy()
-        for col in ['entry_time', 'exit_time']:
-            if not pd.api.types.is_datetime64_any_dtype(tdf[col]):
-                tdf[col] = pd.to_datetime(tdf[col])
-        tdf['entry_sec'] = (tdf['entry_time'].astype('int64') // 10**9).astype(int)
-        tdf['exit_sec'] = (tdf['exit_time'].astype('int64') // 10**9).astype(int)
-        for _, tr in tdf.iterrows():
-            is_win = (tr.get('pnl', 0) or 0) > 0
-            color = '#66bb6a' if is_win else '#ef5350'
-            trade_markers.append({
-                'time': int(tr['entry_sec']),
-                'position': 'belowBar',
-                'color': color,
-                'shape': 'arrowUp' if str(tr.get('direction', 'long')).lower() == 'long' else 'arrowDown',
-                'text': f"Entry @ {tr.get('entry_price')}",
-            })
-            trade_markers.append({
-                'time': int(tr['exit_sec']),
-                'position': 'aboveBar',
-                'color': color,
-                'shape': 'circle',
-                'text': f"Exit @ {tr.get('exit_price')} | PnL: {tr.get('pnl')}",
-            })
+    # Render with ECharts by default (fast)
+    if _HAS_ECHARTS:
+        import importlib
+        st_echarts = importlib.import_module('streamlit_echarts').st_echarts  # type: ignore
+        # Dataset: [time(ms), open, close, low, high]
+        df_e = df[['time','open','close','low','high']].copy()
+        df_e['tms'] = (pd.to_datetime(df_e['time'], unit='s', utc=True).view('int64') // 10**6).astype('int64')
+        dataset = df_e[['tms','open','close','low','high']].values.tolist()
 
-    series = [
-        {
-            'type': 'Candlestick',
-            'data': candles,
-            'markers': trade_markers,
-            'options': {
-                'upColor': '#26a69a',
-                'downColor': '#ef5350',
-                'borderVisible': False,
-                'wickUpColor': '#26a69a',
-                'wickDownColor': '#ef5350',
-            }
+        # Overlays -> line series
+        ech_overlays = []
+        for s in overlays:
+            if s.get('type') == 'Line':
+                od = s['data']
+                ech_overlays.append({
+                    'type': 'line',
+                    'name': 'overlay',
+                    'showSymbol': False,
+                    'data': [[int(x['time'])*1000, float(x['value'])] for x in od],
+                    'lineStyle': {'width': 1, 'color': s.get('options',{}).get('color','#ccc')},
+                    'yAxisIndex': 0,
+                    'z': 2,
+                })
+
+        # Trades -> scatter series at entry/exit prices + line segments (win/loss)
+        entries, exits = [], []
+        win_lines, loss_lines = [], []
+        if trades is not None and not trades.empty and {'entry_time','entry_price','exit_time','exit_price'}.issubset(trades.columns):
+            tdf = trades.copy()
+            tdf['entry_time'] = pd.to_datetime(tdf['entry_time'], utc=True)
+            tdf['exit_time'] = pd.to_datetime(tdf['exit_time'], utc=True)
+            for _, tr in tdf.iterrows():
+                dir_is_long = str(tr.get('direction','long')).lower() == 'long'
+                pnl = float(tr.get('pnl', 0) or 0)
+                ec = '#22c55e' if dir_is_long else '#ef4444'
+                xc = '#22c55e' if pnl >= 0 else '#ef4444'
+                et = int(tr['entry_time'].value // 10**6)
+                xt = int(tr['exit_time'].value // 10**6)
+                ep = float(tr.get('entry_price', None) or df['close'].iloc[0])
+                xp = float(tr.get('exit_price', None) or df['close'].iloc[0])
+                entries.append({'value': [et, ep], 'itemStyle': {'color': ec, 'borderColor': '#e5e7eb', 'borderWidth': 1.2}})
+                exits.append({'value': [xt, xp], 'itemStyle': {'color': xc, 'borderColor': '#e5e7eb', 'borderWidth': 1.2}})
+                if pnl >= 0:
+                    win_lines.extend([[et, ep], [xt, xp], None])
+                else:
+                    loss_lines.extend([[et, ep], [xt, xp], None])
+
+        option = {
+            'backgroundColor': '#0e1117',
+            'grid': {'left': 50, 'right': 20, 'top': 20, 'bottom': 35},
+            'tooltip': {'trigger': 'axis'},
+            'xAxis': {
+                'type': 'time',
+                'axisLine': {'lineStyle': {'color': '#374151'}},
+                'axisLabel': {'color': '#d1d5db'},
+            },
+            'yAxis': {
+                'scale': True,
+                'axisLine': {'lineStyle': {'color': '#374151'}},
+                'axisLabel': {'color': '#d1d5db'},
+                'splitLine': {'lineStyle': {'color': '#1f2937'}},
+            },
+            'dataZoom': [
+                {'type': 'inside', 'start': 80, 'end': 100},
+                {'type': 'slider', 'start': 80, 'end': 100}
+            ],
+            'dataset': [{'source': dataset}],
+            'series': [
+                {
+                    'type': 'candlestick',
+                    'name': 'Price',
+                    'encode': {'x': 0, 'y': [1,2,3,4]},
+                    'itemStyle': {
+                        'color': '#26a69a',
+                        'color0': '#ef5350',
+                        'borderColor': '#26a69a',
+                        'borderColor0': '#ef5350'
+                    },
+                    'z': 1,
+                },
+                *ech_overlays,
+                {
+                    'type': 'line',
+                    'name': 'Winning Trades',
+                    'data': win_lines,
+                    'showSymbol': False,
+                    'lineStyle': {'color': '#93a1a1', 'width': 1.5, 'type': 'dotted'},
+                    'z': 2,
+                },
+                {
+                    'type': 'line',
+                    'name': 'Losing Trades',
+                    'data': loss_lines,
+                    'showSymbol': False,
+                    'lineStyle': {'color': '#93a1a1', 'width': 1.5, 'type': 'dotted'},
+                    'z': 2,
+                },
+                {
+                    'type': 'scatter',
+                    'name': 'Entries',
+                    'symbol': 'triangle',
+                    'symbolSize': 10,
+                    'data': entries,
+                    'emphasis': {'scale': True},
+                    'z': 3,
+                },
+                {
+                    'type': 'scatter',
+                    'name': 'Exits',
+                    'symbol': 'triangle',
+                    'symbolRotate': 180,
+                    'symbolSize': 10,
+                    'data': exits,
+                    'emphasis': {'scale': True},
+                    'z': 3,
+                },
+            ],
         }
-    ] + overlays
+        st_echarts(option, height='600px', theme='dark')
+        return
 
-    # Add close line for guaranteed visibility
-    series.append({
-        'type': 'Line',
-        'data': [{'time': int(t), 'value': float(v)} for t, v in zip(df['time'], df['close'])],
-        'options': {'color': '#f59e0b', 'lineWidth': 1, 'priceLineVisible': False, 'lastValueVisible': False}
-    })
-
-    chartOptions = {
-        'layout': {
-            'background': {'type': 'solid', 'color': '#0e1117'},
-            'textColor': '#d1d5db',
-        },
-        'grid': {
-            'vertLines': {'color': '#1f2937'},
-            'horzLines': {'color': '#1f2937'},
-        },
-        'timeScale': {
-            'borderColor': '#374151',
-            'timeVisible': True,
-            'secondsVisible': False,
-            'rightOffset': 5,
-            'barSpacing': 6,
-        },
-        'rightPriceScale': {'borderColor': '#374151'},
-        'crosshair': {'mode': 1},
-        'handleScroll': {'mouseWheel': True, 'pressedMouseMove': True},
-        'handleScale': {'axisPressedMouseMove': True, 'mouseWheel': True, 'pinch': True},
-        'autoSize': True,
-        'height': 600,
-    }
-
-    # Quick counts for sanity
-    try:
-        overlays_points = sum(len(s.get('data', [])) for s in overlays)
-        st.caption(f"Candles: {len(candles)} | Overlays points: {overlays_points} | Markers: {len(trade_markers)}")
-    except Exception:
-        pass
-
-    # Render (options inside chart dict has widest compatibility)
-    renderLightweightCharts(
-        charts=[{'chart': chartOptions, 'series': series}],
-        key='advanced_chart_beta'
+    # If ECharts isn’t available, fallback to Plotly
+    from backtester.plotting import plot_trades_on_candlestick_plotly
+    fig = plot_trades_on_candlestick_plotly(
+        data,
+        trades if trades is not None else pd.DataFrame(),
+        indicators=indicators,
+        indicator_cfg=indicator_cfg,
+        title="Advanced Chart (Plotly)",
+        show=False,
     )
+    st.plotly_chart(fig, use_container_width=True)

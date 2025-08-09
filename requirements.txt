@@ -7,3 +7,4 @@ tqdm
 jinja2
 streamlit
 streamlit-lightweight-charts
+streamlit-echarts
