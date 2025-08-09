@@ -54,44 +54,88 @@ def plot_trades_on_candlestick_plotly(data, trades, indicators=None, indicator_c
                 if col.lower().startswith('rsi') and panel == 2:
                     for lvl, color in zip([20, 50, 80], ['red', 'gray', 'green']):
                         fig.add_hline(y=lvl, line_dash='dot', line_color=color, row=2, col=1)
-    # Add trades (row 1)
-    for _, trade in trades.iterrows():
-        color = 'green' if trade['pnl'] > 0 else 'red'
-        trade_id_str = str(trade['trade_id']) if 'trade_id' in trade else str(_)
+    # Add trades (row 1) with batched traces for performance
+    if trades is not None and len(trades) > 0:
+        # Prepare entries and exits as single scatter traces with high-contrast styling
+        entries_x, entries_y = [], []
+        exits_x, exits_y = [], []
+        # Prepare line segments for winners and losers separately using None separators
+        win_x, win_y = [], []
+        loss_x, loss_y = [], []
+        for _, tr in trades.iterrows():
+            is_win = (tr.get('pnl', 0) or 0) > 0
+            # Entries
+            entries_x.append(tr.get('entry_time'))
+            entries_y.append(tr.get('entry_price'))
+            # Exits
+            exits_x.append(tr.get('exit_time'))
+            exits_y.append(tr.get('exit_price'))
+            # Lines
+            if is_win:
+                win_x.extend([tr.get('entry_time'), tr.get('exit_time'), None])
+                win_y.extend([tr.get('entry_price'), tr.get('exit_price'), None])
+            else:
+                loss_x.extend([tr.get('entry_time'), tr.get('exit_time'), None])
+                loss_y.extend([tr.get('entry_price'), tr.get('exit_price'), None])
+        # Entries trace (non-GL to ensure marker symbols render reliably)
         fig.add_trace(go.Scatter(
-            x=[trade['entry_time']],
-            y=[trade['entry_price']],
+            x=entries_x,
+            y=entries_y,
             mode='markers',
-            marker=dict(color=color, symbol='triangle-up', size=10),
-            name='Entry' if trade['direction'].lower() in ('buy', 'long') else 'Short Entry',
+            marker=dict(
+                color='#81D4FA',  # soft light blue
+                symbol='triangle-up',
+                size=9,
+                opacity=0.9,
+                line=dict(color='#B0BEC5', width=1.0)  # soft grey outline
+            ),
+            name='Entries',
             showlegend=False,
-            customdata=[[trade_id_str]],
             hovertemplate='Entry<br>Time: %{x}<br>Price: %{y}<extra></extra>'
         ), row=1, col=1)
+        # Exits trace (non-GL)
         fig.add_trace(go.Scatter(
-            x=[trade['exit_time']],
-            y=[trade['exit_price']],
+            x=exits_x,
+            y=exits_y,
             mode='markers',
-            marker=dict(color=color, symbol='x', size=10),
-            name='Exit',
+            marker=dict(
+                color='#FFE082',  # soft amber
+                symbol='x',
+                size=9,
+                opacity=0.9,
+                line=dict(color='#B0BEC5', width=1.0)
+            ),
+            name='Exits',
             showlegend=False,
-            customdata=[[trade_id_str]],
             hovertemplate='Exit<br>Time: %{x}<br>Price: %{y}<extra></extra>'
         ), row=1, col=1)
-        fig.add_trace(go.Scatter(
-            x=[trade['entry_time'], trade['exit_time']],
-            y=[trade['entry_price'], trade['exit_price']],
-            mode='lines',
-            line=dict(color=color, width=2, dash='dot'),
-            name='Trade',
-            showlegend=False,
-            customdata=[[trade_id_str], [trade_id_str]],
-            hovertemplate='Trade<br>Entry: %{x[0]}, Exit: %{x[1]}<extra></extra>'
-        ), row=1, col=1)
+        # Winner line segments (non-GL to support dashed style clearly)
+        if win_x:
+            fig.add_trace(go.Scatter(
+                x=win_x,
+                y=win_y,
+                mode='lines',
+                line=dict(color='#B0BEC5', width=1.5, dash='dot'),  # light grey
+                name='Winning Trades',
+                showlegend=False,
+                hoverinfo='skip'
+            ), row=1, col=1)
+        # Loser line segments (non-GL)
+        if loss_x:
+            fig.add_trace(go.Scatter(
+                x=loss_x,
+                y=loss_y,
+                mode='lines',
+                line=dict(color='#B0BEC5', width=1.5, dash='dot'),  # light grey
+                name='Losing Trades',
+                showlegend=False,
+                hoverinfo='skip'
+            ), row=1, col=1)
     fig.update_layout(
         title=title,
         template='plotly_dark',
         xaxis_rangeslider_visible=False,
+        uirevision='chart-static',
         xaxis=dict(
             rangebreaks=[
                 dict(bounds=["sat", "mon"]),

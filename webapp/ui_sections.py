@@ -22,6 +22,7 @@ from backtester.plotting import plot_trades_on_candlestick_plotly, plot_equity_c
 from backtester.html_report import generate_html_report
 
 from .analytics import compute_drawdown, monthly_returns_heatmap, rolling_sharpe
+from .advanced_chart import section_advanced_chart
 
 
 def render_metrics(equity_curve: pd.DataFrame, trade_log: pd.DataFrame):
@@ -73,11 +74,13 @@ def section_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, indicators
     if data is None or len(data) == 0:
         st.info("No price data to chart.")
         return
+    # Plot full data and all trades for clarity
+    df_plot = data
     tlog = trades.reset_index(drop=True).copy()
     tlog['trade_id'] = tlog.index
     indicator_cfg = strategy.indicator_config() if hasattr(strategy, 'indicator_config') else []
     fig_trades = plot_trades_on_candlestick_plotly(
-        data,
+        df_plot,
         tlog,
         indicators=indicators,
         indicator_cfg=indicator_cfg,
@@ -85,6 +88,8 @@ def section_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, indicators
         show=False,
     )
     st.plotly_chart(fig_trades, use_container_width=True)
+
+
 
 
 def section_trades(trades: pd.DataFrame):

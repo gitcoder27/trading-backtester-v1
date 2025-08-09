@@ -1,18 +1,18 @@
 {
   "mode": "Choose from data/",
   "timeframe": "1T",
-  "data_file": "nifty_2025_1min_01Jul_08Aug.csv",
-  "start_date": "2025-08-06",
-  "end_date": "2025-08-07",
+  "data_file": "nifty_2024_1min_22Dec_14Jan.csv",
+  "start_date": null,
+  "end_date": null,
   "strategy": "EMA10Scalper",
   "debug": false,
   "ema10_ema_period": 10,
   "ema10_pt": 25,
   "ema10_sl": 20,
   "option_delta": 0.5,
-  "lots": 2,
+  "lots": 4,
   "price_per_unit": 1.0,
-  "fee_per_trade": 0.0,
+  "fee_per_trade": 40.0,
   "direction_filter": [
     "long",
     "short"

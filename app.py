@@ -36,7 +36,7 @@ from webapp.analytics import (
 )
 from webapp.prefs import load_prefs, save_prefs, get_pref, set_pref
 from webapp.ui_sections import render_metrics as ui_render_metrics
-from webapp.ui_sections import section_overview, section_chart, section_trades, section_analytics, section_compare, section_export
+from webapp.ui_sections import section_overview, section_chart, section_advanced_chart, section_trades, section_analytics, section_compare, section_export
 
 
 st.set_page_config(page_title="Strategy Backtester", layout="wide")
@@ -295,8 +295,24 @@ if run_btn:
             if fee_per_trade > 0:
                 eq_for_display = adjust_equity_for_fees(equity_curve, trade_log, fee_per_trade)
 
-            # Tabs: Overview | Chart | Trades | Analytics | Sweep | Compare | Export
-            tabs = st.tabs(["Overview", "Chart", "Trades", "Analytics", "Sweep", "Compare", "Export"])
+            # Persist this run's results for use across reruns (e.g., chart controls)
+            st.session_state['last_results'] = {
+                'equity_curve': equity_curve,
+                'trade_log': trade_log,
+                'indicators': indicators,
+                'data': data,
+            }
+            st.session_state['last_strategy'] = strategy
+            st.session_state['last_strategy_name'] = strat_choice
+            st.session_state['last_strat_params'] = strat_params
+            st.session_state['last_options'] = {
+                'option_delta': option_delta,
+                'lots': lots,
+                'price_per_unit': price_per_unit,
+            }
+
+            # Tabs: Overview | Chart | Advanced Chart (Beta) | Trades | Analytics | Sweep | Compare | Export
+            tabs = st.tabs(["Overview", "Chart", "Advanced Chart (Beta)", "Trades", "Analytics", "Sweep", "Compare", "Export"])
 
             # Overview
             with tabs[0]:
@@ -308,16 +324,20 @@ if run_btn:
             with tabs[1]:
                 section_chart(data, shown_trades if apply_filters_to_charts else trade_log, strategy, indicators)
 
-            # Trades
+            # Advanced Chart (Beta)
             with tabs[2]:
+                section_advanced_chart(data, shown_trades if apply_filters_to_charts else trade_log, strategy, indicators)
+
+            # Trades
+            with tabs[3]:
                 section_trades(shown_trades)
 
             # Analytics
-            with tabs[3]:
+            with tabs[4]:
                 section_analytics(eq_for_display, shown_trades)
 
             # Sweep
-            with tabs[4]:
+            with tabs[5]:
                 st.caption("Parameter sweep: run small grid search over selected strategy parameters.")
                 do_sweep = st.checkbox("Enable sweep for this strategy", value=False)
                 max_runs = st.number_input("Max combinations", min_value=10, max_value=2000, value=200, step=10)
@@ -389,31 +409,166 @@ if run_btn:
                             piv = resdf.pivot(index=k1, columns=k2, values='Total Return %')
                             fig_heat = px.imshow(piv, text_auto=True, color_continuous_scale='RdYlGn', origin='lower', title='Sweep Heatmap (Total Return %)')
                             st.plotly_chart(fig_heat, use_container_width=True)
+else:
+    # If not running now, try to render last results (keeps charts when changing UI controls)
+    lr = st.session_state.get('last_results')
+    if not lr:
+        st.info("Run a backtest to see charts and analytics.")
+    else:
+        equity_curve = lr['equity_curve']
+        trade_log = lr['trade_log']
+        indicators = lr.get('indicators')
+        data = lr.get('data')
+        strategy = st.session_state.get('last_strategy')
+        strat_choice = st.session_state.get('last_strategy_name', list(STRATEGY_MAP.keys())[0])
+        strat_params = st.session_state.get('last_strat_params', {"debug": False})
+        opts = st.session_state.get('last_options', {})
+        option_delta = float(opts.get('option_delta', st.session_state.get('option_delta', 0.5)))
+        lots = int(opts.get('lots', st.session_state.get('lots', 2)))
+        price_per_unit = float(opts.get('price_per_unit', st.session_state.get('price_per_unit', 1.0)))
 
-            # Compare
-            with tabs[5]:
-                st.caption("Compare multiple strategies with default/current params")
-                picks = st.multiselect("Strategies", list(STRATEGY_MAP.keys()), default=[strat_choice])
-                if st.button("Run Comparison") and picks:
-                    section_compare(data, picks, strat_choice, strat_params, STRATEGY_MAP, option_delta, lots, price_per_unit)
+        # Apply analytics adjustments/filters for current sidebar settings
+        shown_trades = trade_log.copy()
+        direction_filter = list(st.session_state.get('direction_filter', ["long", "short"]))
+        apply_time_filter = bool(st.session_state.get('apply_time_filter', False))
+        start_hour = int(st.session_state.get('start_hour', 9))
+        end_hour = int(st.session_state.get('end_hour', 15))
+        apply_weekday_filter = bool(st.session_state.get('apply_weekday_filter', False))
+        weekdays = list(st.session_state.get('weekdays', [0, 1, 2, 3, 4]))
+        apply_filters_to_charts = bool(st.session_state.get('apply_filters_to_charts', False))
 
-            # Export
-            with tabs[6]:
-                st.subheader("Export & Report")
-                metrics_dict = {
-                    'Start Amount': float(eq_for_display['equity'].iloc[0]),
-                    'Final Amount': float(eq_for_display['equity'].iloc[-1]),
-                    'Total Return (%)': total_return(eq_for_display)*100,
-                    'Sharpe Ratio': sharpe_ratio(eq_for_display),
-                    'Max Drawdown (%)': max_drawdown(eq_for_display)*100,
-                    'Win Rate (%)': win_rate(shown_trades)*100,
-                    'Total Trades': len(shown_trades),
-                    'Profit Factor': profit_factor(shown_trades),
-                    'Largest Winning Trade': largest_winning_trade(shown_trades),
-                    'Largest Losing Trade': largest_losing_trade(shown_trades),
-                    'Average Holding Time (min)': average_holding_time(shown_trades),
-                    'Max Consecutive Wins': max_consecutive_wins(shown_trades),
-                    'Max Consecutive Losses': max_consecutive_losses(shown_trades),
-                    'indicator_cfg': strategy.indicator_config() if hasattr(strategy, 'indicator_config') else [],
-                }
-                section_export(eq_for_display, data, shown_trades, indicators, strategy, metrics_dict)
+        if direction_filter or apply_time_filter or apply_weekday_filter:
+            shown_trades = filter_trades(
+                trade_log,
+                directions=[d.lower() for d in direction_filter],
+                hours=(start_hour, end_hour) if apply_time_filter else None,
+                weekdays=weekdays if apply_weekday_filter else None,
+            )
+        eq_for_display = equity_curve
+        fee_per_trade = float(st.session_state.get('fee_per_trade', 0.0))
+        if fee_per_trade > 0:
+            eq_for_display = adjust_equity_for_fees(equity_curve, trade_log, fee_per_trade)
+
+        tabs = st.tabs(["Overview", "Chart", "Advanced Chart (Beta)", "Trades", "Analytics", "Sweep", "Compare", "Export"])
+
+        with tabs[0]:
+            st.subheader("Performance Metrics")
+            ui_render_metrics(eq_for_display, shown_trades)
+            section_overview(eq_for_display)
+
+        with tabs[1]:
+            if strategy is None:
+                # Recreate strategy for indicator_config if needed
+                strat_cls = STRATEGY_MAP[strat_choice]
+                strategy = strat_cls(params=strat_params)
+            section_chart(data, shown_trades if apply_filters_to_charts else trade_log, strategy, indicators)
+
+        with tabs[2]:
+            if strategy is None:
+                strat_cls = STRATEGY_MAP[strat_choice]
+                strategy = strat_cls(params=strat_params)
+            section_advanced_chart(data, shown_trades if apply_filters_to_charts else trade_log, strategy, indicators)
+
+        with tabs[3]:
+            section_trades(shown_trades)
+
+        with tabs[4]:
+            section_analytics(eq_for_display, shown_trades)
+
+        with tabs[5]:
+            st.caption("Parameter sweep: run small grid search over selected strategy parameters.")
+            do_sweep = st.checkbox("Enable sweep for this strategy", value=False)
+            max_runs = st.number_input("Max combinations", min_value=10, max_value=2000, value=200, step=10)
+            sweep_params = {}
+            if do_sweep:
+                if strat_choice.startswith("EMA10") or strat_choice.startswith("EMA50"):
+                    p_from = st.number_input("EMA Period from", 5, 200, value=10)
+                    p_to = st.number_input("EMA Period to", 5, 200, value=30)
+                    p_step = st.number_input("EMA Period step", 1, 50, value=5)
+                    pt_from = st.number_input("Target from", 1, 200, value=10)
+                    pt_to = st.number_input("Target to", 1, 400, value=40)
+                    pt_step = st.number_input("Target step", 1, 100, value=10)
+                    if strat_choice.startswith("EMA10"):
+                        sl_from = st.number_input("Stop from", 1, 200, value=10)
+                        sl_to = st.number_input("Stop to", 1, 400, value=30)
+                        sl_step = st.number_input("Stop step", 1, 100, value=10)
+                    else:
+                        sl_from = sl_to = sl_step = None
+                    sweep_params = {
+                        'ema_period': (p_from, p_to, p_step),
+                        'profit_target': (pt_from, pt_to, pt_step) if strat_choice.startswith("EMA10") else None,
+                        'profit_target_points': (pt_from, pt_to, pt_step) if strat_choice.startswith("EMA50") else None,
+                        'stop_loss': (sl_from, sl_to, sl_step) if strat_choice.startswith("EMA10") else None,
+                    }
+                elif strat_choice.startswith("RSI"):
+                    r_from = st.number_input("RSI Period from", 2, 50, value=6)
+                    r_to = st.number_input("RSI Period to", 2, 50, value=14)
+                    r_step = st.number_input("RSI Period step", 1, 10, value=2)
+                    sweep_params = {'rsi_period': (r_from, r_to, r_step)}
+                run_sweep = st.button("Run Sweep")
+                if run_sweep and sweep_params:
+                    grids = []
+                    for k, rng in sweep_params.items():
+                        if rng is None:
+                            continue
+                        a,b,c = rng
+                        grids.append((k, list(range(int(a), int(b)+1, int(c)))))
+                    combos = [{}]
+                    for k, vals in grids:
+                        combos = [dict(x, **{k:v}) for x in combos for v in vals]
+                    if len(combos) > max_runs:
+                        combos = combos[:int(max_runs)]
+                    rows = []
+                    prog = st.progress(0.0)
+                    strat_cls = STRATEGY_MAP[strat_choice]
+                    for i,params_ in enumerate(combos):
+                        p = dict(strat_params)
+                        p.update(params_)
+                        s = strat_cls(params=p)
+                        engine2 = BacktestEngine(data, s, option_delta=option_delta, lots=lots, option_price_per_unit=price_per_unit)
+                        r2 = engine2.run()
+                        eq2 = r2['equity_curve']
+                        t2 = r2['trade_log']
+                        rows.append({
+                            **params_,
+                            'Total Return %': total_return(eq2)*100,
+                            'Sharpe': sharpe_ratio(eq2),
+                            'MaxDD %': max_drawdown(eq2)*100,
+                            'WinRate %': win_rate(t2)*100,
+                            'PF': profit_factor(t2),
+                            'Trades': len(t2),
+                        })
+                        prog.progress((i+1)/len(combos))
+                    resdf = pd.DataFrame(rows)
+                    st.dataframe(resdf.sort_values(['Total Return %','Sharpe'], ascending=[False, False]), use_container_width=True)
+                    if len(grids) == 2:
+                        (k1, v1), (k2, v2) = grids[0], grids[1]
+                        piv = resdf.pivot(index=k1, columns=k2, values='Total Return %')
+                        fig_heat = px.imshow(piv, text_auto=True, color_continuous_scale='RdYlGn', origin='lower', title='Sweep Heatmap (Total Return %)')
+                        st.plotly_chart(fig_heat, use_container_width=True)
+
+        with tabs[6]:
+            st.caption("Compare multiple strategies with default/current params")
+            picks = st.multiselect("Strategies", list(STRATEGY_MAP.keys()), default=[strat_choice])
+            if st.button("Run Comparison") and picks:
+                section_compare(data, picks, strat_choice, strat_params, STRATEGY_MAP, option_delta, lots, price_per_unit)
+
+        with tabs[7]:
+            st.subheader("Export & Report")
+            metrics_dict = {
+                'Start Amount': float(eq_for_display['equity'].iloc[0]),
+                'Final Amount': float(eq_for_display['equity'].iloc[-1]),
+                'Total Return (%)': total_return(eq_for_display)*100,
+                'Sharpe Ratio': sharpe_ratio(eq_for_display),
+                'Max Drawdown (%)': max_drawdown(eq_for_display)*100,
+                'Win Rate (%)': win_rate(shown_trades)*100,
+                'Total Trades': len(shown_trades),
+                'Profit Factor': profit_factor(shown_trades),
+                'Largest Winning Trade': largest_winning_trade(shown_trades),
+                'Largest Losing Trade': largest_losing_trade(shown_trades),
+                'Average Holding Time (min)': average_holding_time(shown_trades),
+                'Max Consecutive Wins': max_consecutive_wins(shown_trades),
+                'Max Consecutive Losses': max_consecutive_losses(shown_trades),
+                'indicator_cfg': strategy.indicator_config() if hasattr(strategy, 'indicator_config') else [],
+            }
+            section_export(eq_for_display, data, shown_trades, indicators, strategy, metrics_dict)
