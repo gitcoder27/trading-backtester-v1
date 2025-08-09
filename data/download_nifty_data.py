@@ -19,8 +19,9 @@ headers = {
 }
 
 # Start and end dates (modify as needed)
-start_date = datetime(2025, 1, 18, tzinfo=pytz.timezone('Asia/Kolkata'))
-end_date = datetime(2025, 4, 13, tzinfo=pytz.timezone('Asia/Kolkata'))
+# format will be yyyy, mm, dd
+start_date = datetime(2025, 7, 1, tzinfo=pytz.timezone('Asia/Kolkata'))
+end_date = datetime(2025, 8, 8, tzinfo=pytz.timezone('Asia/Kolkata'))
 
 # File location to save the CSV (local 'data' folder)
 file_name = f"nifty_2025_1min_{start_date.strftime('%d%b')}_{end_date.strftime('%d%b')}.csv"
@@ -53,22 +54,27 @@ while start_date < end_date:
             print("Response text:", response.text)
             break
         response = response.json()
-        if response and 'data' in response and all(
-            key in response['data'] for key in ['Time', 'o', 'h', 'l', 'c', 'v', 't', 'oi']
-        ):
-            zipped = zip(
-                response['data']['Time'],
-                response['data']['o'],
-                response['data']['h'],
-                response['data']['l'],
-                response['data']['c'],
-                response['data']['v'],
-                response['data']['t'],
-                response['data']['oi']
-            )
-            all_data.extend(zipped)
+        # Check for valid data structure and non-None, non-empty lists
+        required_keys = ['Time', 'o', 'h', 'l', 'c', 'v', 't', 'oi']
+        if response and 'data' in response:
+            data_dict = response['data']
+            if all(key in data_dict and isinstance(data_dict[key], list) and data_dict[key] for key in required_keys):
+                zipped = zip(
+                    data_dict['Time'],
+                    data_dict['o'],
+                    data_dict['h'],
+                    data_dict['l'],
+                    data_dict['c'],
+                    data_dict['v'],
+                    data_dict['t'],
+                    data_dict['oi']
+                )
+                all_data.extend(zipped)
+            else:
+                print("Incomplete, empty, or missing data in response. Skipping this iteration.")
+                print({k: data_dict.get(k) for k in required_keys})
         else:
-            print("Incomplete or missing data in response. Skipping this iteration.")
+            print("No 'data' field in response. Skipping this iteration.")
     except json.JSONDecodeError as e:
         print("JSON decoding failed:", str(e))
         print("Raw response text:", response.text)
@@ -88,4 +94,4 @@ if all_data:
         writer.writerows(all_data)
     print(f"Data saved to {file_path}")
 else:
-    print("No data fetched. CSV not written.")
+    print("No valid data fetched. CSV not written.")

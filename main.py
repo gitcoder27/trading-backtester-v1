@@ -10,6 +10,7 @@ from backtester.engine import BacktestEngine
 from backtester.metrics import total_return, sharpe_ratio, max_drawdown, win_rate, profit_factor, largest_winning_trade, largest_losing_trade, average_holding_time, max_consecutive_wins, max_consecutive_losses
 from backtester.reporting import plot_equity_curve, plot_trades_on_price, save_trade_log, generate_html_report
 from strategies.bbands_scalper import BBandsScalperStrategy
+from strategies.ema10_scalper import EMA10ScalperStrategy
 from strategies.ema44_scalper import EMA44ScalperStrategy
 from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
 from strategies.rsi_cross_strategy import RSICrossStrategy
@@ -26,6 +27,9 @@ def main():
     parser.add_argument('-r','--report',help='Generate HTML report',action='store_true')
     parser.add_argument('-t','--timeframe',help="Timeframe for resampling (e.g. '1T'=1min, '2T'=2min, '5T'=5min, '10T'=10min)",default='1T')
     parser.add_argument('--debug', action='store_true', help='Enable debug/info logging for strategy internals')
+    parser.add_argument('--option-delta', type=float, default=0.5, help='ATM option delta (e.g. 0.5 for ATM, 0.7 for ITM)')
+    parser.add_argument('--lots', type=int, default=2, help='Number of lots to trade (1 lot = 75 units)')
+    parser.add_argument('--option-price-per-unit', type=float, default=1.0, help='Multiplier for option price per unit (default 1.0)')
     args = parser.parse_args()
 
     # Set up logging for debug/info output
@@ -62,14 +66,21 @@ def main():
 
     # Initialize strategy
     strategy_params = {'debug': args.debug}
-    # strategy = EMA44ScalperStrategy()
+    strategy = EMA44ScalperStrategy()
     # strategy = BBandsScalperStrategy()
     # strategy = FirstCandleBreakoutStrategy(params=strategy_params)
     # strategy = RSICrossStrategy(params=strategy_params)
-    strategy = EMA50ScalperStrategy(params=strategy_params) # Use new strategy
+    # strategy = EMA50ScalperStrategy(params=strategy_params) # Use new strategy
+    # strategy = EMA10ScalperStrategy(params=strategy_params)
 
     # Run backtest
-    engine = BacktestEngine(data, strategy)
+    engine = BacktestEngine(
+        data,
+        strategy,
+        option_delta=args.option_delta,
+        lots=args.lots,
+        option_price_per_unit=args.option_price_per_unit
+    )
     results = engine.run()
 
     # Calculate metrics
@@ -150,7 +161,7 @@ def main():
         cmd = input("Enter command ([t]rades plot, [e]quity curve, [q]uit): ").strip().lower()
         if cmd == "t":
             from backtester.reporting import plot_trades_on_candlestick_plotly
-            indicator_cfg = strategy.indicator_config() if hasattr(strategy, 'indicator_config') else {}
+            indicator_cfg = strategy.indicator_config() if hasattr(strategy, 'indicator_config') else []
             plot_trades_on_candlestick_plotly(
                 data, trade_log, indicators=indicators, indicator_cfg=indicator_cfg, title="Trades on Candlestick Chart"
             )

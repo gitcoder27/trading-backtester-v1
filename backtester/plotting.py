@@ -16,12 +16,13 @@ def plot_trades_on_candlestick_plotly(data, trades, indicators=None, indicator_c
     indicator_cfg: list of dicts from strategy.indicator_config()
     """
     # Determine if any indicator needs a second panel
-    has_panel2 = False
-    if indicator_cfg:
-        for cfg in indicator_cfg:
-            if cfg.get('panel', 1) == 2:
-                has_panel2 = True
-                break
+    # Normalize indicator_cfg to a list for robust handling
+    cfg_list = []
+    if isinstance(indicator_cfg, list):
+        cfg_list = indicator_cfg
+    elif isinstance(indicator_cfg, dict):
+        cfg_list = [indicator_cfg]
+    has_panel2 = any((cfg.get('panel', 1) == 2) for cfg in cfg_list)
     rows = 2 if has_panel2 else 1
     specs = [[{"secondary_y": False}] for _ in range(rows)]
     row_heights = [0.7, 0.3] if rows == 2 else [1.0]
@@ -36,8 +37,8 @@ def plot_trades_on_candlestick_plotly(data, trades, indicators=None, indicator_c
         close=data['close'],
         name='Price'), row=1, col=1)
     # Add indicators
-    if indicators is not None and indicator_cfg:
-        for cfg in indicator_cfg:
+    if indicators is not None and cfg_list:
+        for cfg in cfg_list:
             col = cfg.get('column')
             if cfg.get('plot', True) and col in indicators.columns:
                 panel = cfg.get('panel', 1)
@@ -62,7 +63,7 @@ def plot_trades_on_candlestick_plotly(data, trades, indicators=None, indicator_c
             y=[trade['entry_price']],
             mode='markers',
             marker=dict(color=color, symbol='triangle-up', size=10),
-            name='Entry' if trade['direction'].lower() == 'buy' else 'Short Entry',
+            name='Entry' if trade['direction'].lower() in ('buy', 'long') else 'Short Entry',
             showlegend=False,
             customdata=[[trade_id_str]],
             hovertemplate='Entry<br>Time: %{x}<br>Price: %{y}<extra></extra>'

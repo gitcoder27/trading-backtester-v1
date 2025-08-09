@@ -6,10 +6,13 @@ Core backtesting engine for running trading strategies on historical data.
 import pandas as pd
 
 class BacktestEngine:
-    def __init__(self, data, strategy, initial_cash=100000):
+    def __init__(self, data, strategy, initial_cash=100000, option_delta=0.5, lots=2, option_price_per_unit=1):
         self.data = data
         self.strategy = strategy
         self.initial_cash = initial_cash
+        self.option_delta = option_delta
+        self.lots = lots
+        self.option_price_per_unit = option_price_per_unit
 
     def run(self):
         """
@@ -30,6 +33,7 @@ class BacktestEngine:
         trade_log = []
         equity_curve = []
         last_signal = 0
+        option_qty = self.lots * 75
 
         for row in df.itertuples(index=True):
             idx = row.Index
@@ -71,14 +75,15 @@ class BacktestEngine:
                 # Use strategy-specific exit logic
                 exit_now, exit_reason = self.strategy.should_exit(position, row, entry_price)
                 if exit_now:
+                    trade['exit_time'] = row.timestamp
+                    trade['exit_price'] = price
+                    # Simulate ATM option price movement: option_delta x index movement
+                    option_move = self.option_delta * (price - entry_price)
                     if position == 'long':
-                        trade['exit_time'] = row.timestamp
-                        trade['exit_price'] = price
-                        trade['pnl'] = price - entry_price
+                        trade['pnl'] = option_move * option_qty * self.option_price_per_unit
                     else:
-                        trade['exit_time'] = row.timestamp
-                        trade['exit_price'] = price
-                        trade['pnl'] = entry_price - price
+                        # For short (PE), reverse the sign
+                        trade['pnl'] = -option_move * option_qty * self.option_price_per_unit
                     trade['exit_reason'] = exit_reason
                     trade_log.append(trade)
                     equity += trade['pnl']
@@ -125,10 +130,11 @@ class BacktestEngine:
             last_row = df.iloc[-1]
             trade['exit_time'] = last_row.timestamp
             trade['exit_price'] = last_row.close
+            option_move = self.option_delta * (last_row.close - entry_price)
             if position == 'long':
-                trade['pnl'] = last_row.close - entry_price
+                trade['pnl'] = option_move * option_qty * self.option_price_per_unit
             else:
-                trade['pnl'] = entry_price - last_row.close
+                trade['pnl'] = -option_move * option_qty * self.option_price_per_unit
             trade['exit_reason'] = 'End of Data'
             trade_log.append(trade)
             equity += trade['pnl']
