@@ -4,12 +4,11 @@ Allows selecting data, strategy and parameters, running backtests, viewing plots
 and downloading results/reports—all from the browser.
 """
 import os
-import io
 import tempfile
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
-from backtester.data_loader import load_csv
 from backtester.engine import BacktestEngine
 from backtester.metrics import (
     total_return,
@@ -26,185 +25,243 @@ from backtester.metrics import (
 from backtester.plotting import plot_trades_on_candlestick_plotly, plot_equity_curve
 from backtester.html_report import generate_html_report
 
-from strategies.ema10_scalper import EMA10ScalperStrategy
-from strategies.ema44_scalper import EMA44ScalperStrategy
-from strategies.ema50_scalper import EMA50ScalperStrategy
-from strategies.bbands_scalper import BBandsScalperStrategy
-from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
-from strategies.rsi_cross_strategy import RSICrossStrategy
+from webapp.strategies_registry import STRATEGY_MAP
+from webapp.data_utils import list_data_files, load_data_from_source, filter_by_date
+from webapp.analytics import (
+    compute_drawdown,
+    rolling_sharpe,
+    monthly_returns_heatmap,
+    adjust_equity_for_fees,
+    filter_trades,
+)
+from webapp.prefs import load_prefs, save_prefs, get_pref, set_pref
+from webapp.ui_sections import render_metrics as ui_render_metrics
+from webapp.ui_sections import section_overview, section_chart, section_trades, section_analytics, section_compare, section_export
 
 
 st.set_page_config(page_title="Strategy Backtester", layout="wide")
 st.title("Strategy Backtester")
 st.caption("Interactive web app for running and analyzing backtests.")
 
+# Load persisted preferences (used as defaults)
+_prefs = load_prefs()
+
+
+def _parse_date(val):
+    if val is None:
+        return None
+    if isinstance(val, str):
+        try:
+            return pd.to_datetime(val).date()
+        except Exception:
+            return None
+    return val
+
+
+def seed_session_defaults():
+    if st.session_state.get('_prefs_applied', False):
+        return
+    # Data & timeframe
+    st.session_state.setdefault('mode', get_pref(_prefs, 'mode', "Choose from data/"))
+    st.session_state.setdefault('timeframe', get_pref(_prefs, 'timeframe', "1T"))
+    st.session_state.setdefault('data_file', get_pref(_prefs, 'data_file', None))
+    # Dates
+    st.session_state.setdefault('start_date', _parse_date(get_pref(_prefs, 'start_date', None)))
+    st.session_state.setdefault('end_date', _parse_date(get_pref(_prefs, 'end_date', None)))
+    # Strategy & params
+    st.session_state.setdefault('strategy', get_pref(_prefs, 'strategy', list(STRATEGY_MAP.keys())[0]))
+    st.session_state.setdefault('debug', bool(get_pref(_prefs, 'debug', False)))
+    st.session_state.setdefault('ema10_ema_period', int(get_pref(_prefs, 'ema10_ema_period', 10)))
+    st.session_state.setdefault('ema10_pt', int(get_pref(_prefs, 'ema10_pt', 20)))
+    st.session_state.setdefault('ema10_sl', int(get_pref(_prefs, 'ema10_sl', 15)))
+    st.session_state.setdefault('ema50_ema_period', int(get_pref(_prefs, 'ema50_ema_period', 50)))
+    st.session_state.setdefault('ema50_pt', int(get_pref(_prefs, 'ema50_pt', 20)))
+    st.session_state.setdefault('rsi_period', int(get_pref(_prefs, 'rsi_period', 9)))
+    st.session_state.setdefault('rsi_overbought', int(get_pref(_prefs, 'rsi_overbought', 80)))
+    st.session_state.setdefault('rsi_oversold', int(get_pref(_prefs, 'rsi_oversold', 20)))
+    # Execution & filters
+    st.session_state.setdefault('option_delta', float(get_pref(_prefs, 'option_delta', 0.5)))
+    st.session_state.setdefault('lots', int(get_pref(_prefs, 'lots', 2)))
+    st.session_state.setdefault('price_per_unit', float(get_pref(_prefs, 'price_per_unit', 1.0)))
+    st.session_state.setdefault('fee_per_trade', float(get_pref(_prefs, 'fee_per_trade', 0.0)))
+    st.session_state.setdefault('direction_filter', list(get_pref(_prefs, 'direction_filter', ["long", "short"])))
+    st.session_state.setdefault('apply_time_filter', bool(get_pref(_prefs, 'apply_time_filter', False)))
+    st.session_state.setdefault('start_hour', int(get_pref(_prefs, 'start_hour', 9)))
+    st.session_state.setdefault('end_hour', int(get_pref(_prefs, 'end_hour', 15)))
+    st.session_state.setdefault('apply_weekday_filter', bool(get_pref(_prefs, 'apply_weekday_filter', False)))
+    st.session_state.setdefault('weekdays', list(get_pref(_prefs, 'weekdays', [0, 1, 2, 3, 4])))
+    st.session_state.setdefault('apply_filters_to_charts', bool(get_pref(_prefs, 'apply_filters_to_charts', False)))
+
+    st.session_state['_prefs_applied'] = True
+
 
 @st.cache_data(show_spinner=False)
-def list_data_files(data_folder: str = "data"):
-    if not os.path.isdir(data_folder):
-        return []
-    return [f for f in os.listdir(data_folder) if f.endswith(".csv")]
+def cached_list_data_files(data_folder: str = "data"):
+    return list_data_files(data_folder)
 
 
 @st.cache_data(show_spinner=True)
-def load_data_from_source(file_path: str | None, timeframe: str, uploaded_bytes: bytes | None):
-    if uploaded_bytes is not None:
-        # Save to temp and use load_csv for consistent resampling
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp:
-            tmp.write(uploaded_bytes)
-            tmp_path = tmp.name
-        try:
-            df = load_csv(tmp_path, timeframe=timeframe)
-        finally:
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-        return df
-    elif file_path is not None:
-        return load_csv(file_path, timeframe=timeframe)
-    else:
-        return None
+def cached_load_data_from_source(file_path: str | None, timeframe: str, uploaded_bytes: bytes | None):
+    return load_data_from_source(file_path, timeframe, uploaded_bytes)
 
 
 def strategy_selector():
-    strategies = {
-        "EMA10Scalper": EMA10ScalperStrategy,
-        "EMA44Scalper": EMA44ScalperStrategy,
-        "EMA50Scalper": EMA50ScalperStrategy,
-        "BBandsScalper": BBandsScalperStrategy,
-        "FirstCandleBreakout": FirstCandleBreakoutStrategy,
-        "RSICross": RSICrossStrategy,
-    }
-    choice = st.selectbox("Strategy", list(strategies.keys()), index=0)
-    return choice, strategies[choice]
+    choice = st.selectbox("Strategy", list(STRATEGY_MAP.keys()), index=0)
+    return choice, STRATEGY_MAP[choice]
 
+
+# Seed defaults once per session
+seed_session_defaults()
 
 with st.sidebar:
     st.header("Configuration")
 
     # Data selection
-    mode = st.radio("Data Source", ["Choose from data/", "Upload CSV"], index=0)
-    timeframe = st.selectbox("Timeframe", ["1T", "2T", "5T", "10T"], index=0,
-                             help="Pandas resample alias: 1T=1min, etc.")
+    mode_options = ["Choose from data/", "Upload CSV"]
+    mode_index = mode_options.index(st.session_state.get('mode', "Choose from data/")) if st.session_state.get('mode', "Choose from data/") in mode_options else 0
+    mode = st.radio("Data Source", mode_options, index=mode_index, key='mode')
+
+    tf_options = ["1T", "2T", "5T", "10T"]
+    tf_index = tf_options.index(st.session_state.get('timeframe', "1T")) if st.session_state.get('timeframe', "1T") in tf_options else 0
+    timeframe = st.selectbox("Timeframe", tf_options, index=tf_index, help="Pandas resample alias: 1T=1min, etc.", key='timeframe')
 
     selected_file_path = None
     uploaded_bytes = None
     if mode == "Choose from data/":
-        files = list_data_files()
+        files = cached_list_data_files()
         if files:
-            file_name = st.selectbox("CSV File", files)
+            df_index = files.index(st.session_state.get('data_file', files[0])) if st.session_state.get('data_file') in files else 0
+            file_name = st.selectbox("CSV File", files, index=df_index, key='data_file')
             selected_file_path = os.path.join("data", file_name)
         else:
             st.info("No CSV files found in data/.")
     else:
-        up = st.file_uploader("Upload CSV", type=["csv"])
+        up = st.file_uploader("Upload CSV", type=["csv"])  # no key to avoid persisting large bytes in session
         if up is not None:
             uploaded_bytes = up.read()
 
     # Date range filtering
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Start date", value=None)
+        start_date = st.date_input("Start date", value=st.session_state.get('start_date', None), key='start_date')
     with col2:
-        end_date = st.date_input("End date", value=None)
+        end_date = st.date_input("End date", value=st.session_state.get('end_date', None), key='end_date')
 
     # Strategy selection + parameters
     st.subheader("Strategy & Params")
-    strat_choice, strat_cls = strategy_selector()
+    s_keys = list(STRATEGY_MAP.keys())
+    s_index = s_keys.index(st.session_state.get('strategy', s_keys[0])) if st.session_state.get('strategy') in s_keys else 0
+    strat_choice = st.selectbox("Strategy", s_keys, index=s_index, key='strategy')
+    strat_cls = STRATEGY_MAP[strat_choice]
 
-    debug = st.checkbox("Enable debug logs", value=False)
+    debug = st.checkbox("Enable debug logs", value=bool(st.session_state.get('debug', False)), key='debug')
 
     # Strategy-specific parameter widgets
-    strat_params = {"debug": debug}
+    strat_params: dict = {"debug": debug}
     if strat_choice.startswith("EMA10"):
-        ema_period = st.number_input("EMA Period", min_value=5, max_value=100, value=10, step=1)
-        pt = st.number_input("Profit Target (pts)", min_value=1, max_value=200, value=20, step=1)
-        sl = st.number_input("Stop Loss (pts)", min_value=1, max_value=200, value=15, step=1)
-        strat_params.update({"ema_period": ema_period, "profit_target": pt, "stop_loss": sl})
+        ema_period = st.number_input("EMA Period", min_value=5, max_value=200, value=int(st.session_state.get('ema10_ema_period', 10)), step=1, key='ema10_ema_period')
+        pt = st.number_input("Profit Target (pts)", min_value=1, max_value=400, value=int(st.session_state.get('ema10_pt', 20)), step=1, key='ema10_pt')
+        sl = st.number_input("Stop Loss (pts)", min_value=1, max_value=400, value=int(st.session_state.get('ema10_sl', 15)), step=1, key='ema10_sl')
+        strat_params.update({"ema_period": int(ema_period), "profit_target": int(pt), "stop_loss": int(sl)})
     elif strat_choice.startswith("EMA44"):
         st.caption("EMA44 strategy with fixed params (period=44).")
     elif strat_choice.startswith("EMA50"):
-        ema_period = st.number_input("EMA Period", min_value=10, max_value=200, value=50, step=1)
-        pt = st.number_input("Profit Target (pts)", min_value=1, max_value=200, value=20, step=1)
-        strat_params.update({"ema_period": ema_period, "profit_target_points": pt})
+        ema_period = st.number_input("EMA Period", min_value=10, max_value=200, value=int(st.session_state.get('ema50_ema_period', 50)), step=1, key='ema50_ema_period')
+        pt = st.number_input("Profit Target (pts)", min_value=1, max_value=400, value=int(st.session_state.get('ema50_pt', 20)), step=1, key='ema50_pt')
+        strat_params.update({"ema_period": int(ema_period), "profit_target_points": int(pt)})
     elif strat_choice.startswith("RSI"):
-        rsi_period = st.number_input("RSI Period", min_value=2, max_value=50, value=9, step=1)
-        overbought = st.number_input("Overbought", min_value=50, max_value=100, value=80, step=1)
-        oversold = st.number_input("Oversold", min_value=0, max_value=50, value=20, step=1)
-        strat_params.update({"rsi_period": rsi_period, "overbought": overbought, "oversold": oversold})
+        rsi_period = st.number_input("RSI Period", min_value=2, max_value=50, value=int(st.session_state.get('rsi_period', 9)), step=1, key='rsi_period')
+        overbought = st.number_input("Overbought", min_value=50, max_value=100, value=int(st.session_state.get('rsi_overbought', 80)), step=1, key='rsi_overbought')
+        oversold = st.number_input("Oversold", min_value=0, max_value=50, value=int(st.session_state.get('rsi_oversold', 20)), step=1, key='rsi_oversold')
+        strat_params.update({"rsi_period": int(rsi_period), "overbought": int(overbought), "oversold": int(oversold)})
     elif strat_choice.startswith("FirstCandle"):
         st.caption("First Candle Breakout uses its internal defaults.")
     elif strat_choice.startswith("BBands"):
         st.caption("Bollinger Bands scalper uses its internal defaults.")
 
-    # Engine params
     st.subheader("Execution & Options")
-    option_delta = st.slider("Option Delta", min_value=0.1, max_value=1.0, value=0.5, step=0.05)
-    lots = st.number_input("Lots (1 lot=75)", min_value=1, max_value=100, value=2, step=1)
-    price_per_unit = st.number_input("Option Price Multiplier", min_value=0.1, max_value=10.0, value=1.0, step=0.1)
+    option_delta = st.slider("Option Delta", min_value=0.1, max_value=1.0, value=float(st.session_state.get('option_delta', 0.5)), step=0.05, key='option_delta')
+    lots = st.number_input("Lots (1 lot=75)", min_value=1, max_value=100, value=int(st.session_state.get('lots', 2)), step=1, key='lots')
+    price_per_unit = st.number_input("Price per unit", min_value=0.1, max_value=1000.0, value=float(st.session_state.get('price_per_unit', 1.0)), step=0.1, key='price_per_unit')
+    fee_per_trade = st.number_input("Fee per trade (absolute)", min_value=0.0, max_value=10000.0, value=float(st.session_state.get('fee_per_trade', 0.0)), step=1.0, help="Deducted from PnL per closed trade, for analytics/plots only", key='fee_per_trade')
+    direction_filter = st.multiselect("Directions to include", ["long", "short"], default=st.session_state.get('direction_filter', ["long", "short"]), key='direction_filter')
+    apply_time_filter = st.checkbox("Filter by trading hours", value=bool(st.session_state.get('apply_time_filter', False)), key='apply_time_filter')
+    if apply_time_filter:
+        start_hour = st.number_input("Start hour (0-23)", min_value=0, max_value=23, value=int(st.session_state.get('start_hour', 9)), key='start_hour')
+        end_hour = st.number_input("End hour (0-23)", min_value=0, max_value=23, value=int(st.session_state.get('end_hour', 15)), key='end_hour')
+    else:
+        start_hour = st.session_state.get('start_hour', 9)
+        end_hour = st.session_state.get('end_hour', 15)
+    apply_weekday_filter = st.checkbox("Filter by weekdays", value=bool(st.session_state.get('apply_weekday_filter', False)), key='apply_weekday_filter')
+    if apply_weekday_filter:
+        weekdays = st.multiselect("Weekdays (0=Mon ... 6=Sun)", options=list(range(7)), default=st.session_state.get('weekdays', [0, 1, 2, 3, 4]), key='weekdays')
+    else:
+        weekdays = st.session_state.get('weekdays', [0, 1, 2, 3, 4])
+    apply_filters_to_charts = st.checkbox("Apply filters to charts", value=bool(st.session_state.get('apply_filters_to_charts', False)), key='apply_filters_to_charts')
 
     run_btn = st.button("Run Backtest", type="primary", use_container_width=True)
 
-
-def filter_by_date(df: pd.DataFrame, start_date, end_date) -> pd.DataFrame:
-    """Filter a DataFrame by date range, handling tz-aware/naive safely.
-    - If data timestamps are tz-aware and inputs are naive, localize inputs to the same tz.
-    - End date is treated as inclusive (end of day) by filtering strictly before next day.
-    """
-    if 'timestamp' not in df.columns:
-        return df
-    ts = df['timestamp']
-    tz = getattr(ts.dt, 'tz', None)
-    # Start date
-    if start_date:
-        start_dt = pd.to_datetime(start_date)
-        if tz is not None and start_dt.tzinfo is None:
-            start_dt = start_dt.tz_localize(tz)
-        df = df[ts >= start_dt]
-        ts = df['timestamp']
-    # End date (inclusive end-of-day)
-    if end_date:
-        end_dt = pd.to_datetime(end_date)
-        if tz is not None and end_dt.tzinfo is None:
-            end_dt = end_dt.tz_localize(tz)
-        end_dt_next = end_dt + pd.Timedelta(days=1)
-        df = df[ts < end_dt_next]
-    return df
-
-
-def render_metrics(equity_curve: pd.DataFrame, trade_log: pd.DataFrame):
-    start_amount = float(equity_curve['equity'].iloc[0])
-    final_amount = float(equity_curve['equity'].iloc[-1])
-
-    kpis = {
-        "Start Amount": start_amount,
-        "Final Amount": final_amount,
-        "Total Return (%)": total_return(equity_curve) * 100,
-        "Sharpe Ratio": sharpe_ratio(equity_curve),
-        "Max Drawdown (%)": max_drawdown(equity_curve) * 100,
-        "Win Rate (%)": win_rate(trade_log) * 100,
-        "Total Trades": len(trade_log),
-        "Profit Factor": profit_factor(trade_log),
-        "Largest Win": largest_winning_trade(trade_log),
-        "Largest Loss": largest_losing_trade(trade_log),
-        "Avg Holding (min)": average_holding_time(trade_log) if len(trade_log) else 0,
-        "Max Consec Wins": max_consecutive_wins(trade_log),
-        "Max Consec Losses": max_consecutive_losses(trade_log),
-    }
-
-    cols = st.columns(4)
-    items = list(kpis.items())
-    for i, (k, v) in enumerate(items):
-        with cols[i % 4]:
-            st.metric(k, f"{v:.2f}" if isinstance(v, float) else str(v))
+# Note: We do NOT save prefs here. Saving only happens when "Run Backtest" is clicked.
 
 
 if run_btn:
+    # Persist preferences only when running a backtest
+    # Collect current session state into prefs then save
+    for k in [
+        'mode', 'timeframe', 'data_file', 'start_date', 'end_date', 'strategy', 'debug',
+        'ema10_ema_period', 'ema10_pt', 'ema10_sl', 'ema50_ema_period', 'ema50_pt',
+        'rsi_period', 'rsi_overbought', 'rsi_oversold', 'option_delta', 'lots',
+        'price_per_unit', 'fee_per_trade', 'direction_filter', 'apply_time_filter',
+        'start_hour', 'end_hour', 'apply_weekday_filter', 'weekdays', 'apply_filters_to_charts'
+    ]:
+        if k in st.session_state:
+            set_pref(_prefs, k, st.session_state[k])
+    save_prefs(_prefs)
+
+    # Resolve inputs for run
+    mode = st.session_state.get('mode', "Choose from data/")
+    timeframe = st.session_state.get('timeframe', "1T")
+    start_date = st.session_state.get('start_date', None)
+    end_date = st.session_state.get('end_date', None)
+    strat_choice = st.session_state.get('strategy', list(STRATEGY_MAP.keys())[0])
+    strat_cls = STRATEGY_MAP[strat_choice]
+    option_delta = float(st.session_state.get('option_delta', 0.5))
+    lots = int(st.session_state.get('lots', 2))
+    price_per_unit = float(st.session_state.get('price_per_unit', 1.0))
+    fee_per_trade = float(st.session_state.get('fee_per_trade', 0.0))
+    direction_filter = list(st.session_state.get('direction_filter', ["long", "short"]))
+    apply_time_filter = bool(st.session_state.get('apply_time_filter', False))
+    start_hour = int(st.session_state.get('start_hour', 9))
+    end_hour = int(st.session_state.get('end_hour', 15))
+    apply_weekday_filter = bool(st.session_state.get('apply_weekday_filter', False))
+    weekdays = list(st.session_state.get('weekdays', [0, 1, 2, 3, 4]))
+    apply_filters_to_charts = bool(st.session_state.get('apply_filters_to_charts', False))
+
+    # Strategy-specific params reconstruction
+    debug = bool(st.session_state.get('debug', False))
+    strat_params = {"debug": debug}
+    if strat_choice.startswith("EMA10"):
+        strat_params.update({
+            "ema_period": int(st.session_state.get('ema10_ema_period', 10)),
+            "profit_target": int(st.session_state.get('ema10_pt', 20)),
+            "stop_loss": int(st.session_state.get('ema10_sl', 15)),
+        })
+    elif strat_choice.startswith("EMA50"):
+        strat_params.update({
+            "ema_period": int(st.session_state.get('ema50_ema_period', 50)),
+            "profit_target_points": int(st.session_state.get('ema50_pt', 20)),
+        })
+    elif strat_choice.startswith("RSI"):
+        strat_params.update({
+            "rsi_period": int(st.session_state.get('rsi_period', 9)),
+            "overbought": int(st.session_state.get('rsi_overbought', 80)),
+            "oversold": int(st.session_state.get('rsi_oversold', 20)),
+        })
+
     if selected_file_path is None and uploaded_bytes is None:
         st.error("Please choose a CSV from data/ or upload one.")
     else:
-        data = load_data_from_source(selected_file_path, timeframe, uploaded_bytes)
+        data = cached_load_data_from_source(selected_file_path, timeframe, uploaded_bytes)
         if data is None or data.empty:
             st.error("Failed to load data or data is empty.")
         else:
@@ -225,72 +282,138 @@ if run_btn:
             trade_log = results['trade_log']
             indicators = results['indicators'] if 'indicators' in results else None
 
-            # KPIs
-            st.subheader("Performance Metrics")
-            render_metrics(equity_curve, trade_log)
-
-            # Plots
-            st.subheader("Charts")
-            c1, c2 = st.columns([2, 1])
-            with c1:
-                # Enrich trade log with ids for hover
-                tlog = trade_log.reset_index(drop=True).copy()
-                tlog['trade_id'] = tlog.index
-                indicator_cfg = strategy.indicator_config() if hasattr(strategy, 'indicator_config') else []
-                fig_trades = plot_trades_on_candlestick_plotly(
-                    data,
-                    tlog,
-                    indicators=indicators,
-                    indicator_cfg=indicator_cfg,
-                    title="Trades on Candlestick Chart",
-                    show=False,
+            # Apply analytics adjustments/filters
+            shown_trades = trade_log.copy()
+            if direction_filter or apply_time_filter or apply_weekday_filter:
+                shown_trades = filter_trades(
+                    trade_log,
+                    directions=[d.lower() for d in direction_filter],
+                    hours=(start_hour, end_hour) if apply_time_filter else None,
+                    weekdays=weekdays if apply_weekday_filter else None,
                 )
-                st.plotly_chart(fig_trades, use_container_width=True)
-            with c2:
-                fig_eq = None
-                try:
-                    # Use the interactive path
-                    fig_eq = plot_equity_curve(equity_curve, interactive=True)
-                except Exception:
-                    pass
-                if fig_eq is None:
-                    import plotly.graph_objs as go
-                    fig_eq = go.Figure()
-                    fig_eq.add_scatter(x=equity_curve['timestamp'], y=equity_curve['equity'], mode='lines', name='Equity')
-                st.plotly_chart(fig_eq, use_container_width=True)
+            eq_for_display = equity_curve
+            if fee_per_trade > 0:
+                eq_for_display = adjust_equity_for_fees(equity_curve, trade_log, fee_per_trade)
 
-            # Tables
-            st.subheader("Trades")
-            st.dataframe(trade_log)
+            # Tabs: Overview | Chart | Trades | Analytics | Sweep | Compare | Export
+            tabs = st.tabs(["Overview", "Chart", "Trades", "Analytics", "Sweep", "Compare", "Export"])
 
-            # Downloads
-            st.subheader("Export")
-            # Trades CSV
-            csv_bytes = trade_log.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Trades CSV", data=csv_bytes, file_name=f"{strategy.__class__.__name__}_trades.csv", mime="text/csv")
+            # Overview
+            with tabs[0]:
+                st.subheader("Performance Metrics")
+                ui_render_metrics(eq_for_display, shown_trades)
+                section_overview(eq_for_display)
 
-            # HTML Report (generate on demand)
-            if st.button("Generate HTML Report"):
-                with st.spinner("Generating report..."):
-                    tmpdir = tempfile.mkdtemp()
-                    report_path = os.path.join(tmpdir, "report.html")
-                    metrics_dict = {
-                        'Start Amount': float(equity_curve['equity'].iloc[0]),
-                        'Final Amount': float(equity_curve['equity'].iloc[-1]),
-                        'Total Return (%)': total_return(equity_curve)*100,
-                        'Sharpe Ratio': sharpe_ratio(equity_curve),
-                        'Max Drawdown (%)': max_drawdown(equity_curve)*100,
-                        'Win Rate (%)': win_rate(trade_log)*100,
-                        'Total Trades': len(trade_log),
-                        'Profit Factor': profit_factor(trade_log),
-                        'Largest Winning Trade': largest_winning_trade(trade_log),
-                        'Largest Losing Trade': largest_losing_trade(trade_log),
-                        'Average Holding Time (min)': average_holding_time(trade_log),
-                        'Max Consecutive Wins': max_consecutive_wins(trade_log),
-                        'Max Consecutive Losses': max_consecutive_losses(trade_log),
-                        'indicator_cfg': strategy.indicator_config() if hasattr(strategy, 'indicator_config') else [],
-                    }
-                    generate_html_report(equity_curve, data, trade_log, indicators, metrics_dict, report_path)
-                    with open(report_path, 'rb') as f:
-                        html_bytes = f.read()
-                st.download_button("Download HTML Report", data=html_bytes, file_name="report.html", mime="text/html")
+            # Chart
+            with tabs[1]:
+                section_chart(data, shown_trades if apply_filters_to_charts else trade_log, strategy, indicators)
+
+            # Trades
+            with tabs[2]:
+                section_trades(shown_trades)
+
+            # Analytics
+            with tabs[3]:
+                section_analytics(eq_for_display, shown_trades)
+
+            # Sweep
+            with tabs[4]:
+                st.caption("Parameter sweep: run small grid search over selected strategy parameters.")
+                do_sweep = st.checkbox("Enable sweep for this strategy", value=False)
+                max_runs = st.number_input("Max combinations", min_value=10, max_value=2000, value=200, step=10)
+                sweep_params = {}
+                if do_sweep:
+                    if strat_choice.startswith("EMA10") or strat_choice.startswith("EMA50"):
+                        p_from = st.number_input("EMA Period from", 5, 200, value=10)
+                        p_to = st.number_input("EMA Period to", 5, 200, value=30)
+                        p_step = st.number_input("EMA Period step", 1, 50, value=5)
+                        pt_from = st.number_input("Target from", 1, 200, value=10)
+                        pt_to = st.number_input("Target to", 1, 400, value=40)
+                        pt_step = st.number_input("Target step", 1, 100, value=10)
+                        if strat_choice.startswith("EMA10"):
+                            sl_from = st.number_input("Stop from", 1, 200, value=10)
+                            sl_to = st.number_input("Stop to", 1, 400, value=30)
+                            sl_step = st.number_input("Stop step", 1, 100, value=10)
+                        else:
+                            sl_from = sl_to = sl_step = None
+                        sweep_params = {
+                            'ema_period': (p_from, p_to, p_step),
+                            'profit_target': (pt_from, pt_to, pt_step) if strat_choice.startswith("EMA10") else None,
+                            'profit_target_points': (pt_from, pt_to, pt_step) if strat_choice.startswith("EMA50") else None,
+                            'stop_loss': (sl_from, sl_to, sl_step) if strat_choice.startswith("EMA10") else None,
+                        }
+                    elif strat_choice.startswith("RSI"):
+                        r_from = st.number_input("RSI Period from", 2, 50, value=6)
+                        r_to = st.number_input("RSI Period to", 2, 50, value=14)
+                        r_step = st.number_input("RSI Period step", 1, 10, value=2)
+                        sweep_params = {'rsi_period': (r_from, r_to, r_step)}
+                    run_sweep = st.button("Run Sweep")
+                    if run_sweep and sweep_params:
+                        # Build grid
+                        grids = []
+                        for k, rng in sweep_params.items():
+                            if rng is None:
+                                continue
+                            a,b,c = rng
+                            grids.append((k, list(range(int(a), int(b)+1, int(c)))))
+                        combos = [{}]
+                        for k, vals in grids:
+                            combos = [dict(x, **{k:v}) for x in combos for v in vals]
+                        if len(combos) > max_runs:
+                            combos = combos[:int(max_runs)]
+                        rows = []
+                        prog = st.progress(0.0)
+                        for i,params_ in enumerate(combos):
+                            p = dict(strat_params)
+                            p.update(params_)
+                            s = strat_cls(params=p)
+                            engine2 = BacktestEngine(data, s, option_delta=option_delta, lots=lots, option_price_per_unit=price_per_unit)
+                            r2 = engine2.run()
+                            eq2 = r2['equity_curve']
+                            t2 = r2['trade_log']
+                            rows.append({
+                                **params_,
+                                'Total Return %': total_return(eq2)*100,
+                                'Sharpe': sharpe_ratio(eq2),
+                                'MaxDD %': max_drawdown(eq2)*100,
+                                'WinRate %': win_rate(t2)*100,
+                                'PF': profit_factor(t2),
+                                'Trades': len(t2),
+                            })
+                            prog.progress((i+1)/len(combos))
+                        resdf = pd.DataFrame(rows)
+                        st.dataframe(resdf.sort_values(['Total Return %','Sharpe'], ascending=[False, False]), use_container_width=True)
+                        if len(grids) == 2:
+                            # 2D heatmap on first metric
+                            (k1, v1), (k2, v2) = grids[0], grids[1]
+                            piv = resdf.pivot(index=k1, columns=k2, values='Total Return %')
+                            fig_heat = px.imshow(piv, text_auto=True, color_continuous_scale='RdYlGn', origin='lower', title='Sweep Heatmap (Total Return %)')
+                            st.plotly_chart(fig_heat, use_container_width=True)
+
+            # Compare
+            with tabs[5]:
+                st.caption("Compare multiple strategies with default/current params")
+                picks = st.multiselect("Strategies", list(STRATEGY_MAP.keys()), default=[strat_choice])
+                if st.button("Run Comparison") and picks:
+                    section_compare(data, picks, strat_choice, strat_params, STRATEGY_MAP, option_delta, lots, price_per_unit)
+
+            # Export
+            with tabs[6]:
+                st.subheader("Export & Report")
+                metrics_dict = {
+                    'Start Amount': float(eq_for_display['equity'].iloc[0]),
+                    'Final Amount': float(eq_for_display['equity'].iloc[-1]),
+                    'Total Return (%)': total_return(eq_for_display)*100,
+                    'Sharpe Ratio': sharpe_ratio(eq_for_display),
+                    'Max Drawdown (%)': max_drawdown(eq_for_display)*100,
+                    'Win Rate (%)': win_rate(shown_trades)*100,
+                    'Total Trades': len(shown_trades),
+                    'Profit Factor': profit_factor(shown_trades),
+                    'Largest Winning Trade': largest_winning_trade(shown_trades),
+                    'Largest Losing Trade': largest_losing_trade(shown_trades),
+                    'Average Holding Time (min)': average_holding_time(shown_trades),
+                    'Max Consecutive Wins': max_consecutive_wins(shown_trades),
+                    'Max Consecutive Losses': max_consecutive_losses(shown_trades),
+                    'indicator_cfg': strategy.indicator_config() if hasattr(strategy, 'indicator_config') else [],
+                }
+                section_export(eq_for_display, data, shown_trades, indicators, strategy, metrics_dict)

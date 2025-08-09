@@ -1,0 +1,37 @@
+{
+  "mode": "Choose from data/",
+  "timeframe": "1T",
+  "data_file": "nifty_2025_1min_01Jul_08Aug.csv",
+  "start_date": "2025-08-06",
+  "end_date": "2025-08-07",
+  "strategy": "EMA10Scalper",
+  "debug": false,
+  "ema10_ema_period": 10,
+  "ema10_pt": 25,
+  "ema10_sl": 20,
+  "option_delta": 0.5,
+  "lots": 2,
+  "price_per_unit": 1.0,
+  "fee_per_trade": 0.0,
+  "direction_filter": [
+    "long",
+    "short"
+  ],
+  "apply_time_filter": false,
+  "apply_weekday_filter": false,
+  "apply_filters_to_charts": false,
+  "ema50_ema_period": 50,
+  "ema50_pt": 20,
+  "rsi_period": 9,
+  "rsi_overbought": 80,
+  "rsi_oversold": 20,
+  "start_hour": 9,
+  "end_hour": 15,
+  "weekdays": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ]
+}
