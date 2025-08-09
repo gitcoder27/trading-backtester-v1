@@ -141,6 +141,20 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
             'backgroundColor': '#0e1117',
             'grid': {'left': 50, 'right': 20, 'top': 20, 'bottom': 35},
             'tooltip': {'trigger': 'axis'},
+            'legend': {
+                'show': True,
+                'textStyle': {'color': '#d1d5db'},
+                'top': 10,
+            },
+            'toolbox': {
+                'show': True,
+                'feature': {
+                    'saveAsImage': {'show': True},
+                    'restore': {'show': True},
+                    'dataZoom': {'show': True},
+                },
+                'right': 20,
+            },
             'xAxis': {
                 'type': 'time',
                 'axisLine': {'lineStyle': {'color': '#374151'}},
