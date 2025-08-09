@@ -115,7 +115,7 @@ def plot_equity_curve(equity_curve, trades=None, indicators=None, title="Equity 
         fig = go.Figure()
         fig.add_trace(go.Scatter(x=equity_curve['timestamp'], y=equity_curve['equity'], mode='lines', name='Equity'))
         fig.update_layout(title=title, xaxis_title='Time', yaxis_title='Equity')
-        fig.show()
+        return fig
     else:
         plt.figure(figsize=(12, 6))
         plt.plot(equity_curve['timestamp'], equity_curve['equity'], label='Equity')

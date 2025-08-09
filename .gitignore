@@ -4,3 +4,4 @@ __pycache__/
 
 # Ignore results directory
 results/
+backtester/__pycache__/__init__.cpython-313.pyc

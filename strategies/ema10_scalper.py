@@ -9,9 +9,9 @@ from backtester.strategy_base import StrategyBase
 class EMA10ScalperStrategy(StrategyBase):
     def __init__(self, params=None):
         super().__init__(params)
-        self.ema_period = 10
-        self.profit_target = 20
-        self.stop_loss = 15
+        self.ema_period = params.get('ema_period', 10) if params else 10
+        self.profit_target = params.get('profit_target', 20) if params else 20
+        self.stop_loss = params.get('stop_loss', 15) if params else 15
 
     def indicator_config(self):
         """

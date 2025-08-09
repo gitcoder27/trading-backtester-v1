@@ -89,6 +89,25 @@ After running a backtest, you can enter the following commands at the prompt:
 
 ---
 
+## Web App (Streamlit)
+Run an interactive web UI to select strategies, tweak parameters, pick CSVs, and view plots/metrics.
+
+1) Install dependencies:
+
+```powershell
+pip install -r requirements.txt
+```
+
+2) Launch the app:
+
+```powershell
+streamlit run app.py
+```
+
+3) In the browser, choose a CSV from data/ or upload, select strategy and params, and click Run Backtest.
+
+---
+
 ## Adding New Strategies
 - Add your strategy as a new Python file in the `strategies/` directory.
 - Inherit from `StrategyBase` and implement `generate_signals(self, data)`.

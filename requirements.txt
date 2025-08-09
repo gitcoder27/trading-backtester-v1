@@ -5,3 +5,4 @@ seaborn
 plotly
 tqdm
 jinja2
+streamlit

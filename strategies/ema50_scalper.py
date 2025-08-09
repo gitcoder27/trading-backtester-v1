@@ -4,8 +4,20 @@ from backtester.strategy_base import StrategyBase
 class EMA50ScalperStrategy(StrategyBase):
     def __init__(self, params=None):
         super().__init__(params)
-        self.ema_period = 50
-        self.profit_target_points = 20
+        self.ema_period = params.get('ema_period', 50) if params else 50
+        self.profit_target_points = params.get('profit_target_points', 20) if params else 20
+
+    def indicator_config(self):
+        return [
+            {
+                "column": "ema",
+                "label": f"EMA({self.ema_period})",
+                "plot": True,
+                "color": "orange",
+                "type": "solid",
+                "panel": 1,
+            }
+        ]
 
     def generate_signals(self, data):
         """
