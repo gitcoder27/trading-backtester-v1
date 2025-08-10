@@ -8,3 +8,4 @@ jinja2
 streamlit
 streamlit-lightweight-charts
 streamlit-echarts
+pytest
