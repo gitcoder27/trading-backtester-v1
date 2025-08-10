@@ -16,6 +16,8 @@ from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
 from strategies.rsi_cross_strategy import RSICrossStrategy
 from strategies.ema50_scalper import EMA50ScalperStrategy
 from strategies.mean_reversion_scalper import MeanReversionScalper
+from strategies.supertrend_rsi_scalper import SuperTrendRSIScalper
+from strategies.momentum_scalper import MomentumScalper
 import argparse
 import pandas as pd
 
@@ -67,7 +69,9 @@ def main():
 
     # Initialize strategy
     strategy_params = {'debug': args.debug}
-    strategy = MeanReversionScalper(params=strategy_params)
+    strategy = MomentumScalper(params=strategy_params)
+    # strategy = SuperTrendRSIScalper(params=strategy_params)
+    # strategy = MeanReversionScalper(params=strategy_params)
     # strategy = MomentumScalperStrategy(params=strategy_params)
     # strategy = EMA44ScalperStrategy()
     # strategy = BBandsScalperStrategy()
