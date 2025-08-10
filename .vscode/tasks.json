@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Test Advanced Chart Key Generation",
+			"type": "shell",
+			"command": "python test_advanced_chart.py"
+		},
+		{
+			"label": "Clean up test file",
+			"type": "shell",
+			"command": "del test_advanced_chart.py"
+		}
+	]
+}
