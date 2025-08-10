@@ -187,11 +187,10 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
             'toolbox': {
                 'show': True,
                 'feature': {
-                    'saveAsImage': {'show': True},
-                    'restore': {'show': True},
                     'dataZoom': {'show': True},
-                    'magicType': {'show': True, 'type': ['line', 'bar', 'stack', 'tiled']},
-                    'brush': {'show': True, 'type': ['rect', 'polygon', 'clear']},
+                    'restore': {'show': True},
+                    'saveAsImage': {'show': True},
+                    'fullscreen': {'show': True},
                 },
                 'right': 20,
             },
