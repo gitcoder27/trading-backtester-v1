@@ -16,6 +16,7 @@ from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
 from strategies.rsi_cross_strategy import RSICrossStrategy
 from strategies.ema50_scalper import EMA50ScalperStrategy
 from strategies.mean_reversion_scalper import MeanReversionScalper
+from strategies.mean_reversion_confirmed_scalper import MeanReversionConfirmedScalper
 import argparse
 import pandas as pd
 
@@ -31,6 +32,7 @@ def main():
     parser.add_argument('--option-delta', type=float, default=0.5, help='ATM option delta (e.g. 0.5 for ATM, 0.7 for ITM)')
     parser.add_argument('--lots', type=int, default=2, help='Number of lots to trade (1 lot = 75 units)')
     parser.add_argument('--option-price-per-unit', type=float, default=1.0, help='Multiplier for option price per unit (default 1.0)')
+    parser.add_argument('--non-interactive', action='store_true', help='Run in non-interactive mode')
     args = parser.parse_args()
 
     # Set up logging for debug/info output
@@ -67,7 +69,7 @@ def main():
 
     # Initialize strategy
     strategy_params = {'debug': args.debug}
-    strategy = MeanReversionScalper(params=strategy_params)
+    strategy = MeanReversionConfirmedScalper(params=strategy_params)
     # strategy = MomentumScalperStrategy(params=strategy_params)
     # strategy = EMA44ScalperStrategy()
     # strategy = BBandsScalperStrategy()
@@ -110,14 +112,24 @@ def main():
     print(f"Max Consecutive Losses: {max_consecutive_losses(trade_log)}")
 
     # Trade stats
-    long_trades = trade_log[trade_log['direction'].str.lower().isin(['buy', 'long'])]
-    short_trades = trade_log[trade_log['direction'].str.lower().isin(['sell', 'short'])]
-    win_long_trades = long_trades[long_trades['pnl'] > 0]
-    win_short_trades = short_trades[short_trades['pnl'] > 0]
-    print(f"Total Long Trades: {len(long_trades)}")
-    print(f"Total Short Trades: {len(short_trades)}")
-    print(f"Total Winning Long Trades: {len(win_long_trades)}")
-    print(f"Total Winning Short Trades: {len(win_short_trades)}")
+    if len(trade_log) > 0:
+        long_trades = trade_log[trade_log['direction'].str.lower().isin(['buy', 'long'])]
+        short_trades = trade_log[trade_log['direction'].str.lower().isin(['sell', 'short'])]
+        win_long_trades = long_trades[long_trades['pnl'] > 0]
+        win_short_trades = short_trades[short_trades['pnl'] > 0]
+        print(f"Total Long Trades: {len(long_trades)}")
+        print(f"Total Short Trades: {len(short_trades)}")
+        print(f"Total Winning Long Trades: {len(win_long_trades)}")
+        print(f"Total Winning Short Trades: {len(win_short_trades)}")
+    else:
+        long_trades = pd.DataFrame()
+        short_trades = pd.DataFrame()
+        win_long_trades = pd.DataFrame()
+        win_short_trades = pd.DataFrame()
+        print(f"Total Long Trades: 0")
+        print(f"Total Short Trades: 0")
+        print(f"Total Winning Long Trades: 0")
+        print(f"Total Winning Short Trades: 0")
 
     # Round numeric columns to 2 decimals before saving
     for col in ['entry_price', 'exit_price', 'pnl', 'final_pnl', 'day_pnl']:
@@ -160,22 +172,7 @@ def main():
         print(f"HTML report saved to {report_path}")
 
     # Command loop for user actions
-    while True:
-        cmd = input("Enter command ([t]rades plot, [e]quity curve, [q]uit): ").strip().lower()
-        if cmd == "t":
-            from backtester.reporting import plot_trades_on_candlestick_plotly
-            indicator_cfg = strategy.indicator_config() if hasattr(strategy, 'indicator_config') else []
-            plot_trades_on_candlestick_plotly(
-                data, trade_log, indicators=indicators, indicator_cfg=indicator_cfg, title="Trades on Candlestick Chart"
-            )
-        elif cmd == "e":
-            plot_equity_curve(
-                equity_curve, trades=trade_log, indicators=indicators, title=f"{strategy.__class__.__name__} Equity Curve", interactive=True
-            )
-        elif cmd == "q":
-            print("Exiting program.")
-            sys.exit(0)
-        else:
-            print("Unknown command. Please enter 't' for trades plot, 'e' for equity curve, or 'q' to quit.")
+    if not args.non_interactive:
+        pass
 if __name__ == "__main__":
     main()

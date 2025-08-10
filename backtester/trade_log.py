@@ -8,6 +8,9 @@ def save_trade_log(trade_log: pd.DataFrame, filepath: str) -> None:
     """
     Save the trade log to a CSV file, with cumulative and daily PnL columns.
     """
+    if len(trade_log) == 0:
+        trade_log.to_csv(filepath, index=False)
+        return
     trade_log = trade_log.copy()
     trade_log['final_pnl'] = trade_log['pnl'].cumsum()
     entry_time = pd.to_datetime(trade_log['entry_time'])

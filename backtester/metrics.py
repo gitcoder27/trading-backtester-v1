@@ -48,6 +48,8 @@ def profit_factor(trade_log):
     """
     Calculate the profit factor: gross profit / gross loss.
     """
+    if len(trade_log) == 0:
+        return np.nan
     gross_profit = trade_log.loc[trade_log['pnl'] > 0, 'pnl'].sum()
     gross_loss = trade_log.loc[trade_log['pnl'] < 0, 'pnl'].sum()
     if gross_loss == 0:

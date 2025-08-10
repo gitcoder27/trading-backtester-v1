@@ -6,6 +6,7 @@ from strategies.bbands_scalper import BBandsScalperStrategy
 from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
 from strategies.rsi_cross_strategy import RSICrossStrategy
 from strategies.mean_reversion_scalper import MeanReversionScalper
+from strategies.mean_reversion_confirmed_scalper import MeanReversionConfirmedScalper
 
 __all__ = ['STRATEGY_MAP']
 
@@ -17,4 +18,5 @@ STRATEGY_MAP = {
     "FirstCandleBreakout": FirstCandleBreakoutStrategy,
     "RSICross": RSICrossStrategy,
     "MeanReversionScalper": MeanReversionScalper,
+    "MeanReversionConfirmedScalper": MeanReversionConfirmedScalper,
 }
