@@ -306,6 +306,8 @@ if run_btn:
                 'trade_log': trade_log,
                 'indicators': indicators,
                 'data': data,
+                'start_date': start_date,
+                'end_date': end_date,
             }
             # Bump a run UID so Advanced Chart can use it in its component key
             import time as _time

@@ -19,42 +19,102 @@ def _to_epoch_seconds(ts_series: pd.Series) -> pd.Series:
 
 def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, indicators):
     """Advanced chart using a high-performance renderer (ECharts)."""
-    import time
-    
     st.subheader("Advanced Chart (Beta)")
-    
-    # Add a simple refresh button that's properly styled
-    col1, col2 = st.columns([2, 8])
-    with col1:
-        if st.button("🔄 Refresh Chart", type="secondary", use_container_width=True):
-            # Clear all chart-related session state and force complete rebuild
-            for key in list(st.session_state.keys()):
-                if key.startswith('adv_chart_'):
-                    del st.session_state[key]
-            st.session_state['adv_chart_force_rebuild'] = int(time.time() * 1000)
-            st.rerun()
-    
-    if data is None or len(data) == 0:
-        st.info("No price data to chart. Run a backtest first, then click 'Refresh Chart' if the chart doesn't appear.")
-        return
-    
-    # Store current data signature for change detection and auto-update
-    current_run_uid = st.session_state.get('adv_chart_run_uid', 0)
-    data_signature = f"{len(data)}_{data['close'].iloc[-1] if len(data) > 0 else 0}_{len(trades) if trades is not None else 0}"
-    
-    # Check if data has changed and auto-update
-    last_signature = st.session_state.get('adv_chart_last_signature', '')
-    data_changed = data_signature != last_signature
-    
-    if data_changed:
-        st.session_state['adv_chart_last_signature'] = data_signature
-        # Force a component refresh by incrementing a counter
-        st.session_state['adv_chart_force_update'] = st.session_state.get('adv_chart_force_update', 0) + 1
-    
-    # We support multiple renderers (Plotly, Lightweight, ECharts); don't require any single one.
 
+    if data is None or data.empty:
+        st.info("No price data to chart. Run a backtest first.")
+        return
+
+    # Use the passed DataFrame's object ID to detect a new backtest run.
+    # This is a reliable way to check if the underlying data has changed.
+    current_data_id = id(data)
+    if 'adv_chart_data_id' not in st.session_state:
+        st.session_state.adv_chart_data_id = -1
+        st.session_state.render_advanced_chart = False
+
+    if current_data_id != st.session_state.adv_chart_data_id:
+        # New data detected, so it's a new backtest. Reset the chart view.
+        st.session_state.adv_chart_data_id = current_data_id
+        st.session_state.render_advanced_chart = False
+
+        # Also, reset the date range to match the new backtest
+        backtest_start_date = st.session_state.get('last_results', {}).get('start_date')
+        backtest_end_date = st.session_state.get('last_results', {}).get('end_date')
+        st.session_state.adv_chart_start_date = backtest_start_date or data.index.min().date()
+        st.session_state.adv_chart_end_date = backtest_end_date or data.index.max().date()
+        st.rerun()
+
+    # Ensure data index is datetime
+    if not isinstance(data.index, pd.DatetimeIndex):
+        try:
+            data.index = pd.to_datetime(data.index)
+        except Exception:
+            st.error("Could not convert data index to datetime. Chart cannot be displayed.")
+            return
+
+    # -- UI for date range selection --
+    min_date = data.index.min().date()
+    max_date = data.index.max().date()
+
+
+    col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
+    with col1:
+        chart_start_date = st.date_input(
+            "Start Date",
+            value=st.session_state.adv_chart_start_date,
+            min_value=min_date,
+            max_value=max_date,
+            key='adv_chart_start_date_picker'
+        )
+    with col2:
+        chart_end_date = st.date_input(
+            "End Date",
+            value=st.session_state.adv_chart_end_date,
+            min_value=min_date,
+            max_value=max_date,
+            key='adv_chart_end_date_picker'
+        )
+    with col3:
+        st.write("") # Spacer
+        st.write("") # Spacer
+        if st.button("Go", use_container_width=True, type="primary"):
+            st.session_state.adv_chart_start_date = chart_start_date
+            st.session_state.adv_chart_end_date = chart_end_date
+            st.session_state.render_advanced_chart = True
+            st.rerun()
+
+    if not st.session_state.get('render_advanced_chart', False):
+        st.info("Select a date range and click 'Go' to render the chart.")
+        return
+
+    # -- Filter data based on selected date range --
+    start_dt = pd.to_datetime(st.session_state.adv_chart_start_date)
+    end_dt = pd.to_datetime(st.session_state.adv_chart_end_date).replace(hour=23, minute=59, second=59)
+    
+    df = data[(data.index >= start_dt) & (data.index <= end_dt)].copy()
+    
+    if trades is not None and not trades.empty:
+        trades_df = trades.copy()
+
+        # Ensure entry_time is datetime, and convert to naive UTC
+        trades_df['entry_time'] = pd.to_datetime(trades_df['entry_time'], errors='coerce')
+        if hasattr(trades_df['entry_time'].dt, 'tz') and trades_df['entry_time'].dt.tz is not None:
+            trades_df['entry_time'] = trades_df['entry_time'].dt.tz_convert('UTC').dt.tz_localize(None)
+
+        # Ensure start_dt and end_dt are naive
+        start_dt_naive = pd.to_datetime(start_dt)
+        end_dt_naive = pd.to_datetime(end_dt)
+
+        trades = trades_df[
+            (trades_df['entry_time'] >= start_dt_naive) &
+            (trades_df['entry_time'] <= end_dt_naive.replace(hour=23, minute=59, second=59))
+        ]
+    else:
+        trades = pd.DataFrame()
+
+
+    # We support multiple renderers (Plotly, Lightweight, ECharts); don't require any single one.
     ts_col = 'timestamp'
-    df = data.copy()
     if not pd.api.types.is_datetime64_any_dtype(df[ts_col]):
         df[ts_col] = pd.to_datetime(df[ts_col])
     # Use UTCTimestamp seconds for maximum compatibility
