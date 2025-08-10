@@ -17,6 +17,8 @@ from backtester.metrics import (
     average_holding_time,
     max_consecutive_wins,
     max_consecutive_losses,
+    trading_sessions_days,
+    trading_sessions_years,
 )
 from backtester.plotting import plot_trades_on_candlestick_plotly, plot_equity_curve
 from backtester.html_report import generate_html_report
@@ -46,6 +48,8 @@ def render_metrics(equity_curve: pd.DataFrame, trade_log: pd.DataFrame):
         "Avg Holding (min)": average_holding_time(trade_log) if len(trade_log) else 0,
         "Max Consec Wins": max_consecutive_wins(trade_log),
         "Max Consec Losses": max_consecutive_losses(trade_log),
+    "Trading Sessions (days)": trading_sessions_days(equity_curve),
+    "Trading Sessions (years)": trading_sessions_years(equity_curve),
     }
 
     cols = st.columns(4)
@@ -97,7 +101,14 @@ def section_trades(trades: pd.DataFrame):
     if trades is None or trades.empty:
         st.info("No trades to display.")
         return
-    st.dataframe(trades)
+    # Show both normal_pnl and options pnl columns if present
+    display_cols = [
+        'entry_time', 'entry_price', 'direction', 'exit_time', 'exit_price',
+        'normal_pnl', 'pnl', 'exit_reason'
+    ]
+    # Only show columns that exist in the DataFrame
+    display_cols = [c for c in display_cols if c in trades.columns]
+    st.dataframe(trades[display_cols])
     colA, colB, colC = st.columns(3)
     with colA:
         st.metric("Win Rate (%)", f"{win_rate(trades)*100:.2f}")

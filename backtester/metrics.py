@@ -111,3 +111,25 @@ def _max_consecutive_count(mask):
     group = (is_one != is_one.shift()).cumsum()
     runs = is_one.groupby(group).sum()
     return runs.max() if not runs.empty else 0
+
+
+def trading_sessions_days(equity_curve: pd.DataFrame) -> int:
+    """
+    Count the number of unique trading sessions (days) present in the equity curve.
+    This uses the actual timestamps in the data, so holidays/weekends with no data
+    are naturally excluded.
+    """
+    if equity_curve is None or len(equity_curve) == 0 or 'timestamp' not in equity_curve.columns:
+        return 0
+    dates = pd.to_datetime(equity_curve['timestamp']).dt.date
+    return int(pd.Series(dates).nunique())
+
+
+def trading_sessions_years(equity_curve: pd.DataFrame, trading_days_per_year: int = 252) -> float:
+    """
+    Convert trading session days into years using a given trading-days-per-year basis (default 252).
+    """
+    days = trading_sessions_days(equity_curve)
+    if trading_days_per_year <= 0:
+        return np.nan
+    return days / float(trading_days_per_year)

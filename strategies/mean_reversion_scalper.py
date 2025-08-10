@@ -1,13 +1,13 @@
 from backtester.strategy_base import StrategyBase
 import pandas as pd
-import pandas_ta as ta
 
 class MeanReversionScalper(StrategyBase):
     def __init__(self, params=None):
         super().__init__(params)
-        self.bb_length = 20
-        self.bb_std = 2.0
-        self.stop_loss_points = 20
+        p = params or {}
+        self.bb_length = int(p.get('bb_length', 20))
+        self.bb_std = float(p.get('bb_std', 2.0))
+        self.stop_loss_points = float(p.get('stop_loss_points', 20))
 
     def indicator_config(self):
         return [
@@ -36,10 +36,20 @@ class MeanReversionScalper(StrategyBase):
 
     def generate_signals(self, data):
         df = data.copy()
-        bbands = ta.bbands(df['close'], length=self.bb_length, std=self.bb_std)
-        # Rename columns to be valid identifiers
-        bbands.columns = [f"{col.replace('.', '_')}" for col in bbands.columns]
-        df = pd.concat([df, bbands], axis=1)
+        # Compute Bollinger Bands without pandas_ta to avoid dependency issues
+        close = df['close']
+        ma = close.rolling(self.bb_length, min_periods=self.bb_length).mean()
+        stdev = close.rolling(self.bb_length, min_periods=self.bb_length).std()
+
+        std_val = self.bb_std
+        # Column names must match indicator_config (with '.' replaced by '_')
+        col_bbl = f"BBL_{self.bb_length}_{std_val}".replace('.', '_')
+        col_bbm = f"BBM_{self.bb_length}_{std_val}".replace('.', '_')
+        col_bbu = f"BBU_{self.bb_length}_{std_val}".replace('.', '_')
+
+        df[col_bbm] = ma
+        df[col_bbl] = ma - std_val * stdev
+        df[col_bbu] = ma + std_val * stdev
 
         df['prev_close'] = df['close'].shift(1)
         df[f'prev_BBL'] = df[f'BBL_{self.bb_length}_{self.bb_std}'.replace('.', '_')].shift(1)

@@ -11,13 +11,25 @@ This framework allows you to test and analyze your trading strategies on histori
 ### Core Backtesting Engine
 - **Modular Strategy Interface:** Easily add your own custom trading strategies by inheriting from a base class.
 - **Multiple Strategies:** Comes with several built-in strategies, including EMA Scalpers, Bollinger Bands, RSI Cross, and First Candle Breakout.
-- **Performance Metrics:** A wide range of performance metrics are calculated, including Sharpe Ratio, Max Drawdown, Profit Factor, Win Rate, and more.
+**Performance Metrics:** A wide range of performance metrics are calculated, including Sharpe Ratio, Max Drawdown, Profit Factor, Win Rate, Largest Win/Loss, Average Holding Time, and more. Now includes:
+  - **Trading Sessions (days/years):** Accurately counts trading days and converts to years, excluding holidays/weekends.
+  - **PnL Columns:** Both raw price difference (`normal_pnl`) and options-style (`pnl`) are shown in the Trades tab.
 - **HTML Reporting:** Generate detailed HTML reports of your backtest results, including interactive charts and performance statistics.
 - **Trade Logging:** All trades are logged to a CSV file for further analysis.
-
+**Detailed Analytics:** Analyze your trading performance with various charts and tables, including equity curves, drawdown plots, monthly returns heatmaps, and total trading sessions (days/years).
 ### Web App (Streamlit UI)
 - **Interactive Backtesting:** Run backtests on the fly by selecting your data, strategy, and parameters from the web interface.
-- **Advanced Charting:** Visualize your trades on an interactive candlestick chart with panning, zooming, and drawing tools.
+ - **Trade Logs:** A CSV file containing a detailed log of all trades is saved in the `results/` directory. Each trade now includes:
+  - `normal_pnl`: Raw price difference (exit_price - entry_price for long, entry_price - exit_price for short)
+  - `pnl`: Options-style profit/loss calculation
+## Web App Interface
+
+The web app provides a user-friendly interface for all your backtesting needs.
+
+- **Trades Tab:**
+  - Shows both `normal_pnl` and `pnl` columns for each trade.
+- **Overview Tab:**
+  - Displays total trading sessions (days/years) based on actual data, excluding holidays and weekends.
 - **Parameter Sweeping:** Optimize your strategies by running a grid search over a range of parameters to find the best-performing combinations.
 - **Strategy Comparison:** Compare the performance of multiple strategies side-by-side.
 - **Detailed Analytics:** Analyze your trading performance with various charts and tables, including equity curves, drawdown plots, and monthly returns heatmaps.

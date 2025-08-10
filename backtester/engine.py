@@ -80,9 +80,11 @@ class BacktestEngine:
                     # Simulate ATM option price movement: option_delta x index movement
                     option_move = self.option_delta * (price - entry_price)
                     if position == 'long':
+                        trade['normal_pnl'] = price - entry_price
                         trade['pnl'] = option_move * option_qty * self.option_price_per_unit
                     else:
                         # For short (PE), reverse the sign
+                        trade['normal_pnl'] = entry_price - price
                         trade['pnl'] = -option_move * option_qty * self.option_price_per_unit
                     trade['exit_reason'] = exit_reason
                     trade_log.append(trade)
@@ -132,8 +134,10 @@ class BacktestEngine:
             trade['exit_price'] = last_row.close
             option_move = self.option_delta * (last_row.close - entry_price)
             if position == 'long':
+                trade['normal_pnl'] = last_row.close - entry_price
                 trade['pnl'] = option_move * option_qty * self.option_price_per_unit
             else:
+                trade['normal_pnl'] = entry_price - last_row.close
                 trade['pnl'] = -option_move * option_qty * self.option_price_per_unit
             trade['exit_reason'] = 'End of Data'
             trade_log.append(trade)
