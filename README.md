@@ -1,138 +1,161 @@
-# Trading Backtester v1
+# Trading Backtester Pro
 
-A modular backtesting framework for algorithmic trading strategies on historical market data. Supports running, analyzing, and reporting on multiple strategies with flexible CLI options.
+**A powerful, interactive, and modular backtesting framework for algorithmic trading strategies.**
+
+This framework allows you to test and analyze your trading strategies on historical market data with a high degree of flexibility and detail. It features a comprehensive command-line interface (CLI) for automated backtesting and a feature-rich web application (built with Streamlit) for interactive analysis, visualization, and strategy optimization.
 
 ---
 
-## Features
-- Run backtests on historical CSV data
-- Modular strategy interface (add your own strategies easily)
-- Performance metrics (Sharpe, drawdown, profit factor, etc.)
-- Interactive plots and HTML reporting (Plotly, Matplotlib)
+## Key Features
+
+### Core Backtesting Engine
+- **Modular Strategy Interface:** Easily add your own custom trading strategies by inheriting from a base class.
+- **Multiple Strategies:** Comes with several built-in strategies, including EMA Scalpers, Bollinger Bands, RSI Cross, and First Candle Breakout.
+- **Performance Metrics:** A wide range of performance metrics are calculated, including Sharpe Ratio, Max Drawdown, Profit Factor, Win Rate, and more.
+- **HTML Reporting:** Generate detailed HTML reports of your backtest results, including interactive charts and performance statistics.
+- **Trade Logging:** All trades are logged to a CSV file for further analysis.
+
+### Web App (Streamlit UI)
+- **Interactive Backtesting:** Run backtests on the fly by selecting your data, strategy, and parameters from the web interface.
+- **Advanced Charting:** Visualize your trades on an interactive candlestick chart with panning, zooming, and drawing tools.
+- **Parameter Sweeping:** Optimize your strategies by running a grid search over a range of parameters to find the best-performing combinations.
+- **Strategy Comparison:** Compare the performance of multiple strategies side-by-side.
+- **Detailed Analytics:** Analyze your trading performance with various charts and tables, including equity curves, drawdown plots, and monthly returns heatmaps.
+- **Trade Filtering:** Filter your trades by direction (long/short), time of day, and day of the week to analyze your strategy's performance under different conditions.
+- **Data Upload:** Upload your own historical data in CSV format directly from the web app.
+- **Exporting:** Export your trade log, performance metrics, and reports directly from the web app.
+
+---
+
+## Web App Interface
+
+The web app provides a user-friendly interface for all your backtesting needs.
+
+- **Main Interface:**
+  - *[Screenshot of the main interface, showing the sidebar with configuration options and the main content area with tabs.]*
+- **Advanced Charting:**
+  - *[Screenshot of the advanced chart, showing trades plotted on a candlestick chart with indicators.]*
+- **Parameter Sweep:**
+  - *[Screenshot of the parameter sweep results, showing a table of results and a heatmap.]*
+- **Strategy Comparison:**
+  - *[Screenshot of the strategy comparison tab, showing the performance of multiple strategies.]*
 
 ---
 
 ## Requirements
-- Python 3.8+
-- Install dependencies:
 
-```bash
-pip install -r requirements.txt
-```
+- Python 3.8+
+- The required Python packages are listed in `requirements.txt`.
+
+---
+
+## Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository-url>
+    cd trading-backtester-pro
+    ```
+
+2.  **Create a virtual environment (recommended):**
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+    ```
+
+3.  **Install the dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
 ---
 
 ## Usage
 
-### Debug Logging
+You can run the backtester using either the web app (recommended) or the command-line interface.
 
-You can enable detailed debug logging for strategy internals (signal prices, entries, exits, SL/TP) by passing the `--debug` flag to the script:
+### Web App (Recommended)
 
-```sh
-python main.py -f data/yourfile.csv -s 2024-12-24 -e 2024-12-30 --debug
-```
+The web app provides an interactive and intuitive way to run backtests and analyze your strategies.
 
-When enabled, logs will show signal candle high/low, entry/exit points, SL/TP, and reasons for exits.
+1.  **Launch the web app:**
+    ```bash
+    streamlit run app.py
+    ```
 
-### Plotting Signal Candle Lines
+2.  **Open your web browser** to the URL provided by Streamlit (usually `http://localhost:8501`).
 
-For the First Candle Breakout strategy, the signal candle's high/low are plotted as indicator lines on the chart for easy visual debugging.
+3.  **Configure your backtest:**
+    - **Data Selection:** Choose a CSV file from the `data/` directory or upload your own.
+    - **Strategy & Params:** Select a strategy and configure its parameters.
+    - **Execution & Options:** Set your execution parameters, such as lots, fees, and trade filters.
 
-Run the main program using your Python interpreter:
+4.  **Run the backtest:** Click the "Run Backtest" button to start the backtest. The results will be displayed in the various tabs.
+
+### Command-Line Interface (CLI)
+
+The CLI is useful for automated backtesting and scripting.
 
 ```bash
 python main.py [OPTIONS]
 ```
 
-Or, if using a virtual environment:
+**Command-Line Arguments:**
+
+| Argument                  | Description                                                              | Example                        |
+| ------------------------- | ------------------------------------------------------------------------ | ------------------------------ |
+| `-f`, `--file`            | Path to CSV data file.                                                   | `-f data/my_data.csv`          |
+| `-s`, `--start`           | Start date (YYYY-MM-DD).                                                 | `-s 2024-01-01`                |
+| `-e`, `--end`             | End date (YYYY-MM-DD).                                                   | `-e 2024-01-31`                |
+| `-r`, `--report`          | Generate an HTML report.                                                 | `-r`                           |
+| `-t`, `--timeframe`       | Timeframe for resampling (e.g., `1T`, `5T`, `15T`). Default is `1T`.      | `-t 5T`                        |
+| `--debug`                 | Enable debug logging for strategy internals.                             | `--debug`                      |
+| `--option-delta`          | Option delta for trade calculations.                                     | `--option-delta 0.6`           |
+| `--lots`                  | Number of lots to trade.                                                 | `--lots 3`                     |
+| `--option-price-per-unit` | Multiplier for the option price per unit.                                | `--option-price-per-unit 1.2`  |
+
+**Example:**
 
 ```bash
-tradeEnv\Scripts\python.exe main.py [OPTIONS]
+python main.py -f data/nifty_2024_1min_22Dec_14Jan.csv -s 2024-01-01 -e 2024-01-10 -r --strategy EMA10ScalperStrategy
 ```
-
-### Command-Line Arguments
-
-| Argument           | Description                                    | Example                        |
-|--------------------|------------------------------------------------|--------------------------------|
-| `-f`, `--file`     | Path to CSV data file                          | `-f data/my_data.csv`          |
-| `-s`, `--start`    | Start date (YYYY-MM-DD)                        | `-s 2024-01-01`                |
-| `-e`, `--end`      | End date (YYYY-MM-DD)                          | `-e 2024-01-31`                |
-| `-r`, `--report`   | Generate HTML report (saved in `results/`)     | `-r`                           |
-| `-t`, `--timeframe`| Timeframe for resampling (e.g. `1T`, `2T`, `5T`, `10T`, `15T`, or `1min`, `2min`, etc.). Default is `1T` (1 minute). | `-t 5T`                        |
-
-All arguments are optional. If no file is provided, you will be prompted to select a CSV from the `data/` directory.
-
-#### Example: Full Run (Default 1-Minute Data)
-
-```bash
-python main.py -f data/nifty_2024_1min_22Dec_14Jan.csv -s 2024-01-01 -e 2024-01-10 -r
-```
-
-#### Example: Run on 2-Minute or 5-Minute Candles
-
-```bash
-python main.py -f data/nifty_2024_1min_22Dec_14Jan.csv -s 2024-12-24 -e 2024-12-25 -r -t 2T
-python main.py -f data/nifty_2024_1min_22Dec_14Jan.csv -t 5T
-```
-
-- The `-t` / `--timeframe` option lets you resample your 1-minute historical data to any higher timeframe supported by pandas offset aliases (e.g. `2T` for 2 minutes, `5T` for 5 minutes, or `10min` for 10 minutes).
-- If you see a warning about `'T'` being deprecated, you can use `'min'` instead (e.g. `2min`).
-
----
-
-## Interactive Commands (After Backtest)
-After running a backtest, you can enter the following commands at the prompt:
-
-- `t` : Show trades plotted on candlestick chart (Plotly)
-- `e` : Show equity curve plot
-- `q` : Quit the program
-
----
-
-## Web App (Streamlit)
-Run an interactive web UI to select strategies, tweak parameters, pick CSVs, and view plots/metrics.
-
-1) Install dependencies:
-
-```powershell
-pip install -r requirements.txt
-```
-
-2) Launch the app:
-
-```powershell
-streamlit run app.py
-```
-
-3) In the browser, choose a CSV from data/ or upload, select strategy and params, and click Run Backtest.
 
 ---
 
 ## Adding New Strategies
-- Add your strategy as a new Python file in the `strategies/` directory.
-- Inherit from `StrategyBase` and implement `generate_signals(self, data)`.
-- Register/import your strategy in `main.py` or your own runner script.
+
+1.  Create a new Python file in the `strategies/` directory (e.g., `my_strategy.py`).
+2.  In your new file, create a class that inherits from `StrategyBase` (from `backtester.strategy_base`).
+3.  Implement the `generate_signals` method in your class. This method should return a DataFrame with a `signal` column (`1` for long, `-1` for short, `0` for no signal).
+4.  Import your new strategy class in `webapp/strategies_registry.py` and add it to the `STRATEGY_MAP` dictionary.
 
 ---
 
 ## Output
-- Trade logs are saved in `results/` as CSV files.
-- HTML reports (if `-r` is used) are saved in `results/report.html`.
+
+- **Trade Logs:** A CSV file containing a detailed log of all trades is saved in the `results/` directory.
+- **HTML Reports:** If you use the `-r` flag in the CLI, a detailed HTML report will be saved in the `results/` directory.
 
 ---
 
 ## Data Format
-CSV files must have at least the following columns:
-- `timestamp` (parseable datetime)
-- `open`, `high`, `low`, `close`
+
+Your CSV data files should have the following columns:
+- `timestamp` (in a format that can be parsed by pandas)
+- `open`
+- `high`
+- `low`
+- `close`
 
 ---
 
 ## Troubleshooting
-- Ensure your CSV files are correctly formatted and in the `data/` directory.
-- If you encounter errors, check for missing columns or NaN values in your data.
+
+- **No module named 'streamlit'**: Make sure you have installed the dependencies from `requirements.txt`.
+- **File not found**: Ensure your data files are in the `data/` directory and that you are running the commands from the root of the project directory.
 
 ---
 
 ## License
-MIT
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
