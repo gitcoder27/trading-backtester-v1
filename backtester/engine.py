@@ -35,11 +35,10 @@ class BacktestEngine:
         last_signal = 0
         option_qty = self.lots * 75
 
-        for row in df.itertuples(index=True):
-            idx = row.Index
-            signal = row.signal
-            price = row.close
-            ref = getattr(row, exit_col) if exit_col and hasattr(row, exit_col) else None
+        for idx, row in df.iterrows():
+            signal = row['signal']
+            price = row['close']
+            ref = row.get(exit_col) if exit_col else None
 
             # Entry logic
             if position is None:
@@ -48,7 +47,7 @@ class BacktestEngine:
                     entry_price = price
                     entry_idx = idx
                     trade = {
-                        'entry_time': row.timestamp,
+                        'entry_time': row['timestamp'],
                         'entry_price': price,
                         'direction': 'long',
                         'exit_time': None,
@@ -61,7 +60,7 @@ class BacktestEngine:
                     entry_price = price
                     entry_idx = idx
                     trade = {
-                        'entry_time': row.timestamp,
+                        'entry_time': row['timestamp'],
                         'entry_price': price,
                         'direction': 'short',
                         'exit_time': None,
@@ -75,7 +74,7 @@ class BacktestEngine:
                 # Use strategy-specific exit logic
                 exit_now, exit_reason = self.strategy.should_exit(position, row, entry_price)
                 if exit_now:
-                    trade['exit_time'] = row.timestamp
+                    trade['exit_time'] = row['timestamp']
                     trade['exit_price'] = price
                     # Simulate ATM option price movement: option_delta x index movement
                     option_move = self.option_delta * (price - entry_price)
@@ -103,7 +102,7 @@ class BacktestEngine:
                                 entry_price = price
                                 entry_idx = idx
                                 trade = {
-                                    'entry_time': row.timestamp,
+                                    'entry_time': row['timestamp'],
                                     'entry_price': price,
                                     'direction': 'long',
                                     'exit_time': None,
@@ -116,7 +115,7 @@ class BacktestEngine:
                                 entry_price = price
                                 entry_idx = idx
                                 trade = {
-                                    'entry_time': row.timestamp,
+                                    'entry_time': row['timestamp'],
                                     'entry_price': price,
                                     'direction': 'short',
                                     'exit_time': None,
@@ -130,14 +129,14 @@ class BacktestEngine:
         # If trade is still open at the end, close at last price
         if position is not None and trade is not None:
             last_row = df.iloc[-1]
-            trade['exit_time'] = last_row.timestamp
-            trade['exit_price'] = last_row.close
-            option_move = self.option_delta * (last_row.close - entry_price)
+            trade['exit_time'] = last_row['timestamp']
+            trade['exit_price'] = last_row['close']
+            option_move = self.option_delta * (last_row['close'] - entry_price)
             if position == 'long':
-                trade['normal_pnl'] = last_row.close - entry_price
+                trade['normal_pnl'] = last_row['close'] - entry_price
                 trade['pnl'] = option_move * option_qty * self.option_price_per_unit
             else:
-                trade['normal_pnl'] = entry_price - last_row.close
+                trade['normal_pnl'] = entry_price - last_row['close']
                 trade['pnl'] = -option_move * option_qty * self.option_price_per_unit
             trade['exit_reason'] = 'End of Data'
             trade_log.append(trade)
