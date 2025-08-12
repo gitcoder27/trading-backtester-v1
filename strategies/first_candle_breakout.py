@@ -1,3 +1,16 @@
+"""
+This script implements the FirstCandleBreakoutStrategy, an opening range breakout strategy.
+
+Strategy Logic:
+- This strategy identifies the high and low of the first candle of the trading day (or a user-defined time).
+- These levels are then used as breakout points to enter trades.
+- Long Entry: A long position is initiated if the price closes above the high of the first candle.
+- Short Entry: A short position is taken if the price closes below the low of the first candle.
+- Exits:
+  - Stop Loss: For a long position, the stop loss is the low of the signal candle. For a short position, it's the high of the signal candle.
+  - Profit Target: A fixed profit target of 20 points from the entry price.
+- Constraints: The strategy takes only one trade per day. Once a trade is exited, no new trades are initiated until the next trading day.
+"""
 from backtester.strategy_base import StrategyBase
 import pandas as pd
 

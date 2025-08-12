@@ -1,6 +1,15 @@
 """
-EMA-10 Scalper (v1) Strategy
-Objective: Capture small, quick profits based on price crossing the 10-period EMA.
+This script implements the EMA10ScalperStrategy, a scalping strategy based on the 10-period Exponential Moving Average (EMA).
+
+Strategy Logic:
+- The core idea is to trade based on price crossovers of the 10 EMA, which acts as a dynamic support and resistance level.
+- Long Entry: A long position is initiated when the price crosses above the 10 EMA, suggesting a potential uptrend.
+- Short Entry: A short position is taken when the price crosses below the 10 EMA, indicating a potential downtrend.
+- Exits:
+  - A long position is exited if the price closes below the 10 EMA.
+  - A short position is exited if the price closes above the 10 EMA.
+  - A fixed profit target of 20 points from the entry price.
+  - A fixed stop loss of 15 points from the entry price.
 """
 
 import pandas as pd

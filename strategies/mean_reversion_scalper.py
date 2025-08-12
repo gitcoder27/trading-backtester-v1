@@ -1,3 +1,14 @@
+"""
+This script defines the MeanReversionScalper, a classic mean reversion strategy using Bollinger Bands.
+
+Strategy Logic:
+- This strategy enters trades when the price "pierces" one of the outer Bollinger Bands, anticipating a return to the middle band (the moving average).
+- Long Entry: A long position is initiated when the price closes below the lower Bollinger Band, after being inside the bands in the previous candle.
+- Short Entry: A short position is taken when the price closes above the upper Bollinger Band, after being inside the bands in the previous candle.
+- Exits:
+  - Take Profit: The position is closed when the price reaches the middle Bollinger Band.
+  - Stop Loss: A fixed stop loss of 20 points from the entry price.
+"""
 from backtester.strategy_base import StrategyBase
 import pandas as pd
 

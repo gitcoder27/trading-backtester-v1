@@ -1,3 +1,14 @@
+"""
+This script defines the BBandsScalperStrategy, a scalping strategy utilizing Bollinger Bands.
+
+Strategy Logic:
+- Long Entry: A long position is initiated when the price, after dipping below the lower Bollinger Band, crosses back up above it. This is interpreted as a potential bullish reversal signal.
+- Short Entry: A short position is taken when the price, after surging above the upper Bollinger Band, crosses back down below it, signaling a potential bearish reversal.
+- Exits:
+  - The position is closed if the price touches the middle Bollinger Band (the 20-period SMA).
+  - A fixed profit target of 30 points from the entry price.
+  - A fixed stop loss of 20 points from the entry price.
+"""
 from backtester.strategy_base import StrategyBase
 import pandas as pd
 
