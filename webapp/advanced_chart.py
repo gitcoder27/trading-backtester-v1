@@ -294,7 +294,7 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
                 od = s['data']
                 ech_overlays.append({
                     'type': 'line',
-                    'name': 'overlay',
+                    'name': 'Indicator',  # Changed from 'overlay' to 'Indicator'
                     'showSymbol': False,
                     'data': [[int(p['time']) * 1000, float(p['value'])] for p in od],
                     'lineStyle': {'width': 1, 'color': s.get('options', {}).get('color', '#ccc')},
@@ -388,7 +388,7 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
             'backgroundColor': '#0e1117',
             'grid': {'left': 50, 'right': 20, 'top': 20, 'bottom': 35},
             
-            # Optimized tooltip settings - Dark theme for better data analysis
+            # Optimized tooltip settings - Compact dark theme
             'tooltip': {
                 'trigger': 'axis' if tooltip_enabled else 'none',
                 'triggerOn': 'mousemove' if tooltip_enabled else 'none',
@@ -400,14 +400,18 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
                 'borderWidth': 1,
                 'textStyle': {
                     'color': '#f9fafb',          # Light text
-                    'fontSize': 12,
+                    'fontSize': 11,              # Smaller font for compactness
                     'fontFamily': 'monospace'    # Monospace for better number alignment
                 },
-                'padding': [8, 12],              # Compact padding
-                'shadowBlur': 10,
+                'padding': [6, 8],               # More compact padding
+                'shadowBlur': 8,
                 'shadowColor': 'rgba(0, 0, 0, 0.3)',
-                'shadowOffsetX': 2,
-                'shadowOffsetY': 2,
+                'shadowOffsetX': 1,
+                'shadowOffsetY': 1,
+                # Use a simpler approach - just show price data with better styling
+                'order': 'valueDesc',  # Show values in descending order
+                'showContent': True,
+                'confine': True,  # Keep tooltip within chart bounds
             },
             
             'legend': {
@@ -498,6 +502,7 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
                     'z': 2,
                     'animation': animation_enabled,
                     'progressive': 500,
+                    'tooltip': {'show': False},  # Hide from tooltip
                 },
                 {
                     'type': 'line', 
@@ -512,6 +517,7 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
                     'z': 2,
                     'animation': animation_enabled,
                     'progressive': 500,
+                    'tooltip': {'show': False},  # Hide from tooltip
                 },
                 {
                     'type': 'scatter', 
@@ -524,6 +530,7 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
                     'animation': animation_enabled,
                     'large': len(entries) > 100,
                     'largeThreshold': 100,
+                    'tooltip': {'show': False},  # Hide from tooltip
                 },
                 {
                     'type': 'scatter', 
@@ -536,6 +543,7 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
                     'animation': animation_enabled,
                     'large': len(exits) > 100,
                     'largeThreshold': 100,
+                    'tooltip': {'show': False},  # Hide from tooltip
                 },
             ],
         }
