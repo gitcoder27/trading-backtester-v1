@@ -10,7 +10,7 @@
   "ema10_pt": 25,
   "ema10_sl": 20,
   "option_delta": 0.5,
-  "lots": 4,
+  "lots": 5,
   "price_per_unit": 1.0,
   "fee_per_trade": 40.0,
   "direction_filter": [
@@ -34,5 +34,6 @@
     3,
     4
   ],
-  "adv_chart_animation_enabled": true
+  "adv_chart_animation_enabled": true,
+  "adv_chart_tooltip_enabled": true
 }
