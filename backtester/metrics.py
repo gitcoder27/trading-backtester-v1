@@ -10,15 +10,22 @@ def total_return(equity_curve):
     """
     Calculate total return from the equity curve.
     """
+    if equity_curve.empty:
+        return 0.0
     start = equity_curve['equity'].iloc[0]
     end = equity_curve['equity'].iloc[-1]
+    if start == 0:
+        return np.nan
     return (end - start) / start
 
-def sharpe_ratio(equity_curve, risk_free_rate=0.0, periods_per_year=252*390):
+def sharpe_ratio(equity_curve, risk_free_rate=0.0, periods_per_year=252):
     """
-    Calculate the Sharpe ratio.
-    Assumes equity_curve is at 1-minute frequency (252 trading days, 390 minutes per day).
+    Calculate the annualized Sharpe ratio.
+    The caller should provide a `periods_per_year` value appropriate for the data frequency
+    (e.g., 252 for daily, 252*6.5 for hourly, 252*390 for minutely).
     """
+    if len(equity_curve) < 2:
+        return np.nan
     returns = equity_curve['equity'].pct_change().dropna()
     excess_returns = returns - (risk_free_rate / periods_per_year)
     if excess_returns.std() == 0:
