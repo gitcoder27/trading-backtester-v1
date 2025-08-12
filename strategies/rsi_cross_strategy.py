@@ -1,3 +1,20 @@
+"""
+This script defines the RSICrossStrategy, a mean reversion strategy based on the Relative Strength Index (RSI).
+
+Strategy Logic:
+- This strategy enters trades when the RSI indicates overbought or oversold conditions and then crosses back into the normal range, signaling a potential reversal.
+- Long Entry:
+  1. The RSI first crosses below the oversold level (20).
+  2. A long position is initiated when the RSI crosses back above the oversold level.
+- Short Entry:
+  1. The RSI first crosses above the overbought level (80).
+  2. A short position is taken when the RSI crosses back below the overbought level.
+- Exits:
+  - Take Profit: The position is closed when the RSI reaches the median level (50).
+  - Stop Loss:
+    - For a long position, the stop loss is triggered if the RSI crosses back below the oversold level.
+    - For a short position, the stop loss is triggered if the RSI crosses back above the overbought level.
+"""
 from backtester.strategy_base import StrategyBase
 import pandas as pd
 

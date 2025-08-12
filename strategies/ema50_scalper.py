@@ -1,3 +1,14 @@
+"""
+This script defines the EMA50ScalperStrategy, a long-only scalping strategy that uses the 50-period Exponential Moving Average (EMA).
+
+Strategy Logic:
+- This strategy aims to capture upward movements by entering trades when the price shows strength by crossing above the 50 EMA.
+- Long Entry: A long position is initiated when the price crosses above the 50 EMA.
+- Short Entry: This is a long-only strategy and does not generate short signals.
+- Exits:
+  - The position is closed if the price closes below the 50 EMA, which serves as a dynamic trailing stop.
+  - A fixed profit target of 20 points from the entry price.
+"""
 import pandas as pd
 from backtester.strategy_base import StrategyBase
 

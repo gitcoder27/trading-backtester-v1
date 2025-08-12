@@ -3,7 +3,21 @@ import pandas as pd
 
 class MeanReversionConfirmedScalper(StrategyBase):
     """
-    A mean reversion scalping strategy that uses Bollinger Bands and a Stochastic Oscillator for confirmation.
+    This script defines the MeanReversionConfirmedScalper, a mean reversion scalping strategy.
+
+    Strategy Logic:
+    - This strategy aims to profit from prices returning to their mean after a significant deviation.
+    - It uses Bollinger Bands to identify these deviations and a Stochastic Oscillator to confirm the entry signals.
+    - Long Entry:
+      1. The price is near the lower Bollinger Band.
+      2. The Stochastic Oscillator crosses above the oversold level (20), confirming bullish momentum.
+    - Short Entry:
+      1. The price is near the upper Bollinger Band.
+      2. The Stochastic Oscillator crosses below the overbought level (80), confirming bearish momentum.
+    - Exits:
+      - Take Profit: The position is closed when the price reaches the middle Bollinger Band.
+      - Stop Loss: An ATR-based stop loss (1.5 * ATR) is used.
+      - Daily Profit Target: The strategy stops trading for the day if a daily profit target of 40 points is reached.
     """
     def __init__(self, params=None):
         super().__init__(params)
