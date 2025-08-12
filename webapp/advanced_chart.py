@@ -7,13 +7,15 @@ _HAS_ECHARTS = importlib.util.find_spec('streamlit_echarts') is not None
 
 
 def _to_iso_utc(ts_series: pd.Series) -> pd.Series:
-    s = pd.to_datetime(ts_series, utc=True)
+    s = pd.to_datetime(ts_series)
     return s.dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def _to_epoch_seconds(ts_series: pd.Series) -> pd.Series:
-    """Return integer seconds since epoch (UTC)."""
-    s = pd.to_datetime(ts_series, utc=True)
+    """Return integer seconds since epoch, preserving original timezone."""
+    s = pd.to_datetime(ts_series)
+    # Don't force UTC conversion - this preserves the original timezone
+    # The epoch calculation will automatically account for timezone offset
     return (s.astype('int64') // 10**9).astype(int)
 
 
@@ -305,8 +307,8 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
         win_lines, loss_lines = [], []
         if trades is not None and not trades.empty and {'entry_time', 'entry_price', 'exit_time', 'exit_price'}.issubset(trades.columns):
             tdf = trades.copy()
-            tdf['entry_time'] = pd.to_datetime(tdf['entry_time'], utc=True, errors='coerce')
-            tdf['exit_time'] = pd.to_datetime(tdf['exit_time'], utc=True, errors='coerce')
+            tdf['entry_time'] = pd.to_datetime(tdf['entry_time'], errors='coerce')
+            tdf['exit_time'] = pd.to_datetime(tdf['exit_time'], errors='coerce')
             for _, tr in tdf.iterrows():
                 if pd.isna(tr['entry_time']) or pd.isna(tr['exit_time']):
                     continue
@@ -344,27 +346,68 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
                 # Add trade line to appropriate list
                 (win_lines if pnl >= 0 else loss_lines).extend([[et, ep], [xt, xp], None])
 
-        # Add performance controls
+        # Add performance controls with caching
+        from webapp.prefs import load_prefs, save_prefs, get_pref, set_pref
+        _prefs = load_prefs()
+        # Set defaults from prefs if not already in session_state
+        if 'adv_chart_tooltip_enabled' not in st.session_state:
+            st.session_state.adv_chart_tooltip_enabled = bool(get_pref(_prefs, 'adv_chart_tooltip_enabled', True))
+        if 'adv_chart_animation_enabled' not in st.session_state:
+            st.session_state.adv_chart_animation_enabled = bool(get_pref(_prefs, 'adv_chart_animation_enabled', False))
+
         st.subheader("Performance Settings", help="Adjust these settings to optimize chart performance")
-        
         col_perf1, col_perf2 = st.columns(2)
         with col_perf1:
-            tooltip_enabled = st.checkbox("Enable Tooltip", value=True, help="Disable to reduce CPU usage on hover")
+            tooltip_enabled = st.checkbox(
+                "Enable Tooltip",
+                value=st.session_state.adv_chart_tooltip_enabled,
+                help="Disable to reduce CPU usage on hover",
+                key="adv_chart_tooltip_enabled"
+            )
         with col_perf2:
-            animation_enabled = st.checkbox("Enable Animations", value=False, help="Disable for better performance")
+            animation_enabled = st.checkbox(
+                "Enable Animations",
+                value=st.session_state.adv_chart_animation_enabled,
+                help="Disable for better performance",
+                key="adv_chart_animation_enabled"
+            )
+
+        # Update prefs if changed
+        changed = False
+        if _prefs.get('adv_chart_tooltip_enabled', True) != st.session_state.adv_chart_tooltip_enabled:
+            set_pref(_prefs, 'adv_chart_tooltip_enabled', st.session_state.adv_chart_tooltip_enabled)
+            changed = True
+        if _prefs.get('adv_chart_animation_enabled', False) != st.session_state.adv_chart_animation_enabled:
+            set_pref(_prefs, 'adv_chart_animation_enabled', st.session_state.adv_chart_animation_enabled)
+            changed = True
+        if changed:
+            save_prefs(_prefs)
 
         # Performance-optimized ECharts option
         option = {
             'backgroundColor': '#0e1117',
             'grid': {'left': 50, 'right': 20, 'top': 20, 'bottom': 35},
             
-            # Optimized tooltip settings
+            # Optimized tooltip settings - Dark theme for better data analysis
             'tooltip': {
                 'trigger': 'axis' if tooltip_enabled else 'none',
                 'triggerOn': 'mousemove' if tooltip_enabled else 'none',
                 'enterable': False,  # Prevent tooltip from interfering with mouse events
                 'hideDelay': 100,    # Quick hide to reduce re-renders
                 'animation': animation_enabled,
+                'backgroundColor': '#1f2937',  # Dark background
+                'borderColor': '#374151',      # Subtle border
+                'borderWidth': 1,
+                'textStyle': {
+                    'color': '#f9fafb',          # Light text
+                    'fontSize': 12,
+                    'fontFamily': 'monospace'    # Monospace for better number alignment
+                },
+                'padding': [8, 12],              # Compact padding
+                'shadowBlur': 10,
+                'shadowColor': 'rgba(0, 0, 0, 0.3)',
+                'shadowOffsetX': 2,
+                'shadowOffsetY': 2,
             },
             
             'legend': {
@@ -421,8 +464,7 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
             'animationDuration': 300 if animation_enabled else 0,
             'animationEasing': 'cubicOut' if animation_enabled else None,
             
-            # Performance optimization
-            'useUTC': True,
+            # Performance optimization - preserve original timezone for tooltip display
             'progressive': 1000,  # Progressive rendering for large datasets
             'progressiveThreshold': 500,  # Start progressive rendering after 500 points
             

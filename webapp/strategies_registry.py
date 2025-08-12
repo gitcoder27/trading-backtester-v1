@@ -4,6 +4,7 @@ from strategies.ema44_scalper import EMA44ScalperStrategy
 from strategies.ema50_scalper import EMA50ScalperStrategy
 from strategies.bbands_scalper import BBandsScalperStrategy
 from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
+from strategies.intraday_ema_trade import IntradayEmaTradeStrategy
 from strategies.rsi_cross_strategy import RSICrossStrategy
 from strategies.mean_reversion_scalper import MeanReversionScalper
 from strategies.mean_reversion_confirmed_scalper import MeanReversionConfirmedScalper
@@ -21,4 +22,5 @@ STRATEGY_MAP = {
     "MeanReversionScalper": MeanReversionScalper,
     "MeanReversionConfirmedScalper": MeanReversionConfirmedScalper,
     "AwesomeScalper": AwesomeScalperStrategy,
+    "IntradayEmaTradeStrategy": IntradayEmaTradeStrategy,
 }

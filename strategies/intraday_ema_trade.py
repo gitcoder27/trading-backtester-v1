@@ -123,3 +123,17 @@ class IntradayEmaTradeStrategy(StrategyBase):
                 return True, 'Take Profit'
 
         return False, ''
+
+    def indicator_config(self):
+        """
+        Returns config for indicators to plot on the chart (EMA).
+        """
+        return [
+            {
+                'column': 'ema',
+                'plot': True,
+                'panel': 1,
+                'color': '#FFD700',  # Gold/yellow for EMA
+                'name': f'EMA{self.ema_period}'
+            }
+        ]
