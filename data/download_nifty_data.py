@@ -20,8 +20,9 @@ headers = {
 
 # Start and end dates (modify as needed)
 # format will be yyyy, mm, dd
-start_date = datetime(2025, 7, 1, tzinfo=pytz.timezone('Asia/Kolkata'))
-end_date = datetime(2025, 8, 8, tzinfo=pytz.timezone('Asia/Kolkata'))
+start_date = datetime(2025, 8, 8, tzinfo=pytz.timezone('Asia/Kolkata'))
+# end_date = datetime(2025, 8, 8, tzinfo=pytz.timezone('Asia/Kolkata'))
+end_date = datetime.now(pytz.timezone('Asia/Kolkata')) # fetch todays date
 
 # File location to save the CSV (local 'data' folder)
 file_name = f"nifty_2025_1min_{start_date.strftime('%d%b')}_{end_date.strftime('%d%b')}.csv"

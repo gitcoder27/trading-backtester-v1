@@ -116,6 +116,7 @@ seed_session_defaults()
 with st.sidebar:
     st.header("Configuration")
 
+
     with st.expander("Data Selection", expanded=True):
         mode_options = ["Choose from data/", "Upload CSV"]
         mode_index = mode_options.index(st.session_state.get('mode', "Choose from data/")) if st.session_state.get('mode', "Choose from data/") in mode_options else 0
@@ -125,8 +126,15 @@ with st.sidebar:
         tf_index = tf_options.index(st.session_state.get('timeframe', "1T")) if st.session_state.get('timeframe', "1T") in tf_options else 0
         timeframe = st.selectbox("Timeframe", tf_options, index=tf_index, help="Pandas resample alias: 1T=1min, etc.", key='timeframe')
 
+        # Add refresh button for file list
+        refresh_files = st.button("Refresh file list", key="refresh_files")
+
         selected_file_path = None
         uploaded_bytes = None
+        # If refresh button is clicked, clear the cache for file listing
+        if refresh_files:
+            cached_list_data_files.clear()
+
         if mode == "Choose from data/":
             files = cached_list_data_files()
             if files:
