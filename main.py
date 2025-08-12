@@ -69,7 +69,14 @@ def main():
 
     # Initialize strategy
     strategy_params = {'debug': args.debug}
-    strategy = BBandsScalperStrategy()
+    strategy = MeanReversionConfirmedScalper(params=strategy_params)
+    # strategy = MomentumScalperStrategy(params=strategy_params)
+    # strategy = EMA44ScalperStrategy()
+    # strategy = BBandsScalperStrategy()
+    # strategy = FirstCandleBreakoutStrategy(params=strategy_params)
+    # strategy = RSICrossStrategy(params=strategy_params)
+    # strategy = EMA50ScalperStrategy(params=strategy_params) # Use new strategy
+    # strategy = EMA10ScalperStrategy(params=strategy_params)
 
     # Run backtest
     engine = BacktestEngine(
