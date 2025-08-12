@@ -537,14 +537,23 @@ def section_advanced_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, i
                 "tabElements.forEach(function(tab) {"
                 "  observer.observe(tab, { attributes: true, attributeFilter: ['aria-selected'] });"
                 "});"
+                # Detect Streamlit sidebar open/close and trigger resize so chart fills width
+                "try {"
+                "  var sidebar = document.querySelector('section[data-testid=\"stSidebar\"]');"
+                "  if (sidebar) {"
+                "    var sideObs = new MutationObserver(function(){ setTimeout(fire, 50); setTimeout(fire, 250); setTimeout(fire, 600); });"
+                "    sideObs.observe(sidebar, { attributes: true, attributeFilter: ['style','class'] });"
+                "  }"
+                "} catch(e) { /* noop */ }"
                 "}"
             )
         }
-
+        
         # Performance settings for renderer
         renderer_type = 'canvas'  # Use canvas for good quality and performance
         chart_height = '600px'
-        chart_width = '1100px'
+        # Use responsive width so the chart expands when the sidebar collapses
+        chart_width = '100%'
         
         # Performance info
         perf_info = f"📈 Rendering {len(candles)} candles, {len(entries)} trades | Renderer: {renderer_type}"
