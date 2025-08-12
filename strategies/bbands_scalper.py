@@ -6,20 +6,17 @@ class BBandsScalperStrategy(StrategyBase):
         price = row['close']
         mid = row['mid']
         if position == 'long':
-            if price < mid:
-                return True, 'Mid exit'
-            elif price >= entry_price + 30:
+            if price >= entry_price + 60:
                 return True, 'Target'
-            elif price <= entry_price - 20:
+            elif price <= entry_price - 30:
                 return True, 'Stop Loss'
         elif position == 'short':
-            if price > mid:
-                return True, 'Mid exit'
-            elif price <= entry_price - 30:
+            if price <= entry_price - 60:
                 return True, 'Target'
-            elif price >= entry_price + 20:
+            elif price >= entry_price + 30:
                 return True, 'Stop Loss'
         return False, ''
+
     def __init__(self, params=None):
         super().__init__(params)
         self.length = 20
@@ -66,15 +63,19 @@ class BBandsScalperStrategy(StrategyBase):
         df['std'] = df['close'].rolling(self.length).std(ddof=0)
         df['upper'] = df['mid'] + self.stddev * df['std']
         df['lower'] = df['mid'] - self.stddev * df['std']
-        df['prev_close'] = df['close'].shift(1)
-        df['prev_upper'] = df['upper'].shift(1)
-        df['prev_lower'] = df['lower'].shift(1)
-        df['prev_mid'] = df['mid'].shift(1)
 
-        # Long: prev_close < prev_lower and close > lower
-        long_entry = (df['prev_close'] < df['prev_lower']) & (df['close'] > df['lower'])
-        # Short: prev_close > prev_upper and close < upper
-        short_entry = (df['prev_close'] > df['prev_upper']) & (df['close'] < df['upper'])
+        # RSI calculation
+        delta = df['close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df['rsi'] = 100 - (100 / (1 + rs))
+
+        # Long: close < lower and rsi < 30
+        long_entry = (df['close'] < df['lower']) & (df['rsi'] < 30)
+        # Short: close > upper and rsi > 70
+        short_entry = (df['close'] > df['upper']) & (df['rsi'] > 70)
+
         df['signal'] = 0
         df.loc[long_entry, 'signal'] = 1
         df.loc[short_entry, 'signal'] = -1
