@@ -11,7 +11,9 @@ def load_csv(filepath, timeframe='1T'):
     timeframe: pandas offset alias (e.g. '1T', '2T', '5T', '10T').
     Returns a pandas DataFrame.
     """
-    df = pd.read_csv(filepath, parse_dates=['timestamp'])
+    df = pd.read_csv(filepath)
+    # Parse timestamps while preserving timezone information
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
     df = df.set_index('timestamp')
     if timeframe != '1T':
         df = df.resample(timeframe).agg({
