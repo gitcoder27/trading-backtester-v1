@@ -7,7 +7,7 @@ import os
 import sys
 from backtester.data_loader import load_csv
 from backtester.engine import BacktestEngine
-from backtester.metrics import total_return, sharpe_ratio, max_drawdown, win_rate, profit_factor, largest_winning_trade, largest_losing_trade, average_holding_time, max_consecutive_wins, max_consecutive_losses
+from backtester.metrics import total_return, sharpe_ratio, max_drawdown, win_rate, profit_factor, largest_winning_trade, largest_losing_trade, average_holding_time, max_consecutive_wins, max_consecutive_losses, trading_sessions_days, trading_sessions_years
 from backtester.reporting import plot_equity_curve, plot_trades_on_price, save_trade_log, generate_html_report
 from strategies.bbands_scalper import BBandsScalperStrategy
 from strategies.ema10_scalper import EMA10ScalperStrategy
@@ -114,6 +114,8 @@ def main():
     print(f"Average Holding Time: {avg_hold:.2f} min" if avg_hold==avg_hold else "Average Holding Time: N/A")
     print(f"Max Consecutive Wins: {max_consecutive_wins(trade_log)}")
     print(f"Max Consecutive Losses: {max_consecutive_losses(trade_log)}")
+    print(f"Trading Sessions (days): {trading_sessions_days(equity_curve)}")
+    print(f"Trading Sessions (years): {trading_sessions_years(equity_curve):.2f}")
 
     # Trade stats
     if len(trade_log) > 0:
