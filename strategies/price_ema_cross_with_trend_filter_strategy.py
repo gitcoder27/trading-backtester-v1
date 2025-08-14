@@ -22,6 +22,7 @@ class PriceEMACrossWithTrendFilterStrategy(StrategyBase):
         self.rsi_period = params.get('rsi_period', 14) if params else 14
         self.atr_period = params.get('atr_period', 14) if params else 14
         self.atr_multiplier = params.get('atr_multiplier', 2) if params else 2
+        self.max_stop_loss_points = params.get('max_stop_loss_points', 35) if params else 35
         self.profit_target = params.get('profit_target', 30) if params else 30
 
     def indicator_config(self):
@@ -110,19 +111,21 @@ class PriceEMACrossWithTrendFilterStrategy(StrategyBase):
         if pd.isna(atr) or atr == 0:
             return False, ''
 
+        stop_loss_points = min(atr * self.atr_multiplier, self.max_stop_loss_points)
+
         if position == 'long':
             # Exit if profit target reached
             if price >= entry_price + self.profit_target:
                 return True, 'Target'
-            # Exit if ATR stop loss hit
-            if price <= entry_price - (atr * self.atr_multiplier):
-                return True, 'ATR Stop'
+            # Exit if stop loss hit
+            if price <= entry_price - stop_loss_points:
+                return True, 'Stop Loss'
         elif position == 'short':
             # Exit if profit target reached
             if price <= entry_price - self.profit_target:
                 return True, 'Target'
-            # Exit if ATR stop loss hit
-            if price >= entry_price + (atr * self.atr_multiplier):
-                return True, 'ATR Stop'
+            # Exit if stop loss hit
+            if price >= entry_price + stop_loss_points:
+                return True, 'Stop Loss'
 
         return False, ''
