@@ -8,3 +8,5 @@ jinja2
 streamlit
 streamlit-lightweight-charts
 streamlit-echarts
+numba
+psutil

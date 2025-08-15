@@ -1,21 +1,45 @@
 """
-Backtest execution logic for Streamlit app.
+Backtest execution logic for Streamlit app with performance monitoring.
 """
-# This module will contain backtest execution logic split from app.py
-
 import pandas as pd
+import time
+import streamlit as st
 from backtester.engine import BacktestEngine
+from backtester.performance_monitor import PerformanceMonitor, performance_timer
 from webapp.analytics import adjust_equity_for_fees, filter_trades
 
+@performance_timer
 def run_backtest(data, strategy, option_delta, lots, price_per_unit, fee_per_trade, direction_filter, apply_time_filter, start_hour, end_hour, apply_weekday_filter, weekdays):
-    engine = BacktestEngine(
-        data,
-        strategy,
-        option_delta=option_delta,
-        lots=lots,
-        option_price_per_unit=price_per_unit,
-    )
-    results = engine.run()
+    """
+    Enhanced backtest runner with performance monitoring.
+    """
+    # Initialize performance monitoring
+    monitor = PerformanceMonitor()
+    monitor.start_monitoring()
+    
+    # Display progress
+    with st.spinner('Running backtest...'):
+        # Initialize engine
+        engine = BacktestEngine(
+            data,
+            strategy,
+            option_delta=option_delta,
+            lots=lots,
+            option_price_per_unit=price_per_unit,
+        )
+        
+        # Run backtest
+        results = engine.run()
+        
+    # Stop monitoring
+    metrics = monitor.stop_monitoring(data_rows=len(data))
+    
+    # Display performance metrics
+    st.success(f"Backtest completed in {metrics['total_time']:.2f}s")
+    with st.expander("Performance Metrics", expanded=False):
+        monitor.display_metrics()
+    
+    # Extract results
     equity_curve = results['equity_curve']
     trade_log = results['trade_log']
     indicators = results['indicators'] if 'indicators' in results else None
@@ -39,4 +63,5 @@ def run_backtest(data, strategy, option_delta, lots, price_per_unit, fee_per_tra
         'indicators': indicators,
         'shown_trades': shown_trades,
         'eq_for_display': eq_for_display,
+        'performance_metrics': metrics,
     }

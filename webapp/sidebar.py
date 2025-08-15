@@ -3,17 +3,62 @@ Sidebar UI configuration for Streamlit app.
 """
 import streamlit as st
 import os
+import hashlib
+import time
 from webapp.data_utils import list_data_files, load_data_from_source
 from webapp.session import set_pref, save_prefs
 from webapp.strategies_registry import STRATEGY_MAP
+
+# Global cache for data with memory management
+_data_cache = {}
+_cache_max_size = 5
 
 @st.cache_data(show_spinner=False)
 def cached_list_data_files(data_folder: str = "data"):
 	return list_data_files(data_folder)
 
-@st.cache_data(show_spinner=True)
+def _get_cache_key(file_path, timeframe, uploaded_bytes):
+    """Generate a cache key for the given parameters."""
+    if uploaded_bytes:
+        file_hash = hashlib.md5(uploaded_bytes).hexdigest()
+        return f"uploaded_{file_hash}_{timeframe}"
+    else:
+        return f"file_{file_path}_{timeframe}"
+
+def _clean_cache():
+    """Remove old cache entries if cache is too large."""
+    global _data_cache
+    if len(_data_cache) > _cache_max_size:
+        oldest_key = min(_data_cache.keys(), key=lambda k: _data_cache[k]['timestamp'])
+        del _data_cache[oldest_key]
+
+@st.cache_data(show_spinner=True, ttl=3600)
 def cached_load_data_from_source(file_path: str | None, timeframe: str, uploaded_bytes: bytes | None):
-	return load_data_from_source(file_path, timeframe, uploaded_bytes)
+    """Enhanced caching with performance monitoring."""
+    cache_key = _get_cache_key(file_path, timeframe, uploaded_bytes)
+    
+    # Check global cache first
+    if cache_key in _data_cache:
+        st.sidebar.success(f"Using cached data (loaded in {_data_cache[cache_key]['load_time']:.2f}s)")
+        return _data_cache[cache_key]['data']
+    
+    # Load data if not in cache
+    start_time = time.time()
+    data = load_data_from_source(file_path, timeframe, uploaded_bytes)
+    load_time = time.time() - start_time
+    
+    # Store in cache
+    _data_cache[cache_key] = {
+        'data': data,
+        'timestamp': time.time(),
+        'load_time': load_time
+    }
+    
+    # Clean cache if needed
+    _clean_cache()
+    
+    st.sidebar.info(f"Data loaded in {load_time:.2f}s ({len(data)} rows)")
+    return data
 
 def render_sidebar():
     with st.sidebar:

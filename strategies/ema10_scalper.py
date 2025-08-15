@@ -21,6 +21,8 @@ class EMA10ScalperStrategy(StrategyBase):
         self.ema_period = params.get('ema_period', 10) if params else 10
         self.profit_target = params.get('profit_target', 20) if params else 20
         self.stop_loss = params.get('stop_loss', 15) if params else 15
+        # Enable fast vectorized approach for simple signal-based strategies
+        self._use_fast_vectorized = True
 
     @staticmethod
     def get_params_config():
@@ -57,23 +59,28 @@ class EMA10ScalperStrategy(StrategyBase):
 
     def generate_signals(self, data):
         """
+        Optimized signal generation using vectorized operations.
         Adds 'signal' column to data:
         1 = Long Entry, -1 = Short Entry, 0 = No Entry/Flat
         """
         df = data.copy()
+        
+        # Vectorized EMA calculation
         df['ema'] = df['close'].ewm(span=self.ema_period, adjust=False).mean()
-        df['prev_close'] = df['close'].shift(1)
-        df['prev_ema'] = df['ema'].shift(1)
-
-        # Long Entry: prev_close < prev_ema and close > ema
-        long_entry = (df['prev_close'] < df['prev_ema']) & (df['close'] > df['ema'])
-        # Short Entry: prev_close > prev_ema and close < ema
-        short_entry = (df['prev_close'] > df['prev_ema']) & (df['close'] < df['ema'])
-
+        
+        # Vectorized signal calculation using shift operations
+        prev_close = df['close'].shift(1)
+        prev_ema = df['ema'].shift(1)
+        
+        # Vectorized conditions
+        long_condition = (prev_close < prev_ema) & (df['close'] > df['ema'])
+        short_condition = (prev_close > prev_ema) & (df['close'] < df['ema'])
+        
+        # Create signal column efficiently
         df['signal'] = 0
-        df.loc[long_entry, 'signal'] = 1
-        df.loc[short_entry, 'signal'] = -1
-
+        df.loc[long_condition, 'signal'] = 1
+        df.loc[short_condition, 'signal'] = -1
+        
         return df
 
     def should_exit(self, position, row, entry_price):

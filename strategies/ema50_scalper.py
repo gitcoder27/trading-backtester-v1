@@ -17,6 +17,8 @@ class EMA50ScalperStrategy(StrategyBase):
         super().__init__(params)
         self.ema_period = params.get('ema_period', 50) if params else 50
         self.profit_target_points = params.get('profit_target_points', 20) if params else 20
+        # Enable fast vectorized approach
+        self._use_fast_vectorized = True
 
     @staticmethod
     def get_params_config():

@@ -1,10 +1,10 @@
 {
   "mode": "Choose from data/",
   "timeframe": "1T",
-  "data_file": "nifty_2025_1min_08Aug_12Aug.csv",
+  "data_file": "nifty_2024_1min_22Oct_22Dec.csv",
   "start_date": null,
   "end_date": null,
-  "strategy": "IntradayEmaTradeStrategy",
+  "strategy": "EMA44Scalper",
   "debug": false,
   "ema10_ema_period": 10,
   "ema10_pt": 25,

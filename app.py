@@ -1,7 +1,6 @@
 """
 Streamlit Web App for the trading-backtester-v1 project.
-Allows selecting data, strategy and parameters, running backtests, viewing plots,
-and downloading results/reports—all from the browser.
+Optimized for high performance backtesting with large datasets.
 """
 import time as _time
 import pandas as pd
@@ -21,6 +20,7 @@ from backtester.metrics import (
     win_rate,
 )
 from backtester.plotting import plot_equity_curve, plot_trades_on_candlestick_plotly
+from backtester.optimization_utils import PerformanceOptimizer
 from webapp.analytics import (
     adjust_equity_for_fees,
     compute_drawdown,
@@ -36,6 +36,9 @@ from webapp.session import seed_session_defaults, set_pref, save_prefs
 from webapp.sidebar import cached_load_data_from_source, render_sidebar
 from webapp.strategies_registry import STRATEGY_MAP
 from webapp.tabs import render_tabs
+
+# Configure performance optimizations
+PerformanceOptimizer.configure_pandas()
 
 
 def render_dashboard(
@@ -144,6 +147,33 @@ def main():
         data = filter_by_date(
             data, sidebar_config["start_date"], sidebar_config["end_date"]
         )
+        
+        # Performance estimation and optimization suggestions
+        data_rows = len(data)
+        strategy_name = sidebar_config["strat_choice"]
+        
+        estimated_time = PerformanceOptimizer.estimate_processing_time(
+            data_rows, 
+            strategy_complexity=2.0 if 'complex' in strategy_name.lower() else 1.0
+        )
+        
+        # Show performance info
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.info(f"📊 Data points: {data_rows:,}")
+        with col2:
+            st.info(f"⏱️ Estimated time: {estimated_time:.1f}s")
+        with col3:
+            if estimated_time > 5:
+                st.warning("⚠️ Large dataset detected")
+        
+        # Show optimization suggestions for large datasets
+        if data_rows > 50000:
+            suggestions = PerformanceOptimizer.suggest_optimizations(data_rows, strategy_name)
+            if suggestions:
+                with st.expander("💡 Performance Optimization Suggestions", expanded=False):
+                    for suggestion in suggestions:
+                        st.write(f"• {suggestion}")
 
         # Instantiate strategy
         strategy = sidebar_config["strat_cls"](params=sidebar_config["strat_params"])

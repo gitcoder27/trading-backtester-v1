@@ -35,6 +35,8 @@ class BBandsScalperStrategy(StrategyBase):
         super().__init__(params)
         self.length = 20
         self.stddev = 2
+        # Enable fast vectorized approach for simple signal-based logic
+        self._use_fast_vectorized = True
 
     def indicator_config(self):
         """
