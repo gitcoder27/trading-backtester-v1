@@ -61,28 +61,28 @@ def render_sidebar():
             strat_cls = STRATEGY_MAP[strat_choice]
 
             debug = st.checkbox("Enable debug logs", value=bool(st.session_state.get('debug', False)), key='debug')
-
             strat_params: dict = {"debug": debug}
-            if strat_choice.startswith("EMA10"):
-                ema_period = st.number_input("EMA Period", min_value=5, max_value=200, value=int(st.session_state.get('ema10_ema_period', 10)), step=1, key='ema10_ema_period')
-                pt = st.number_input("Profit Target (pts)", min_value=1, max_value=400, value=int(st.session_state.get('ema10_pt', 20)), step=1, key='ema10_pt')
-                sl = st.number_input("Stop Loss (pts)", min_value=1, max_value=400, value=int(st.session_state.get('ema10_sl', 15)), step=1, key='ema10_sl')
-                strat_params.update({"ema_period": int(ema_period), "profit_target": int(pt), "stop_loss": int(sl)})
-            elif strat_choice.startswith("EMA44"):
-                st.caption("EMA44 strategy with fixed params (period=44).")
-            elif strat_choice.startswith("EMA50"):
-                ema_period = st.number_input("EMA Period", min_value=10, max_value=200, value=int(st.session_state.get('ema50_ema_period', 50)), step=1, key='ema50_ema_period')
-                pt = st.number_input("Profit Target (pts)", min_value=1, max_value=400, value=int(st.session_state.get('ema50_pt', 20)), step=1, key='ema50_pt')
-                strat_params.update({"ema_period": int(ema_period), "profit_target_points": int(pt)})
-            elif strat_choice.startswith("RSI"):
-                rsi_period = st.number_input("RSI Period", min_value=2, max_value=50, value=int(st.session_state.get('rsi_period', 9)), step=1, key='rsi_period')
-                overbought = st.number_input("Overbought", min_value=50, max_value=100, value=int(st.session_state.get('rsi_overbought', 80)), step=1, key='rsi_overbought')
-                oversold = st.number_input("Oversold", min_value=0, max_value=50, value=int(st.session_state.get('rsi_oversold', 20)), step=1, key='rsi_oversold')
-                strat_params.update({"rsi_period": int(rsi_period), "overbought": int(overbought), "oversold": int(oversold)})
-            elif strat_choice.startswith("FirstCandle"):
-                st.caption("First Candle Breakout uses its internal defaults.")
-            elif strat_choice.startswith("BBands"):
-                st.caption("Bollinger Bands scalper uses its internal defaults.")
+
+            # Dynamically generate UI for strategy parameters
+            if hasattr(strat_cls, 'get_params_config'):
+                params_config = strat_cls.get_params_config()
+                if params_config:
+                    for config in params_config:
+                        # Currently only supports number_input, can be extended
+                        if config["type"] == "number_input":
+                            value = st.number_input(
+                                label=config["label"],
+                                value=int(st.session_state.get(config["name"], config["default"])),
+                                min_value=config.get("min"),
+                                max_value=config.get("max"),
+                                step=config.get("step"),
+                                key=config["name"]
+                            )
+                            strat_params[config["param_key"]] = value
+                else:
+                    st.caption(f"{strat_choice} uses its internal defaults.")
+            else:
+                st.caption(f"{strat_choice} uses its internal defaults.")
 
         with st.expander("Execution & Options", expanded=False):
             option_delta = st.slider("Option Delta", min_value=0.1, max_value=1.0, value=float(st.session_state.get('option_delta', 0.5)), step=0.05, key='option_delta')

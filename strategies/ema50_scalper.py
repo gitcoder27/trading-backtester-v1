@@ -18,6 +18,19 @@ class EMA50ScalperStrategy(StrategyBase):
         self.ema_period = params.get('ema_period', 50) if params else 50
         self.profit_target_points = params.get('profit_target_points', 20) if params else 20
 
+    @staticmethod
+    def get_params_config():
+        return [
+            {
+                "name": "ema50_ema_period", "param_key": "ema_period", "type": "number_input",
+                "label": "EMA Period", "default": 50, "min": 10, "max": 200, "step": 1
+            },
+            {
+                "name": "ema50_pt", "param_key": "profit_target_points", "type": "number_input",
+                "label": "Profit Target (pts)", "default": 20, "min": 1, "max": 400, "step": 1
+            },
+        ]
+
     def indicator_config(self):
         return [
             {
