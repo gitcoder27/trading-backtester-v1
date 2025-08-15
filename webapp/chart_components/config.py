@@ -43,11 +43,11 @@ class ChartConstants:
 
 class ChartConfig:
     """Builder class for chart configuration."""
-    
+
     @staticmethod
     def build_echarts_option(
         dataset: List[List],
-        overlays: List[Dict],
+        overlays: Dict[int, List[Dict]],
         trade_data: TradeData,
         options: ChartOptions,
         performance: PerformanceSettings,
@@ -56,15 +56,23 @@ class ChartConfig:
     ) -> Dict[str, Any]:
         """Build complete ECharts configuration."""
         
+        panel_keys = sorted(overlays.keys()) if overlays else [1]
+        num_panels = len(panel_keys)
+
+        grids = ChartConfig._build_grid_config(num_panels)
+        x_axes = ChartConfig._build_x_axis_config(options, num_panels)
+        y_axes = ChartConfig._build_y_axis_config(options, performance, num_panels)
+
         option = {
             'backgroundColor': options.background_color,
-            'grid': ChartConfig._build_grid_config(),
-            'tooltip': ChartConfig._build_tooltip_config(performance, options),
+            'grid': grids,
+            'tooltip': ChartConfig._build_tooltip_config(performance, options, num_panels),
             'legend': ChartConfig._build_legend_config(performance, options),
             'toolbox': ChartConfig._build_toolbox_config(),
-            'xAxis': ChartConfig._build_x_axis_config(options),
-            'yAxis': ChartConfig._build_y_axis_config(options, performance),
-            'dataZoom': ChartConfig._build_datazoom_config(x_min, x_max, performance),
+            'xAxis': x_axes,
+            'yAxis': y_axes,
+            'dataZoom': ChartConfig._build_datazoom_config(x_min, x_max, performance, num_panels),
+            'axisPointer': { 'link': [{'xAxisIndex': 'all'}] },
             'animation': performance.animation_enabled,
             'animationDuration': ChartConstants.ANIMATION_DURATION if performance.animation_enabled else 0,
             'animationEasing': ChartConstants.ANIMATION_EASING if performance.animation_enabled else None,
@@ -77,20 +85,30 @@ class ChartConfig:
         return option
     
     @staticmethod
-    def _build_grid_config() -> Dict[str, Any]:
-        """Build grid configuration."""
-        return {
-            'left': 50,
-            'right': 20,
-            'top': 20,
-            'bottom': 35
-        }
+    def _build_grid_config(num_panels: int) -> List[Dict[str, Any]]:
+        """Build grid configuration for multiple panels."""
+        grids = []
+        total_height = 80  # Percentage
+        panel_height = total_height / num_panels
+
+        for i in range(num_panels):
+            grids.append({
+                'left': 50,
+                'right': 20,
+                'top': f'{10 + i * panel_height}%',
+                'height': f'{panel_height * 0.85}%' # Space between panels
+            })
+        return grids
     
     @staticmethod
-    def _build_tooltip_config(performance: PerformanceSettings, options: ChartOptions) -> Dict[str, Any]:
+    def _build_tooltip_config(performance: PerformanceSettings, options: ChartOptions, num_panels: int) -> Dict[str, Any]:
         """Build tooltip configuration."""
         return {
-            'trigger': 'axis' if performance.tooltip_enabled else 'none',
+            'trigger': 'axis',
+            'axisPointer': {
+                'type': 'cross',
+                'link': [{'xAxisIndex': 'all'}]
+            },
             'triggerOn': 'mousemove' if performance.tooltip_enabled else 'none',
             'enterable': False,
             'hideDelay': ChartConstants.TOOLTIP_HIDE_DELAY,
@@ -137,34 +155,44 @@ class ChartConfig:
         }
     
     @staticmethod
-    def _build_x_axis_config(options: ChartOptions) -> Dict[str, Any]:
-        """Build X-axis configuration."""
-        return {
-            'type': 'time',
-            'axisLine': {'lineStyle': {'color': options.border_color}},
-            'axisLabel': {'color': options.text_color},
-            'animation': False  # X-axis animation usually not needed
-        }
+    def _build_x_axis_config(options: ChartOptions, num_panels: int) -> List[Dict[str, Any]]:
+        """Build X-axis configuration for multiple panels."""
+        axes = []
+        for i in range(num_panels):
+            axes.append({
+                'type': 'time',
+                'gridIndex': i,
+                'axisLine': {'lineStyle': {'color': options.border_color}},
+                'axisLabel': {'color': options.text_color, 'show': i == num_panels -1}, # Show labels only on last axis
+                'animation': False
+            })
+        return axes
     
     @staticmethod
-    def _build_y_axis_config(options: ChartOptions, performance: PerformanceSettings) -> Dict[str, Any]:
-        """Build Y-axis configuration."""
-        return {
-            'scale': True,
-            'axisLine': {'lineStyle': {'color': options.border_color}},
-            'axisLabel': {'color': options.text_color},
-            'splitLine': {'lineStyle': {'color': options.grid_color}},
-            'animation': performance.animation_enabled
-        }
+    def _build_y_axis_config(options: ChartOptions, performance: PerformanceSettings, num_panels: int) -> List[Dict[str, Any]]:
+        """Build Y-axis configuration for multiple panels."""
+        axes = []
+        for i in range(num_panels):
+            axes.append({
+                'scale': True,
+                'gridIndex': i,
+                'axisLine': {'lineStyle': {'color': options.border_color}},
+                'axisLabel': {'color': options.text_color},
+                'splitLine': {'lineStyle': {'color': options.grid_color}},
+                'animation': performance.animation_enabled
+            })
+        return axes
     
     @staticmethod
     def _build_datazoom_config(
         x_min: Optional[int], 
         x_max: Optional[int], 
-        performance: PerformanceSettings
+        performance: PerformanceSettings,
+        num_panels: int
     ) -> List[Dict[str, Any]]:
-        """Build data zoom configuration."""
+        """Build data zoom configuration for multiple panels."""
         base_config = {
+            'xAxisIndex': list(range(num_panels)),
             'startValue': x_min,
             'endValue': x_max,
             'throttle': performance.throttle_delay,
@@ -173,12 +201,12 @@ class ChartConfig:
         
         return [
             {'type': 'inside', **base_config},
-            {'type': 'slider', **base_config}
+            {'type': 'slider', 'show': True, **base_config}
         ]
     
     @staticmethod
     def _build_series_config(
-        overlays: List[Dict],
+        overlays: Dict[int, List[Dict]],
         trade_data: TradeData,
         options: ChartOptions,
         performance: PerformanceSettings,
@@ -215,6 +243,8 @@ class ChartConfig:
                 'borderColor': options.up_color,
                 'borderColor0': options.down_color
             },
+            'xAxisIndex': 0,
+            'yAxisIndex': 0,
             'z': ChartConstants.Z_CANDLESTICKS,
             'animation': performance.animation_enabled,
             'large': dataset_length > performance.large_threshold,
@@ -223,29 +253,32 @@ class ChartConfig:
         }
     
     @staticmethod
-    def _build_overlay_series(overlays: List[Dict], performance: PerformanceSettings) -> List[Dict[str, Any]]:
+    def _build_overlay_series(overlays: Dict[int, List[Dict]], performance: PerformanceSettings) -> List[Dict[str, Any]]:
         """Build overlay (indicator) series configuration."""
         ech_overlays = []
-        
-        for overlay in overlays:
-            if overlay.get('type') == 'Line':
-                data = overlay['data']
-                
-                ech_overlays.append({
-                    'type': 'line',
-                    'name': 'Indicator',
-                    'showSymbol': False,
-                    'data': [[int(p['time']) * 1000, float(p['value'])] for p in data],
-                    'lineStyle': {
-                        'width': ChartConstants.INDICATOR_LINE_WIDTH,
-                        'color': overlay.get('options', {}).get('color', '#ccc')
-                    },
-                    'yAxisIndex': 0,
-                    'z': ChartConstants.Z_INDICATORS,
-                    'animation': performance.animation_enabled,
-                })
-        
-        return ech_overlays
+        panel_keys = sorted(overlays.keys())
+        panel_map = {panel_id: i for i, panel_id in enumerate(panel_keys)}
+
+        for panel_id, panel_overlays in overlays.items():
+            axis_index = panel_map[panel_id]
+            for overlay in panel_overlays:
+                if overlay.get('type') == 'Line':
+                    data = overlay['data']
+
+                    ech_overlays.append({
+                        'type': 'line',
+                        'name': overlay.get('name', 'Indicator'),
+                        'showSymbol': False,
+                        'data': [[int(p['time']) * 1000, float(p['value'])] for p in data],
+                        'lineStyle': {
+                            'width': ChartConstants.INDICATOR_LINE_WIDTH,
+                            'color': overlay.get('options', {}).get('color', '#ccc')
+                        },
+                        'xAxisIndex': axis_index,
+                        'yAxisIndex': axis_index,
+                        'z': ChartConstants.Z_INDICATORS,
+                        'animation': performance.animation_enabled,
+                    })
         
         return ech_overlays
     

@@ -239,52 +239,51 @@ class DataProcessor:
         indicators: Optional[pd.DataFrame],
         indicator_config: List[dict],
         timestamp_col: str = TIMESTAMP_COLUMN
-    ) -> List[dict]:
-        """Build overlay data from indicators."""
-        import logging
+    ) -> Dict[int, List[dict]]:
+        """Build overlay data from indicators, grouped by panel."""
         logger = logging.getLogger(__name__)
-        logger.setLevel(logging.DEBUG)  # Ensure debug messages are shown
-        
-        overlays = []
-        
+        logger.setLevel(logging.DEBUG)
+
+        overlays_by_panel: Dict[int, List[dict]] = {}
+
         if indicators is None:
             logger.debug("build_overlay_data: indicators is None")
-            return overlays
-            
-        if len(indicator_config) == 0:
+            return overlays_by_panel
+
+        if not indicator_config:
             logger.debug("build_overlay_data: indicator_config is empty")
-            return overlays
-        
+            return overlays_by_panel
+
         logger.debug(f"build_overlay_data: Processing {len(indicator_config)} indicator configs")
         logger.debug(f"build_overlay_data: Available columns: {list(indicators.columns)}")
         logger.debug(f"build_overlay_data: Indicators shape: {indicators.shape}")
-        
+
         indf = indicators.copy()
         if not pd.api.types.is_datetime64_any_dtype(indf[timestamp_col]):
             indf[timestamp_col] = pd.to_datetime(indf[timestamp_col])
         indf['time'] = TimeUtil.to_epoch_seconds(indf[timestamp_col])
-        
+
         for cfg in indicator_config:
             col = cfg.get('column')
             plot_enabled = cfg.get('plot', True)
             panel = cfg.get('panel', 1)
-            
+
             logger.debug(f"build_overlay_data: Processing indicator '{col}', plot={plot_enabled}, panel={panel}")
-            
-            if (plot_enabled and 
-                col in indf.columns and 
-                panel == 1):
-                
+
+            if plot_enabled and col in indf.columns:
                 color = cfg.get('color', '#cccccc')
                 overlay_data = indf[['time', col]].dropna().copy()
-                
-                logger.debug(f"build_overlay_data: Adding overlay for '{col}' with {len(overlay_data)} data points")
-                logger.debug(f"build_overlay_data: First few values: {overlay_data.head()}")
-                
-                overlays.append({
+
+                logger.debug(f"build_overlay_data: Adding overlay for '{col}' in panel {panel} with {len(overlay_data)} data points")
+
+                if panel not in overlays_by_panel:
+                    overlays_by_panel[panel] = []
+
+                overlays_by_panel[panel].append({
                     'type': 'Line',
+                    'name': cfg.get('label', col),
                     'data': [
-                        {'time': int(t), 'value': float(v)} 
+                        {'time': int(t), 'value': float(v)}
                         for t, v in zip(overlay_data['time'], overlay_data[col])
                     ],
                     'options': {
@@ -299,9 +298,7 @@ class DataProcessor:
                 if not plot_enabled:
                     logger.debug(f"build_overlay_data: Skipping '{col}' - plot disabled")
                 elif col not in indf.columns:
-                    logger.debug(f"build_overlay_data: Skipping '{col}' - column not found")
-                elif panel != 1:
-                    logger.debug(f"build_overlay_data: Skipping '{col}' - panel {panel} != 1")
-        
-        logger.debug(f"build_overlay_data: Created {len(overlays)} overlays")
-        return overlays
+                    logger.warning(f"build_overlay_data: Skipping '{col}' - column not found in indicators DataFrame")
+
+        logger.debug(f"build_overlay_data: Created overlays for panels: {list(overlays_by_panel.keys())}")
+        return overlays_by_panel

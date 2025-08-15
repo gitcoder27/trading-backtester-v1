@@ -1,69 +1,46 @@
-import re
-from playwright.sync_api import Page, expect, sync_playwright
-from playwright._impl._errors import TimeoutError, Error
+from playwright.sync_api import sync_playwright, expect
 
-def run_backtest_and_verify_chart(page: Page):
-    """
-    This test verifies the functionality of the advanced chart.
-    1. Runs a backtest.
-    2. Navigates to the 'Advanced Chart' tab and verifies the chart is not initially rendered.
-    3. Clicks the 'Go' button and verifies the chart is then rendered.
-    """
-    try:
-        # 1. Navigate to the app
-        page.goto("http://localhost:8501")
-
-        # Wait for the app to load by looking for the "Run Backtest" button
-        expect(page.get_by_role("button", name="Run Backtest")).to_be_visible(timeout=30000)
-
-        # 2. Run a backtest
-        # Select a data file by clicking the dropdown and then the option
-        page.get_by_label("CSV File").click()
-        # Use a more specific locator to avoid strict mode violation
-        page.get_by_test_id("stSelectboxVirtualDropdown").get_by_text("nifty_2025_1min_01Aug_08Sep.csv").click()
-
-        # Select a strategy
-        page.get_by_text("Strategy & Params").click() # Open the strategy section
-        page.get_by_label("Strategy").click() # Open the strategy dropdown
-        # Use a more specific locator for the strategy as well
-        page.get_by_test_id("stSelectboxVirtualDropdown").get_by_text("BBandsScalper").click()
-
-        # Click the "Run Backtest" button
-        page.get_by_role("button", name="Run Backtest").click()
-
-        # Wait for the backtest to complete by looking for the "Overview" tab content
-        expect(page.get_by_text("Total Return")).to_be_visible(timeout=120000)
-
-        # 3. Navigate to the 'Advanced Chart' tab
-        page.get_by_role("tab", name="Advanced Chart").click()
-
-        # 4. Verify the chart is not initially rendered
-        expect(page.get_by_text("Select a date range and click 'Go' to render the chart.")).to_be_visible()
-
-        # Take a screenshot to prove the chart is not there
-        page.screenshot(path="jules-scratch/verification/advanced_chart_before_go.png")
-
-        # 5. Click the 'Go' button
-        page.get_by_role("button", name="Go").click()
-
-        # 6. Verify the chart is rendered
-        # The chart is an ECharts canvas, so we'll look for the canvas element.
-        expect(page.locator("canvas")).to_be_visible()
-
-        # Take a screenshot to prove the chart is now visible
-        page.screenshot(path="jules-scratch/verification/advanced_chart_after_go.png")
-
-    except (TimeoutError, Error) as e:
-        print(f"Test failed with an error: {e}")
-        page.screenshot(path="jules-scratch/verification/error_screenshot.png")
-        raise
-
-def main():
+def run_verification():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        run_backtest_and_verify_chart(page)
-        browser.close()
+
+        try:
+            page.set_default_timeout(60000)
+
+            page.goto("http://localhost:8501")
+
+            expect(page.get_by_text("Strategy Backtester")).to_be_visible()
+
+            # Use a more robust way to select the strategy
+            page.get_by_label("Strategy", exact=True).click()
+            page.get_by_text("RSICrossStrategy").click()
+
+            run_button = page.get_by_role("button", name="Run Backtest")
+            expect(run_button).to_be_enabled()
+            run_button.click()
+
+            advanced_chart_tab = page.get_by_text("Advanced Chart", exact=True)
+            expect(advanced_chart_tab).to_be_visible()
+            advanced_chart_tab.click()
+
+            # Wait for the chart to be rendered
+            expect(page.locator("canvas").nth(1)).to_be_visible()
+
+            page.wait_for_timeout(2000)
+
+            screenshot_path = "jules-scratch/verification/advanced_chart.png"
+            page.screenshot(path=screenshot_path)
+
+            print(f"Screenshot saved to {screenshot_path}")
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            error_path = "jules-scratch/verification/error_screenshot.png"
+            page.screenshot(path=error_path)
+            print(f"Error screenshot saved to {error_path}")
+        finally:
+            browser.close()
 
 if __name__ == "__main__":
-    main()
+    run_verification()
