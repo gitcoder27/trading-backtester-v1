@@ -7,6 +7,14 @@ class StrategyBase:
     def __init__(self, params=None):
         self.params = params or {}
 
+    @staticmethod
+    def get_params_config():
+        """
+        Returns a list of parameter configurations for the UI.
+        Each element in the list is a dictionary defining a widget.
+        """
+        return []
+
     def generate_signals(self, data):
         """
         Given a DataFrame of historical data, return a DataFrame or Series of signals.

@@ -22,6 +22,23 @@ class EMA10ScalperStrategy(StrategyBase):
         self.profit_target = params.get('profit_target', 20) if params else 20
         self.stop_loss = params.get('stop_loss', 15) if params else 15
 
+    @staticmethod
+    def get_params_config():
+        return [
+            {
+                "name": "ema10_ema_period", "param_key": "ema_period", "type": "number_input",
+                "label": "EMA Period", "default": 10, "min": 5, "max": 200, "step": 1
+            },
+            {
+                "name": "ema10_pt", "param_key": "profit_target", "type": "number_input",
+                "label": "Profit Target (pts)", "default": 20, "min": 1, "max": 400, "step": 1
+            },
+            {
+                "name": "ema10_sl", "param_key": "stop_loss", "type": "number_input",
+                "label": "Stop Loss (pts)", "default": 15, "min": 1, "max": 400, "step": 1
+            },
+        ]
+
     def indicator_config(self):
         """
         Configuration describing which indicators to plot and how.
