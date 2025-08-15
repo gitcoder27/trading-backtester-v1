@@ -1,6 +1,7 @@
 """
 Streamlit Web App for the trading-backtester-v1 project.
 Optimized for high performance backtesting with large datasets.
+Now includes lazy loading and chart caching for improved UI performance.
 """
 import time as _time
 import pandas as pd
@@ -36,6 +37,12 @@ from webapp.session import seed_session_defaults, set_pref, save_prefs
 from webapp.sidebar import cached_load_data_from_source, render_sidebar
 from webapp.strategies_registry import STRATEGY_MAP
 from webapp.tabs import render_tabs
+from webapp.performance_optimization import (
+    PerformanceMonitor, 
+    LazyTabManager, 
+    clear_chart_cache,
+    show_cache_stats
+)
 
 # Configure performance optimizations
 PerformanceOptimizer.configure_pandas()
@@ -62,6 +69,9 @@ def render_dashboard(
         config["strat_choice"],
         config["strat_params"],
         STRATEGY_MAP,
+        config.get("option_delta", 1.0),
+        config.get("lots", 1),
+        config.get("price_per_unit", 1.0),
     )
 
     with tabs[6]:
@@ -81,10 +91,35 @@ def render_dashboard(
 
 
 def main():
-    """Main function to run the Streamlit app."""
+    """Main function to run the Streamlit app with performance optimizations."""
     st.set_page_config(page_title="Strategy Backtester", layout="wide")
     st.title("Strategy Backtester")
-    st.caption("Interactive web app for running and analyzing backtests.")
+    st.caption("Interactive web app for running and analyzing backtests - Now with performance optimizations! 🚀")
+
+    # Add performance controls in sidebar
+    with st.sidebar:
+        st.divider()
+        st.subheader("🚀 Performance Controls")
+        
+        # Cache management
+        with st.expander("Cache Management", expanded=False):
+            show_cache_stats()
+            if st.button("🗑️ Clear All Caches"):
+                clear_chart_cache()
+                # Clear other caches
+                st.cache_data.clear()
+                st.success("All caches cleared!")
+                st.rerun()
+        
+        # Tab loading preferences
+        with st.expander("Tab Loading", expanded=False):
+            st.write("Tabs load lazily to improve performance.")
+            if st.button("🔄 Reset Tab States"):
+                keys_to_remove = [key for key in st.session_state.keys() if key.startswith('load_tab_')]
+                for key in keys_to_remove:
+                    del st.session_state[key]
+                st.success("Tab states reset!")
+                st.rerun()
 
     # Seed defaults once per session
     seed_session_defaults(st, STRATEGY_MAP)
@@ -94,6 +129,9 @@ def main():
     sidebar_config = render_sidebar()
 
     if sidebar_config["run_btn"]:
+        # Start overall performance monitoring
+        overall_timer = PerformanceMonitor.start_timer("complete_backtest_flow")
+        
         # Persist preferences only when running a backtest
         # Collect current session state into prefs then save
         for k in [
@@ -177,20 +215,23 @@ def main():
 
         # Instantiate strategy
         strategy = sidebar_config["strat_cls"](params=sidebar_config["strat_params"])
-        backtest_results = run_backtest(
-            data,
-            strategy,
-            sidebar_config["option_delta"],
-            sidebar_config["lots"],
-            sidebar_config["price_per_unit"],
-            sidebar_config["fee_per_trade"],
-            sidebar_config["direction_filter"],
-            sidebar_config["apply_time_filter"],
-            sidebar_config["start_hour"],
-            sidebar_config["end_hour"],
-            sidebar_config["apply_weekday_filter"],
-            sidebar_config["weekdays"],
-        )
+        
+        # Run backtest with progress indicator
+        with st.spinner('🚀 Running optimized backtest...'):
+            backtest_results = run_backtest(
+                data,
+                strategy,
+                sidebar_config["option_delta"],
+                sidebar_config["lots"],
+                sidebar_config["price_per_unit"],
+                sidebar_config["fee_per_trade"],
+                sidebar_config["direction_filter"],
+                sidebar_config["apply_time_filter"],
+                sidebar_config["start_hour"],
+                sidebar_config["end_hour"],
+                sidebar_config["apply_weekday_filter"],
+                sidebar_config["weekdays"],
+            )
 
         # Persist this run's results for use across reruns
         st.session_state["last_results"] = {
@@ -211,16 +252,28 @@ def main():
             "price_per_unit": sidebar_config["price_per_unit"],
         }
 
+        # Mark all tabs for loading (fresh backtest)
+        LazyTabManager.mark_tab_for_loading("Overview")
+        LazyTabManager.mark_tab_for_loading("Chart") 
+        LazyTabManager.mark_tab_for_loading("Advanced_Chart")
+        LazyTabManager.mark_tab_for_loading("Trades")
+        LazyTabManager.mark_tab_for_loading("Analytics")
+
         # Immediately render dashboard after backtest run
-        render_dashboard(
-            data=data,
-            trade_log=backtest_results["trade_log"],
-            shown_trades=backtest_results["shown_trades"],
-            strategy=strategy,
-            indicators=backtest_results["indicators"],
-            eq_for_display=backtest_results["eq_for_display"],
-            config=sidebar_config,
-        )
+        with st.spinner('📊 Preparing dashboard...'):
+            render_dashboard(
+                data=data,
+                trade_log=backtest_results["trade_log"],
+                shown_trades=backtest_results["shown_trades"],
+                strategy=strategy,
+                indicators=backtest_results["indicators"],
+                eq_for_display=backtest_results["eq_for_display"],
+                config=sidebar_config,
+            )
+        
+        # End overall performance monitoring
+        total_time = PerformanceMonitor.end_timer(overall_timer, "Complete backtest flow")
+        st.success(f"🎉 Complete workflow finished in {total_time:.2f}s")
 
     else:
         # If not running now, try to render last results
