@@ -35,6 +35,7 @@ class ChartData:
     """Container for chart data."""
     candles: List[CandleData]
     overlays: List[Dict[str, Any]] = field(default_factory=list)
+    oscillators: List[Dict[str, Any]] = field(default_factory=list)
     original_length: int = 0
     sampled_length: int = 0
     
@@ -42,6 +43,11 @@ class ChartData:
     def is_sampled(self) -> bool:
         """Check if data was sampled for performance."""
         return self.original_length > self.sampled_length > 0
+    
+    @property
+    def has_oscillators(self) -> bool:
+        """Check if there are oscillators to display."""
+        return len(self.oscillators) > 0
 
 
 @dataclass 

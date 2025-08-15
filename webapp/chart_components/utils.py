@@ -239,21 +239,22 @@ class DataProcessor:
         indicators: Optional[pd.DataFrame],
         indicator_config: List[dict],
         timestamp_col: str = TIMESTAMP_COLUMN
-    ) -> List[dict]:
-        """Build overlay data from indicators."""
+    ) -> Tuple[List[dict], List[dict]]:
+        """Build overlay and oscillator data from indicators."""
         import logging
         logger = logging.getLogger(__name__)
         logger.setLevel(logging.DEBUG)  # Ensure debug messages are shown
         
         overlays = []
+        oscillators = []
         
         if indicators is None:
             logger.debug("build_overlay_data: indicators is None")
-            return overlays
+            return overlays, oscillators
             
         if len(indicator_config) == 0:
             logger.debug("build_overlay_data: indicator_config is empty")
-            return overlays
+            return overlays, oscillators
         
         logger.debug(f"build_overlay_data: Processing {len(indicator_config)} indicator configs")
         logger.debug(f"build_overlay_data: Available columns: {list(indicators.columns)}")
@@ -272,17 +273,18 @@ class DataProcessor:
             logger.debug(f"build_overlay_data: Processing indicator '{col}', plot={plot_enabled}, panel={panel}")
             
             if (plot_enabled and 
-                col in indf.columns and 
-                panel == 1):
+                col in indf.columns):
                 
                 color = cfg.get('color', '#cccccc')
+                label = cfg.get('label', col)
                 overlay_data = indf[['time', col]].dropna().copy()
                 
-                logger.debug(f"build_overlay_data: Adding overlay for '{col}' with {len(overlay_data)} data points")
+                logger.debug(f"build_overlay_data: Adding {'overlay' if panel == 1 else 'oscillator'} for '{col}' with {len(overlay_data)} data points")
                 logger.debug(f"build_overlay_data: First few values: {overlay_data.head()}")
                 
-                overlays.append({
+                indicator_series = {
                     'type': 'Line',
+                    'name': label,
                     'data': [
                         {'time': int(t), 'value': float(v)} 
                         for t, v in zip(overlay_data['time'], overlay_data[col])
@@ -294,14 +296,89 @@ class DataProcessor:
                         'lastValueVisible': False,
                     },
                     'priceScaleId': 'right',
-                })
+                }
+                
+                if panel == 1:
+                    overlays.append(indicator_series)
+                elif panel == 2:
+                    oscillators.append(indicator_series)
             else:
                 if not plot_enabled:
                     logger.debug(f"build_overlay_data: Skipping '{col}' - plot disabled")
                 elif col not in indf.columns:
                     logger.debug(f"build_overlay_data: Skipping '{col}' - column not found")
-                elif panel != 1:
-                    logger.debug(f"build_overlay_data: Skipping '{col}' - panel {panel} != 1")
         
-        logger.debug(f"build_overlay_data: Created {len(overlays)} overlays")
-        return overlays
+        logger.debug(f"build_overlay_data: Created {len(overlays)} overlays and {len(oscillators)} oscillators")
+        return overlays, oscillators
+
+    @staticmethod
+    def align_data_timestamps(
+        price_data: pd.DataFrame,
+        indicators: Optional[pd.DataFrame],
+        timestamp_col: str = TIMESTAMP_COLUMN
+    ) -> Tuple[pd.DataFrame, Optional[pd.DataFrame]]:
+        """
+        Align price data and indicators to have the same timestamp range.
+        This ensures synchronization between multi-panel charts.
+        
+        The method finds the latest start time among all indicators (accounting for 
+        warm-up periods) and aligns both datasets to ensure proper synchronization
+        when zooming in ECharts multi-panel setup.
+        
+        Args:
+            price_data: Price OHLC data with timestamp column
+            indicators: Indicators data with timestamp column
+            timestamp_col: Name of timestamp column
+            
+        Returns:
+            Tuple of aligned (price_data, indicators) with matching timestamp ranges
+        """
+        if indicators is None or indicators.empty:
+            return price_data, indicators
+            
+        # Safety check for empty price data
+        if price_data.empty:
+            return price_data, indicators
+            
+        # Ensure timestamp columns are datetime
+        price_ts = pd.to_datetime(price_data[timestamp_col])
+        indicators_ts = pd.to_datetime(indicators[timestamp_col])
+        
+        # Find the latest start time where all indicators have valid data
+        # This accounts for different warm-up periods across indicators
+        indicator_columns = [col for col in indicators.columns if col != timestamp_col]
+        latest_start = indicators_ts.min()  # Start with the earliest timestamp
+        
+        # For each indicator column, find when it first has valid data
+        for col in indicator_columns:
+            if col in indicators.columns:
+                col_valid_mask = indicators[col].notna()
+                if col_valid_mask.any():
+                    try:
+                        first_valid_idx = col_valid_mask.idxmax()
+                        # Use .loc instead of .iloc to avoid indexing errors
+                        first_valid_timestamp = indicators_ts.loc[first_valid_idx]
+                        latest_start = max(latest_start, first_valid_timestamp)
+                    except (IndexError, KeyError) as e:
+                        logger.warning(f"align_data_timestamps: Error finding first valid timestamp for {col}: {e}")
+                        continue
+        
+        # Common end time is the minimum of both datasets
+        common_end = min(price_ts.max(), indicators_ts.max())
+        
+        logger.debug(f"align_data_timestamps: Price range: {price_ts.min()} to {price_ts.max()}")
+        logger.debug(f"align_data_timestamps: Indicators range: {indicators_ts.min()} to {indicators_ts.max()}")
+        logger.debug(f"align_data_timestamps: Latest valid start: {latest_start}")
+        logger.debug(f"align_data_timestamps: Common end: {common_end}")
+        
+        # Filter both datasets to common range
+        price_mask = (price_ts >= latest_start) & (price_ts <= common_end)
+        indicators_mask = (indicators_ts >= latest_start) & (indicators_ts <= common_end)
+        
+        aligned_price = price_data[price_mask].copy()
+        aligned_indicators = indicators[indicators_mask].copy()
+        
+        logger.debug(f"align_data_timestamps: Aligned price points: {len(aligned_price)}")
+        logger.debug(f"align_data_timestamps: Aligned indicator points: {len(aligned_indicators)}")
+        
+        return aligned_price, aligned_indicators

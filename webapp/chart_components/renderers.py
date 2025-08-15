@@ -66,7 +66,8 @@ class EChartsRenderer:
             # Build chart configuration (ChartConfig will handle overlay conversion)
             option = ChartConfig.build_echarts_option(
                 dataset=dataset,
-                overlays=chart_data.overlays,  # Pass original overlays, not converted ones
+                overlays=chart_data.overlays,  # Pass panel 1 indicators
+                oscillators=chart_data.oscillators,  # Pass panel 2 indicators  
                 trade_data=trade_data,
                 options=self.options,
                 performance=self.performance,

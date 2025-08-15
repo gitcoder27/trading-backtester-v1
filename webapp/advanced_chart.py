@@ -149,8 +149,20 @@ class AdvancedChartManager:
         
         filtered_data = DataProcessor.filter_data_by_date_range(data, start_datetime, end_datetime)
         
+        # Filter indicators by the same date range as the main data
+        if indicators is not None:
+            filtered_indicators = DataProcessor.filter_data_by_date_range(indicators, start_datetime, end_datetime)
+        else:
+            filtered_indicators = indicators
+        
+        # ✨ NEW: Align timestamps to ensure synchronization between panels
+        # This fixes the issue where RSI warm-up period causes misaligned timestamps
+        aligned_data, aligned_indicators = DataProcessor.align_data_timestamps(
+            filtered_data, filtered_indicators
+        )
+        
         # Clean and validate OHLC data
-        clean_data = DataProcessor.clean_and_validate_ohlc_data(filtered_data)
+        clean_data = DataProcessor.clean_and_validate_ohlc_data(aligned_data)
         
         # Sample data for performance if needed
         sampled_data, was_sampled = DataProcessor.sample_data_for_performance(
@@ -160,22 +172,14 @@ class AdvancedChartManager:
         # Convert to candlestick format
         candles = DataProcessor.convert_to_candlestick_data(sampled_data)
         
-        # Build overlay data from the indicators parameter (as in original implementation)
+        # Build overlay data from the aligned indicators
         indicator_config = strategy.indicator_config() if hasattr(strategy, 'indicator_config') else []
-        if indicators is not None:
-            # Filter indicators by the same date range as the main data
-            start_dt, end_dt = self.chart_state.start_date, self.chart_state.end_date
-            start_datetime = pd.to_datetime(start_dt)
-            end_datetime = pd.to_datetime(end_dt).replace(hour=23, minute=59, second=59)
-            filtered_indicators = DataProcessor.filter_data_by_date_range(indicators, start_datetime, end_datetime)
-        else:
-            filtered_indicators = indicators
-        
-        overlays = DataProcessor.build_overlay_data(filtered_indicators, indicator_config)
+        overlays, oscillators = DataProcessor.build_overlay_data(aligned_indicators, indicator_config)
         
         return ChartData(
             candles=candles,
             overlays=overlays,
+            oscillators=oscillators,
             original_length=len(clean_data),
             sampled_length=len(sampled_data) if was_sampled else len(clean_data)
         )
