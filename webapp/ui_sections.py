@@ -25,6 +25,84 @@ from backtester.html_report import generate_html_report
 
 from .analytics import compute_drawdown, monthly_returns_heatmap, rolling_sharpe
 from .advanced_chart import section_advanced_chart
+from .performance_optimization import (
+    cached_chart, 
+    LazyTabManager, 
+    ChartOptimizer, 
+    PerformanceMonitor,
+    show_cache_stats
+)
+
+
+@cached_chart("equity_curve", ttl=300)
+def cached_plot_equity_curve(eq_for_display: pd.DataFrame):
+    """Cached version of equity curve plotting."""
+    return plot_equity_curve(eq_for_display, interactive=True)
+
+@cached_chart("drawdown", ttl=300)  
+def cached_compute_and_plot_drawdown(eq_for_display: pd.DataFrame):
+    """Cached version of drawdown computation and plotting."""
+    dd = compute_drawdown(eq_for_display)
+    return px.area(dd, x='timestamp', y='drawdown', title='Underwater (Drawdown)', template='plotly_dark')
+
+@cached_chart("candlestick", ttl=300)
+def cached_plot_trades_candlestick(data: pd.DataFrame, trades: pd.DataFrame, indicators, indicator_cfg, max_points: int = 2000):
+    """Cached version of trades on candlestick plotting with optimization."""
+    # Optimize data for performance
+    optimized_data, optimized_trades, was_sampled = ChartOptimizer.optimize_chart_data(data, trades, max_points)
+    
+    if was_sampled:
+        st.info(f"📊 Displaying {len(optimized_data)} of {len(data)} data points for optimal performance")
+    
+    return plot_trades_on_candlestick_plotly(
+        optimized_data,
+        optimized_trades,
+        indicators=indicators,
+        indicator_cfg=indicator_cfg,
+        title="Trades on Candlestick Chart",
+        show=False,
+    )
+
+@cached_chart("analytics", ttl=300)
+def cached_analytics_charts(eq_for_display: pd.DataFrame, shown_trades: pd.DataFrame):
+    """Cached version of analytics charts generation."""
+    charts = {}
+    
+    # PnL histogram
+    if shown_trades is not None and not shown_trades.empty:
+        charts['pnl_hist'] = px.histogram(
+            shown_trades, x='pnl', nbins=50, 
+            title='Trade PnL Distribution', 
+            template='plotly_dark'
+        )
+    
+    # Hourly win rate
+    if shown_trades is not None and not shown_trades.empty and 'entry_time' in shown_trades:
+        et = pd.to_datetime(shown_trades['entry_time'])
+        dfh = shown_trades.copy()
+        dfh['hour'] = et.dt.hour
+        dfh['is_win'] = (dfh['pnl'] > 0).astype(int)
+        agg = dfh.groupby('hour').agg(trades=('pnl', 'count'), winrate=('is_win','mean')).reset_index()
+        charts['hourly_winrate'] = px.bar(
+            agg, x='hour', y='winrate', 
+            title='Win Rate by Hour', 
+            template='plotly_dark'
+        )
+    
+    # Monthly returns heatmap
+    if eq_for_display is not None and not eq_for_display.empty:
+        charts['monthly_heatmap'] = monthly_returns_heatmap(eq_for_display)
+        
+        # Rolling Sharpe
+        rs = rolling_sharpe(eq_for_display, window=50)
+        if not rs.empty:
+            charts['rolling_sharpe'] = px.line(
+                rs, x='timestamp', y='rolling_sharpe', 
+                title='Rolling Sharpe (window=50)', 
+                template='plotly_dark'
+            )
+    
+    return charts
 
 
 def render_metrics(equity_curve: pd.DataFrame, trade_log: pd.DataFrame):
@@ -60,36 +138,72 @@ def render_metrics(equity_curve: pd.DataFrame, trade_log: pd.DataFrame):
 
 
 def section_overview(eq_for_display: pd.DataFrame):
+    """Overview section with cached charts and performance monitoring."""
+    return LazyTabManager.conditional_render(
+        "Overview", 
+        _render_overview_content, 
+        eq_for_display,
+        description="Shows equity curve and drawdown charts"
+    )
+
+def _render_overview_content(eq_for_display: pd.DataFrame):
+    """Internal function to render overview content."""
     st.subheader("Performance Metrics")
     if eq_for_display is None or len(eq_for_display) == 0:
         st.info("No equity curve to display.")
         return
+    
     c1, c2 = st.columns([2, 1])
     with c1:
-        fig_eq = plot_equity_curve(eq_for_display, interactive=True)
+        fig_eq = cached_plot_equity_curve(eq_for_display)
         st.plotly_chart(fig_eq, use_container_width=True)
     with c2:
-        dd = compute_drawdown(eq_for_display)
-        fig_dd = px.area(dd, x='timestamp', y='drawdown', title='Underwater (Drawdown)', template='plotly_dark')
+        fig_dd = cached_compute_and_plot_drawdown(eq_for_display)
         st.plotly_chart(fig_dd, use_container_width=True)
+    
+    # Show performance stats in expander
+    with st.expander("🚀 Performance Info", expanded=False):
+        show_cache_stats()
 
 
 def section_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, indicators):
+    """Chart section with lazy loading and optimization."""
+    return LazyTabManager.conditional_render(
+        "Chart", 
+        _render_chart_content, 
+        data, trades, strategy, indicators,
+        description="Shows candlestick chart with trades overlaid"
+    )
+
+def _render_chart_content(data: pd.DataFrame, trades: pd.DataFrame, strategy, indicators):
+    """Internal function to render chart content."""
     if data is None or len(data) == 0:
         st.info("No price data to chart.")
         return
-    # Plot full data and all trades for clarity
-    df_plot = data
+    
+    # Performance settings
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        max_points = st.selectbox(
+            "Chart Resolution", 
+            [1000, 2000, 5000, "All"], 
+            index=1,
+            help="Lower values = faster rendering"
+        )
+        if max_points == "All":
+            max_points = len(data)
+    
+    with col1:
+        st.write("")  # Spacer
+    
+    # Prepare trade data
     tlog = trades.reset_index(drop=True).copy()
     tlog['trade_id'] = tlog.index
     indicator_cfg = strategy.indicator_config() if hasattr(strategy, 'indicator_config') else []
-    fig_trades = plot_trades_on_candlestick_plotly(
-        df_plot,
-        tlog,
-        indicators=indicators,
-        indicator_cfg=indicator_cfg,
-        title="Trades on Candlestick Chart",
-        show=False,
+    
+    # Generate cached chart
+    fig_trades = cached_plot_trades_candlestick(
+        data, tlog, indicators, indicator_cfg, max_points
     )
     st.plotly_chart(fig_trades, use_container_width=True)
 
@@ -97,6 +211,16 @@ def section_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, indicators
 
 
 def section_trades(trades: pd.DataFrame):
+    """Trades section with lazy loading."""
+    return LazyTabManager.conditional_render(
+        "Trades", 
+        _render_trades_content, 
+        trades,
+        description="Shows detailed trade log and summary metrics"
+    )
+
+def _render_trades_content(trades: pd.DataFrame):
+    """Internal function to render trades content."""
     st.caption("Filtered trades shown below (if filters enabled in sidebar)")
     if trades is None or trades.empty:
         st.info("No trades to display.")
@@ -119,28 +243,45 @@ def section_trades(trades: pd.DataFrame):
 
 
 def section_analytics(eq_for_display: pd.DataFrame, shown_trades: pd.DataFrame):
-    if shown_trades is not None and not shown_trades.empty:
-        fig_hist = px.histogram(shown_trades, x='pnl', nbins=50, title='Trade PnL Distribution', template='plotly_dark')
-        st.plotly_chart(fig_hist, use_container_width=True)
-    if shown_trades is not None and not shown_trades.empty and 'entry_time' in shown_trades:
-        et = pd.to_datetime(shown_trades['entry_time'])
-        dfh = shown_trades.copy()
-        dfh['hour'] = et.dt.hour
-        dfh['is_win'] = (dfh['pnl'] > 0).astype(int)
-        agg = dfh.groupby('hour').agg(trades=('pnl', 'count'), winrate=('is_win','mean')).reset_index()
-        fig_hr = px.bar(agg, x='hour', y='winrate', title='Win Rate by Hour', template='plotly_dark')
-        st.plotly_chart(fig_hr, use_container_width=True)
-    if eq_for_display is not None and not eq_for_display.empty:
-        fig_mh = monthly_returns_heatmap(eq_for_display)
-        if fig_mh is not None:
-            st.plotly_chart(fig_mh, use_container_width=True)
-        rs = rolling_sharpe(eq_for_display, window=50)
-        if not rs.empty:
-            fig_rs = px.line(rs, x='timestamp', y='rolling_sharpe', title='Rolling Sharpe (window=50)', template='plotly_dark')
-            st.plotly_chart(fig_rs, use_container_width=True)
+    """Analytics section with lazy loading and cached charts."""
+    return LazyTabManager.conditional_render(
+        "Analytics", 
+        _render_analytics_content, 
+        eq_for_display, shown_trades,
+        description="Shows advanced analytics: PnL distribution, hourly patterns, monthly returns, rolling Sharpe"
+    )
+
+def _render_analytics_content(eq_for_display: pd.DataFrame, shown_trades: pd.DataFrame):
+    """Internal function to render analytics content."""
+    # Get all cached charts at once
+    charts = cached_analytics_charts(eq_for_display, shown_trades)
+    
+    # Render charts if available
+    if 'pnl_hist' in charts:
+        st.plotly_chart(charts['pnl_hist'], use_container_width=True)
+    
+    if 'hourly_winrate' in charts:
+        st.plotly_chart(charts['hourly_winrate'], use_container_width=True)
+    
+    if 'monthly_heatmap' in charts and charts['monthly_heatmap'] is not None:
+        st.plotly_chart(charts['monthly_heatmap'], use_container_width=True)
+    
+    if 'rolling_sharpe' in charts:
+        st.plotly_chart(charts['rolling_sharpe'], use_container_width=True)
+
+
+def section_advanced_chart_lazy(data: pd.DataFrame, trades: pd.DataFrame, strategy, indicators):
+    """Advanced chart section with lazy loading."""
+    return LazyTabManager.conditional_render(
+        "Advanced_Chart", 
+        section_advanced_chart, 
+        data, trades, strategy, indicators,
+        description="Shows interactive ECharts/Plotly candlestick chart with advanced features"
+    )
 
 
 def section_compare(data: pd.DataFrame, picks: List[str], strat_choice: str, strat_params: Dict[str, Any], strategy_map, option_delta: float, lots: int, price_per_unit: float):
+    """Compare multiple strategies side by side."""
     import plotly.graph_objs as go
     from backtester.engine import BacktestEngine
     from backtester.metrics import total_return, sharpe_ratio, max_drawdown, win_rate, profit_factor
