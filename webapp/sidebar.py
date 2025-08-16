@@ -134,6 +134,7 @@ def render_sidebar():
             lots = st.number_input("Lots (1 lot=75)", min_value=1, max_value=100, value=int(st.session_state.get('lots', 2)), step=1, key='lots')
             price_per_unit = st.number_input("Price per unit", min_value=0.1, max_value=1000.0, value=float(st.session_state.get('price_per_unit', 1.0)), step=0.1, key='price_per_unit')
             fee_per_trade = st.number_input("Fee per trade (absolute)", min_value=0.0, max_value=10000.0, value=float(st.session_state.get('fee_per_trade', 0.0)), step=1.0, help="Deducted from PnL per closed trade, for analytics/plots only", key='fee_per_trade')
+            intraday = st.checkbox("Intraday mode (exit at 15:15)", value=bool(st.session_state.get('intraday', False)), key='intraday')
             direction_filter = st.multiselect("Directions to include", ["long", "short"], default=st.session_state.get('direction_filter', ["long", "short"]), key='direction_filter')
             apply_time_filter = st.checkbox("Filter by trading hours", value=bool(st.session_state.get('apply_time_filter', False)), key='apply_time_filter')
             if apply_time_filter:
@@ -181,4 +182,5 @@ def render_sidebar():
         'weekdays': weekdays,
         'apply_filters_to_charts': apply_filters_to_charts,
         'timeframe': timeframe,
+        'intraday': intraday,
     }

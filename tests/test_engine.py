@@ -253,3 +253,33 @@ def test_backtest_engine_run_equal_length_equity_curve(monkeypatch):
     )
     result = engine.run()
     assert len(result['equity_curve']) == len(data)
+
+
+class IntradayStrategy(StrategyBase):
+    _use_fast_vectorized = False
+
+    def generate_signals(self, data):
+        df = data.copy()
+        df['signal'] = [1, 0, 0, 1]
+        return df
+
+    def should_exit(self, position, row, entry_price):
+        return False, ''
+
+
+def test_intraday_session_close():
+    ts = pd.to_datetime(
+        [
+            '2024-01-01 15:00',
+            '2024-01-01 15:14',
+            '2024-01-01 15:15',
+            '2024-01-01 15:16',
+        ]
+    )
+    data = pd.DataFrame({'timestamp': ts, 'close': [100.0, 101.0, 102.0, 103.0]})
+    engine = BacktestEngine(data, IntradayStrategy(), intraday=True)
+    result = engine.run()
+    trade_log = result['trade_log']
+    assert len(trade_log) == 1
+    assert trade_log['exit_reason'].iloc[0] == 'Session Close'
+    assert trade_log['exit_time'].iloc[0] == ts[2]

@@ -36,6 +36,7 @@ def main():
     parser.add_argument('--lots', type=int, default=2, help='Number of lots to trade (1 lot = 75 units)')
     parser.add_argument('--option-price-per-unit', type=float, default=1.0, help='Multiplier for option price per unit (default 1.0)')
     parser.add_argument('--non-interactive', action='store_true', help='Run in non-interactive mode')
+    parser.add_argument('--intraday', action='store_true', help='Enable intraday mode with session close at 15:15')
     args = parser.parse_args()
 
     # Set up logging for debug/info output
@@ -90,7 +91,8 @@ def main():
         strategy,
         option_delta=args.option_delta,
         lots=args.lots,
-        option_price_per_unit=args.option_price_per_unit
+        option_price_per_unit=args.option_price_per_unit,
+        intraday=args.intraday,
     )
     results = engine.run()
 
