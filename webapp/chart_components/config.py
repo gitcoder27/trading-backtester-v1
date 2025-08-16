@@ -227,39 +227,88 @@ class ChartConfig:
         has_oscillators: bool = False
     ) -> List[Dict[str, Any]]:
         """Build data zoom configuration."""
-        base_config = {
+        base_x_config = {
             'startValue': x_min,
             'endValue': x_max,
             'throttle': performance.throttle_delay,
             'animation': performance.animation_enabled
         }
-        
+
+        # Vertical zoom shouldn't filter data to keep all points visible
+        base_y_config = {
+            'throttle': performance.throttle_delay,
+            'animation': performance.animation_enabled,
+            'filterMode': 'none'
+        }
+
         # ZOOM FIX: Explicit synchronization for multi-panel charts
         if has_oscillators:
             # Use explicit axis linking with connect property for reliable sync
             return [
                 {
-                    'type': 'inside', 
-                    **base_config, 
+                    'type': 'inside',
+                    **base_x_config,
                     'xAxisIndex': [0, 1],
                     'filterMode': 'none',  # Don't filter data, just zoom
                     'moveOnMouseMove': True,
                     'zoomOnMouseWheel': True
                 },
                 {
-                    'type': 'slider', 
-                    **base_config, 
+                    'type': 'slider',
+                    **base_x_config,
                     'xAxisIndex': [0, 1],
                     'filterMode': 'none',  # Don't filter data, just zoom
                     'show': True,
                     'height': 20,
                     'bottom': 10
+                },
+                {
+                    'type': 'inside',
+                    **base_y_config,
+                    'yAxisIndex': [0, 1],
+                    'orient': 'vertical',
+                    'moveOnMouseMove': True,
+                    'zoomOnMouseWheel': True
+                },
+                {
+                    'type': 'slider',
+                    **base_y_config,
+                    'yAxisIndex': [0, 1],
+                    'orient': 'vertical',
+                    'show': True,
+                    'right': 0,
+                    'width': 15
                 }
             ]
         else:
             return [
-                {'type': 'inside', **base_config},
-                {'type': 'slider', **base_config}
+                {
+                    'type': 'inside',
+                    **base_x_config,
+                    'filterMode': 'none'
+                },
+                {
+                    'type': 'slider',
+                    **base_x_config,
+                    'filterMode': 'none'
+                },
+                {
+                    'type': 'inside',
+                    **base_y_config,
+                    'yAxisIndex': [0],
+                    'orient': 'vertical',
+                    'moveOnMouseMove': True,
+                    'zoomOnMouseWheel': True
+                },
+                {
+                    'type': 'slider',
+                    **base_y_config,
+                    'yAxisIndex': [0],
+                    'orient': 'vertical',
+                    'show': True,
+                    'right': 0,
+                    'width': 15
+                }
             ]
     
     @staticmethod
