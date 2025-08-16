@@ -94,12 +94,18 @@ def main():
     st.set_page_config(page_title="Strategy Backtester", layout="wide")
     st.title("Strategy Backtester")
     st.caption("Interactive web app for running and analyzing backtests - Now with performance optimizations! 🚀")
+    # Seed defaults once per session
+    seed_session_defaults(st, STRATEGY_MAP)
+    _prefs = st.session_state.get("_prefs_obj")
 
-    # Add performance controls in sidebar
+    # Render sidebar and get configuration values
+    sidebar_config = render_sidebar()
+
+    # Add performance controls at the bottom of the sidebar
     with st.sidebar:
         st.divider()
         st.subheader("🚀 Performance Controls")
-        
+
         # Cache management
         with st.expander("Cache Management", expanded=False):
             show_cache_stats()
@@ -109,7 +115,7 @@ def main():
                 st.cache_data.clear()
                 st.success("All caches cleared!")
                 st.rerun()
-        
+
         # Tab loading preferences
         with st.expander("Tab Loading", expanded=False):
             st.write("Tabs load lazily to improve performance.")
@@ -119,13 +125,6 @@ def main():
                     del st.session_state[key]
                 st.success("Tab states reset!")
                 st.rerun()
-
-    # Seed defaults once per session
-    seed_session_defaults(st, STRATEGY_MAP)
-    _prefs = st.session_state.get("_prefs_obj")
-
-    # Render sidebar and get configuration values
-    sidebar_config = render_sidebar()
 
     if sidebar_config["run_btn"]:
         # Start overall performance monitoring
