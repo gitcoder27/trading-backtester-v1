@@ -33,6 +33,10 @@ class ChartConstants:
     TRADE_SYMBOL_SIZE = 12
     TRADE_LINE_WIDTH = 2
     INDICATOR_LINE_WIDTH = 1
+
+    # Candlestick sizing
+    CANDLE_MIN_WIDTH = 5
+    CANDLE_MAX_WIDTH = 30
     
     # Z-index layers
     Z_CANDLESTICKS = 1
@@ -371,6 +375,8 @@ class ChartConfig:
             'large': dataset_length > performance.large_threshold,
             'largeThreshold': performance.large_threshold,
             'progressive': ChartConstants.PROGRESSIVE_THRESHOLD,
+            'barMinWidth': ChartConstants.CANDLE_MIN_WIDTH,
+            'barMaxWidth': ChartConstants.CANDLE_MAX_WIDTH,
         }
     
     @staticmethod
