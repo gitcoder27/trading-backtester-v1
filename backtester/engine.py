@@ -199,7 +199,6 @@ class BacktestEngine:
         entry_idx = None
         trade_log = []
         equity_curve = []
-        last_signal = 0
 
         for idx, row in df.iterrows():
             signal = row['signal']
@@ -315,5 +314,5 @@ class BacktestEngine:
         })
 
         trade_log_df = pd.DataFrame(trade_log)
-        
+
         return equity_curve_df, trade_log_df
