@@ -246,7 +246,7 @@ class ChartConfig:
         # ZOOM FIX: Explicit synchronization for multi-panel charts
         if has_oscillators:
             # Use explicit axis linking with connect property for reliable sync
-            return [
+            zoom_config = [
                 {
                     'type': 'inside',
                     **base_x_config,
@@ -263,27 +263,31 @@ class ChartConfig:
                     'show': True,
                     'height': 20,
                     'bottom': 10
-                },
-                {
-                    'type': 'inside',
-                    **base_y_config,
-                    'yAxisIndex': [0, 1],
-                    'orient': 'vertical',
-                    'moveOnMouseMove': True,
-                    'zoomOnMouseWheel': True
-                },
-                {
-                    'type': 'slider',
-                    **base_y_config,
-                    'yAxisIndex': [0, 1],
-                    'orient': 'vertical',
-                    'show': True,
-                    'right': 0,
-                    'width': 15
                 }
             ]
+            if performance.vertical_zoom_enabled:
+                zoom_config.extend([
+                    {
+                        'type': 'inside',
+                        **base_y_config,
+                        'yAxisIndex': [0, 1],
+                        'orient': 'vertical',
+                        'moveOnMouseMove': True,
+                        'zoomOnMouseWheel': True
+                    },
+                    {
+                        'type': 'slider',
+                        **base_y_config,
+                        'yAxisIndex': [0, 1],
+                        'orient': 'vertical',
+                        'show': True,
+                        'right': 0,
+                        'width': 15
+                    }
+                ])
+            return zoom_config
         else:
-            return [
+            zoom_config = [
                 {
                     'type': 'inside',
                     **base_x_config,
@@ -293,25 +297,29 @@ class ChartConfig:
                     'type': 'slider',
                     **base_x_config,
                     'filterMode': 'none'
-                },
-                {
-                    'type': 'inside',
-                    **base_y_config,
-                    'yAxisIndex': [0],
-                    'orient': 'vertical',
-                    'moveOnMouseMove': True,
-                    'zoomOnMouseWheel': True
-                },
-                {
-                    'type': 'slider',
-                    **base_y_config,
-                    'yAxisIndex': [0],
-                    'orient': 'vertical',
-                    'show': True,
-                    'right': 0,
-                    'width': 15
                 }
             ]
+            if performance.vertical_zoom_enabled:
+                zoom_config.extend([
+                    {
+                        'type': 'inside',
+                        **base_y_config,
+                        'yAxisIndex': [0],
+                        'orient': 'vertical',
+                        'moveOnMouseMove': True,
+                        'zoomOnMouseWheel': True
+                    },
+                    {
+                        'type': 'slider',
+                        **base_y_config,
+                        'yAxisIndex': [0],
+                        'orient': 'vertical',
+                        'show': True,
+                        'right': 0,
+                        'width': 15
+                    }
+                ])
+            return zoom_config
     
     @staticmethod
     def _build_series_config(
