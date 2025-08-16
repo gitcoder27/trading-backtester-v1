@@ -30,7 +30,7 @@ def main():
     parser.add_argument('-s','--start',help='Start date (YYYY-MM-DD)',default=None)
     parser.add_argument('-e','--end',help='End date (YYYY-MM-DD)',default=None)
     parser.add_argument('-r','--report',help='Generate HTML report',action='store_true')
-    parser.add_argument('-t','--timeframe',help="Timeframe for resampling (e.g. '1T'=1min, '2T'=2min, '5T'=5min, '10T'=10min)",default='1T')
+    parser.add_argument('-t','--timeframe',help="Timeframe for resampling (e.g. '1min', '2min', '5min', '10min')",default='1min')
     parser.add_argument('--debug', action='store_true', help='Enable debug/info logging for strategy internals')
     parser.add_argument('--option-delta', type=float, default=0.5, help='ATM option delta (e.g. 0.5 for ATM, 0.7 for ITM)')
     parser.add_argument('--lots', type=int, default=2, help='Number of lots to trade (1 lot = 75 units)')
