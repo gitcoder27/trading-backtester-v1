@@ -134,6 +134,10 @@ The CLI is useful for automated backtesting and scripting.
 python main.py [OPTIONS]
 ```
 
+By default, `main.py` runs in intraday mode and exits any open positions at
+**15:15**. Use `--no-intraday` to disable this cutoff and allow trades to carry
+past the session close.
+
 **Command-Line Arguments:**
 
 
@@ -149,6 +153,7 @@ python main.py [OPTIONS]
 | `--lots` | Number of lots to trade. | `--lots 3` |
 | `--option-price-per-unit` | Multiplier for the option price per unit. | `--option-price-per-unit 1.2` |
 | `--non-interactive` | Run without interactive prompts. | `--non-interactive` |
+| `--no-intraday` | Disable intraday mode and allow trades past 15:15. | `--no-intraday` |
 **Example:**
 
 ```bash
