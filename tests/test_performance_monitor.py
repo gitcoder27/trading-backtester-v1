@@ -15,3 +15,9 @@ def test_performance_monitor_basic():
 def test_get_memory_usage():
     mem = get_memory_usage()
     assert mem > 0
+
+
+def test_stop_without_start_and_display_empty():
+    pm = PerformanceMonitor()
+    assert pm.stop_monitoring() == {}
+    assert pm.display_metrics() is None

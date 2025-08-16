@@ -8,7 +8,8 @@ from backtester.strategy_base import StrategyBase
 def test_vectorized_backtest_core():
     signals = np.array([0, 1, -1])
     prices = np.array([100.0, 101.0, 102.0])
-    equity = _vectorized_backtest_core.py_func(
+    core = getattr(_vectorized_backtest_core, 'py_func', _vectorized_backtest_core)
+    equity = core(
         signals,
         prices,
         option_delta=1.0,
@@ -56,7 +57,8 @@ def test_backtest_engine_run():
 def test_vectorized_backtest_core_extended():
     signals = np.array([-1, -1, 1, 1])
     prices = np.array([100.0, 99.0, 101.0, 100.0])
-    equity = _vectorized_backtest_core.py_func(
+    core = getattr(_vectorized_backtest_core, 'py_func', _vectorized_backtest_core)
+    equity = core(
         signals,
         prices,
         option_delta=1.0,
@@ -218,6 +220,9 @@ def test_run_traditional_backtest_no_entry():
     df = strategy.generate_signals(data)
     equity_df, trade_log = engine._run_traditional_backtest(df, 75, ['exit_indicator'])
     assert trade_log.empty
+    # Cover strategy methods
+    assert strategy.should_exit('long', df.iloc[0], 100) == (False, '')
+    assert strategy.indicator_config() == [{'column': 'exit_indicator'}]
     assert equity_df['equity'].iloc[0] == pytest.approx(1000.0)
 
 
