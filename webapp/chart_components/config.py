@@ -62,7 +62,7 @@ class ChartConfig:
         
         option = {
             'backgroundColor': options.background_color,
-            'grid': ChartConfig._build_grid_config(has_oscillators),
+            'grid': ChartConfig._build_grid_config(has_oscillators, options),
             'tooltip': ChartConfig._build_tooltip_config(performance, options),
             'legend': ChartConfig._build_legend_config(performance, options),
             'toolbox': ChartConfig._build_toolbox_config(),
@@ -81,24 +81,26 @@ class ChartConfig:
         return option
     
     @staticmethod
-    def _build_grid_config(has_oscillators: bool = False) -> List[Dict[str, Any]]:
+    def _build_grid_config(has_oscillators: bool = False, options: Optional[ChartOptions] = None) -> List[Dict[str, Any]]:
         """Build grid configuration for single or dual panel setup."""
         if has_oscillators:
-            # Dual panel setup: Main panel (70%) and oscillator panel (30%)
+            main_ratio = options.main_panel_ratio if options else 65
+            osc_ratio = options.oscillator_panel_ratio if options else 25
+            osc_top = main_ratio + 5  # Maintain gap between panels
             return [
                 {
                     'id': 'main',
                     'left': 50,
                     'right': 20,
                     'top': 20,
-                    'height': '65%'  # Main chart takes 65%
+                    'height': f'{main_ratio}%'
                 },
                 {
                     'id': 'oscillator',
                     'left': 50,
                     'right': 20,
-                    'top': '70%',  # Start at 70% from top
-                    'height': '25%'  # Oscillator panel takes 25%
+                    'top': f'{osc_top}%',
+                    'height': f'{osc_ratio}%'
                 }
             ]
         else:

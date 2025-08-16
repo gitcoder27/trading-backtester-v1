@@ -87,6 +87,9 @@ class ChartOptions:
     width: str = "100%"
     theme: str = "dark"
     background_color: str = "#0e1117"
+    # Panel height ratios for main/oscillator panels
+    main_panel_ratio: int = 65
+    oscillator_panel_ratio: int = 25
     
     # Color scheme
     up_color: str = "#26a69a"
