@@ -6,7 +6,7 @@ import time
 import streamlit as st
 from backtester.engine import BacktestEngine
 from backtester.performance_monitor import PerformanceMonitor, performance_timer
-from webapp.analytics import adjust_equity_for_fees, filter_trades
+from webapp.analytics import filter_trades
 
 @performance_timer
 def run_backtest(data, strategy, option_delta, lots, price_per_unit, fee_per_trade, direction_filter, apply_time_filter, start_hour, end_hour, apply_weekday_filter, weekdays):
@@ -26,6 +26,7 @@ def run_backtest(data, strategy, option_delta, lots, price_per_unit, fee_per_tra
             option_delta=option_delta,
             lots=lots,
             option_price_per_unit=price_per_unit,
+            fee_per_trade=fee_per_trade,
         )
         
         # Run backtest
@@ -54,8 +55,6 @@ def run_backtest(data, strategy, option_delta, lots, price_per_unit, fee_per_tra
             weekdays=weekdays if apply_weekday_filter else None,
         )
     eq_for_display = equity_curve
-    if fee_per_trade > 0:
-        eq_for_display = adjust_equity_for_fees(equity_curve, trade_log, fee_per_trade)
 
     return {
         'equity_curve': equity_curve,

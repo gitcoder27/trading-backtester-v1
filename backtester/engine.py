@@ -8,86 +8,117 @@ import pandas as pd
 import numpy as np
 from numba import jit
 import warnings
+
 warnings.filterwarnings('ignore')
 
+
 @jit(nopython=True)
-def _vectorized_backtest_core(signals, prices, option_delta, option_qty, option_price_per_unit, initial_equity=100000.0):
-    """
-    Simplified vectorized backtest core using numba JIT compilation.
+def _vectorized_backtest_core(
+    signals,
+    prices,
+    option_delta,
+    option_qty,
+    option_price_per_unit,
+    fee_per_trade=0.0,
+    slippage=0.0,
+    initial_equity=100000.0,
+):
+    """Simplified vectorized backtest core using numba JIT compilation.
     Returns only equity curve for performance.
+
+    Parameters
+    ----------
+    fee_per_trade : float
+        Flat transaction cost deducted per round trip.
+    slippage : float
+        Absolute price slippage applied on both entry and exit.
     """
     n = len(signals)
     equity_curve = np.zeros(n)
-    
+
     position = 0  # 0=none, 1=long, -1=short
     entry_price = 0.0
     current_equity = initial_equity
-    
+
     for i in range(n):
         signal = signals[i]
         price = prices[i]
-        
+
         # Entry logic
         if position == 0:
             if signal == 1:  # Long entry
                 position = 1
-                entry_price = price
+                entry_price = price + slippage
             elif signal == -1:  # Short entry
                 position = -1
-                entry_price = price
+                entry_price = price - slippage
         else:
             # Exit logic - simplified for performance (signal reversal only)
             exit_now = False
-            
+
             # Check for signal reversal exit
             if (position == 1 and signal == -1) or (position == -1 and signal == 1):
                 exit_now = True
-            
+
             if exit_now:
+                exit_price = price - slippage if position == 1 else price + slippage
                 # Calculate PnL
-                option_move = option_delta * (price - entry_price)
+                option_move = option_delta * (exit_price - entry_price)
                 if position == 1:  # Long
                     pnl = option_move * option_qty * option_price_per_unit
                 else:  # Short
                     pnl = -option_move * option_qty * option_price_per_unit
-                
-                current_equity += pnl
-                
+
+                current_equity += pnl - fee_per_trade
+
                 # Reset position
                 position = 0
                 entry_price = 0.0
-                
+
                 # Immediate re-entry if signal present
                 if signal == 1:
                     position = 1
-                    entry_price = price
+                    entry_price = price + slippage
                 elif signal == -1:
                     position = -1
-                    entry_price = price
-        
+                    entry_price = price - slippage
+
         equity_curve[i] = current_equity
 
     if position != 0:
         last_price = prices[-1]
-        option_move = option_delta * (last_price - entry_price)
+        exit_price = last_price - slippage if position == 1 else last_price + slippage
+        option_move = option_delta * (exit_price - entry_price)
         if position == 1:
             pnl = option_move * option_qty * option_price_per_unit
         else:
             pnl = -option_move * option_qty * option_price_per_unit
-        current_equity += pnl
+        current_equity += pnl - fee_per_trade
 
     equity_curve = np.append(equity_curve, current_equity)
 
     return equity_curve
 
 class BacktestEngine:
-    def __init__(self, data, strategy, initial_cash=100000, option_delta=0.5, lots=2, option_price_per_unit=1):
+    def __init__(
+        self,
+        data,
+        strategy,
+        initial_cash=100000,
+        option_delta=0.5,
+        lots=2,
+        option_price_per_unit=1,
+        fee_per_trade=0.0,
+        slippage=0.0,
+    ):
         self.data = data
         self.strategy = strategy
         self.initial_cash = initial_cash
         self.option_delta = option_delta
         self.lots = lots
         self.option_price_per_unit = option_price_per_unit
+        self.fee_per_trade = fee_per_trade
+        self.slippage = slippage
 
     def run(self):
         """
@@ -112,8 +143,14 @@ class BacktestEngine:
         # Use vectorized backtest if signals are simple (just entry signals)
         if self._can_use_fast_vectorized(df):
             equity_curve_values = _vectorized_backtest_core(
-                signals, prices,
-                self.option_delta, option_qty, self.option_price_per_unit, self.initial_cash
+                signals,
+                prices,
+                self.option_delta,
+                option_qty,
+                self.option_price_per_unit,
+                self.fee_per_trade,
+                self.slippage,
+                self.initial_cash,
             )
 
             # Build results
@@ -158,33 +195,41 @@ class BacktestEngine:
         
         trades = []
         position = 0
-        entry_price = 0
+        entry_price = 0.0
         entry_time = None
-        
+
         for i in range(len(signals)):
             signal = signals[i]
-            
+
             if position == 0 and signal != 0:
-                # Entry
+                # Entry with slippage
                 position = signal
-                entry_price = prices[i]
+                if signal == 1:
+                    entry_price = prices[i] + self.slippage
+                else:
+                    entry_price = prices[i] - self.slippage
                 entry_time = timestamps[i]
             elif position != 0 and (signal == -position or i == len(signals) - 1):
-                # Exit
-                exit_price = prices[i]
+                # Exit with slippage
+                if position == 1:
+                    exit_price = prices[i] - self.slippage
+                else:
+                    exit_price = prices[i] + self.slippage
                 exit_time = timestamps[i]
-                
+
                 # Calculate PnL
                 option_move = self.option_delta * (exit_price - entry_price)
                 option_qty = self.lots * 75
-                
+
                 if position == 1:  # Long
                     pnl = option_move * option_qty * self.option_price_per_unit
                     direction = 'long'
                 else:  # Short
                     pnl = -option_move * option_qty * self.option_price_per_unit
                     direction = 'short'
-                
+
+                pnl -= self.fee_per_trade
+
                 trades.append({
                     'entry_time': entry_time,
                     'entry_price': entry_price,
@@ -195,12 +240,15 @@ class BacktestEngine:
                     'normal_pnl': exit_price - entry_price if position == 1 else entry_price - exit_price,
                     'exit_reason': 'Signal Reversal' if i < len(signals) - 1 else 'End of Data'
                 })
-                
+
                 position = 0
                 if i < len(signals) - 1 and signal != 0:
                     # Immediate re-entry
                     position = signal
-                    entry_price = exit_price
+                    if signal == 1:
+                        entry_price = prices[i] + self.slippage
+                    else:
+                        entry_price = prices[i] - self.slippage
                     entry_time = exit_time
         
         return pd.DataFrame(trades)
@@ -225,29 +273,29 @@ class BacktestEngine:
             if position is None:
                 if signal == 1:
                     position = 'long'
-                    entry_price = price
+                    entry_price = price + self.slippage
                     entry_idx = idx
                     trade = {
                         'entry_time': row['timestamp'],
-                        'entry_price': price,
+                        'entry_price': entry_price,
                         'direction': 'long',
                         'exit_time': None,
                         'exit_price': None,
                         'pnl': None,
-                        'exit_reason': None
+                        'exit_reason': None,
                     }
                 elif signal == -1:
                     position = 'short'
-                    entry_price = price
+                    entry_price = price - self.slippage
                     entry_idx = idx
                     trade = {
                         'entry_time': row['timestamp'],
-                        'entry_price': price,
+                        'entry_price': entry_price,
                         'direction': 'short',
                         'exit_time': None,
                         'exit_price': None,
                         'pnl': None,
-                        'exit_reason': None
+                        'exit_reason': None,
                     }
                 else:
                     trade = None
@@ -256,16 +304,22 @@ class BacktestEngine:
                 exit_now, exit_reason = self.strategy.should_exit(position, row, entry_price)
                 if exit_now:
                     trade['exit_time'] = row['timestamp']
-                    trade['exit_price'] = price
-                    # Simulate ATM option price movement: option_delta x index movement
-                    option_move = self.option_delta * (price - entry_price)
                     if position == 'long':
-                        trade['normal_pnl'] = price - entry_price
+                        trade['exit_price'] = price - self.slippage
+                        exit_price = trade['exit_price']
+                    else:
+                        trade['exit_price'] = price + self.slippage
+                        exit_price = trade['exit_price']
+                    # Simulate ATM option price movement: option_delta x index movement
+                    option_move = self.option_delta * (exit_price - entry_price)
+                    if position == 'long':
+                        trade['normal_pnl'] = exit_price - entry_price
                         trade['pnl'] = option_move * option_qty * self.option_price_per_unit
                     else:
                         # For short (PE), reverse the sign
-                        trade['normal_pnl'] = entry_price - price
+                        trade['normal_pnl'] = entry_price - exit_price
                         trade['pnl'] = -option_move * option_qty * self.option_price_per_unit
+                    trade['pnl'] -= self.fee_per_trade
                     trade['exit_reason'] = exit_reason
                     trade_log.append(trade)
                     equity += trade['pnl']
@@ -279,29 +333,29 @@ class BacktestEngine:
                         if position is None and signal != 0:
                             if signal == 1:
                                 position = 'long'
-                                entry_price = price
+                                entry_price = price + self.slippage
                                 entry_idx = idx
                                 trade = {
                                     'entry_time': row['timestamp'],
-                                    'entry_price': price,
+                                    'entry_price': entry_price,
                                     'direction': 'long',
                                     'exit_time': None,
                                     'exit_price': None,
                                     'pnl': None,
-                                    'exit_reason': None
+                                    'exit_reason': None,
                                 }
                             elif signal == -1:
                                 position = 'short'
-                                entry_price = price
+                                entry_price = price - self.slippage
                                 entry_idx = idx
                                 trade = {
                                     'entry_time': row['timestamp'],
-                                    'entry_price': price,
+                                    'entry_price': entry_price,
                                     'direction': 'short',
                                     'exit_time': None,
                                     'exit_price': None,
                                     'pnl': None,
-                                    'exit_reason': None
+                                    'exit_reason': None,
                                 }
 
             equity_curve.append(equity)
@@ -310,14 +364,20 @@ class BacktestEngine:
         if position is not None and trade is not None:
             last_row = df.iloc[-1]
             trade['exit_time'] = last_row['timestamp']
-            trade['exit_price'] = last_row['close']
-            option_move = self.option_delta * (last_row['close'] - entry_price)
             if position == 'long':
-                trade['normal_pnl'] = last_row['close'] - entry_price
+                trade['exit_price'] = last_row['close'] - self.slippage
+                exit_price = trade['exit_price']
+            else:
+                trade['exit_price'] = last_row['close'] + self.slippage
+                exit_price = trade['exit_price']
+            option_move = self.option_delta * (exit_price - entry_price)
+            if position == 'long':
+                trade['normal_pnl'] = exit_price - entry_price
                 trade['pnl'] = option_move * option_qty * self.option_price_per_unit
             else:
-                trade['normal_pnl'] = entry_price - last_row['close']
+                trade['normal_pnl'] = entry_price - exit_price
                 trade['pnl'] = -option_move * option_qty * self.option_price_per_unit
+            trade['pnl'] -= self.fee_per_trade
             trade['exit_reason'] = 'End of Data'
             trade_log.append(trade)
             equity += trade['pnl']
