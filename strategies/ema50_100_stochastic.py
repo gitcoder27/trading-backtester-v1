@@ -1,25 +1,24 @@
 """
-EMA50 & EMA100 Crossover with Stochastic Strategy
+EMA50 & EMA100 with Stochastic Crossover Strategy
 
-This strategy trades the first pullback after a new trend is signalled by a
-crossover of the 50-period and 100-period exponential moving averages (EMAs).
-It uses a stochastic oscillator to time the entry.
+This strategy trades in the direction of the 50 and 100 period exponential
+moving averages (EMAs) and uses a stochastic oscillator to time entries.
 
 Long Setup:
-    * Wait for the 50 EMA to cross above the 100 EMA (uptrend).
-    * During the subsequent pullback, wait for the stochastic (%K) to dip
-      below 20 and then cross back above 20 while price recovers above the
-      short EMA.
-    * Enter long when these conditions align.
-    * Stop loss is set at the recent swing low and a fixed profit target is
-      used for exits.
+    * 50 EMA is above the 100 EMA (uptrend).
+    * Stochastic %K (5) crosses above %D (3) while both are at or below 20.
+    * Enter long on the crossover.
+    * Stop loss is the low of the entry candle and a fixed 20 point profit
+      target is used for exits.
 
 Short Setup:
-    * Mirror of the long setup using a 50 EMA crossing below the 100 EMA and
-      a stochastic pullback above 80 that crosses back below 80.
+    * 50 EMA is below the 100 EMA (downtrend).
+    * Stochastic %K crosses below %D while both are at or above 80.
+    * Stop loss is the high of the entry candle with the same 20 point profit
+      target.
 
-The strategy is designed for quick scalping trades following the first
-pullback of a new short-term trend.
+The strategy is designed for quick scalp trades in the direction of the
+prevailing trend.
 """
 
 from backtester.strategy_base import StrategyBase
@@ -34,11 +33,10 @@ class EMA50_100StochasticStrategy(StrategyBase):
         self.ema_long = params.get("ema_long", 100) if params else 100
         self.k_period = params.get("k_period", 5) if params else 5
         self.d_period = params.get("d_period", 3) if params else 3
-        self.smooth_period = params.get("smooth_period", 3) if params else 3
+        self.smooth_period = params.get("smooth_period", 5) if params else 5
         self.profit_target_points = (
             params.get("profit_target_points", 20) if params else 20
         )
-        self.swing_lookback = params.get("swing_lookback", 5) if params else 5
 
     @staticmethod
     def get_params_config():
@@ -88,16 +86,6 @@ class EMA50_100StochasticStrategy(StrategyBase):
                 "param_key": "smooth_period",
                 "type": "number_input",
                 "label": "Stochastic Smooth",
-                "default": 3,
-                "min": 1,
-                "max": 50,
-                "step": 1,
-            },
-            {
-                "name": "swing_lookback",
-                "param_key": "swing_lookback",
-                "type": "number_input",
-                "label": "Swing Lookback",
                 "default": 5,
                 "min": 1,
                 "max": 50,
@@ -169,58 +157,51 @@ class EMA50_100StochasticStrategy(StrategyBase):
 
         df = self._compute_stochastic(df)
 
-        df["recent_low"] = df["low"].rolling(self.swing_lookback).min().shift(1)
-        df["recent_high"] = df["high"].rolling(self.swing_lookback).max().shift(1)
-
         df["signal"] = 0
-        wait_long = False
-        wait_short = False
 
         for i in range(1, len(df)):
-            ema_s_prev = df["ema_short"].iloc[i - 1]
-            ema_l_prev = df["ema_long"].iloc[i - 1]
             ema_s = df["ema_short"].iloc[i]
             ema_l = df["ema_long"].iloc[i]
-            stoch_prev = df["stoch_k"].iloc[i - 1]
-            stoch = df["stoch_k"].iloc[i]
-            price = df["close"].iloc[i]
+            k_prev = df["stoch_k"].iloc[i - 1]
+            d_prev = df["stoch_d"].iloc[i - 1]
+            k = df["stoch_k"].iloc[i]
+            d = df["stoch_d"].iloc[i]
 
-            if ema_s_prev <= ema_l_prev and ema_s > ema_l:
-                wait_long = True
-                wait_short = False
-            elif ema_s_prev >= ema_l_prev and ema_s < ema_l:
-                wait_short = True
-                wait_long = False
-
+            # Long setup
             if (
-                wait_long
-                and stoch_prev < 20
-                and stoch >= 20
-                and price > ema_s
+                ema_s > ema_l
+                and k_prev <= d_prev
+                and k > d
+                and max(k_prev, d_prev, k, d) <= 20
             ):
                 df.iloc[i, df.columns.get_loc("signal")] = 1
-                wait_long = False
 
-            if (
-                wait_short
-                and stoch_prev > 80
-                and stoch <= 80
-                and price < ema_s
+            # Short setup
+            elif (
+                ema_s < ema_l
+                and k_prev >= d_prev
+                and k < d
+                and min(k_prev, d_prev, k, d) >= 80
             ):
                 df.iloc[i, df.columns.get_loc("signal")] = -1
-                wait_short = False
+
+        # Store entry candle levels for stop loss reference
+        df["entry_low"] = np.where(df["signal"] == 1, df["low"], np.nan)
+        df["entry_low"] = df["entry_low"].ffill()
+        df["entry_high"] = np.where(df["signal"] == -1, df["high"], np.nan)
+        df["entry_high"] = df["entry_high"].ffill()
 
         return df
 
     def should_exit(self, position, row, entry_price):
         if position == "long":
-            stop = row.recent_low if pd.notna(row.recent_low) else None
+            stop = row.entry_low if pd.notna(row.entry_low) else None
             if stop is not None and row.low <= stop:
                 return True, "stop_loss"
             if row.high >= entry_price + self.profit_target_points:
                 return True, "profit_target"
         elif position == "short":
-            stop = row.recent_high if pd.notna(row.recent_high) else None
+            stop = row.entry_high if pd.notna(row.entry_high) else None
             if stop is not None and row.high >= stop:
                 return True, "stop_loss"
             if row.low <= entry_price - self.profit_target_points:
