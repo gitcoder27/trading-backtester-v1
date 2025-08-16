@@ -29,11 +29,15 @@ def sharpe_ratio(equity_curve, risk_free_rate=0.0, periods_per_year=252*390):
 def max_drawdown(equity_curve):
     """
     Calculate the maximum drawdown.
+
+    Returns the magnitude of the largest peak-to-trough decline in the
+    equity curve as a positive percentage.
     """
     equity = equity_curve['equity']
     roll_max = equity.cummax()
     drawdown = (equity - roll_max) / roll_max
-    return drawdown.min()
+    # drawdown values are negative; convert to positive magnitude
+    return -drawdown.min()
 
 def win_rate(trade_log):
     """
