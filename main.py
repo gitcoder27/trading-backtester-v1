@@ -10,6 +10,7 @@ from backtester.engine import BacktestEngine
 from backtester.metrics import total_return, sharpe_ratio, max_drawdown, win_rate, profit_factor, largest_winning_trade, largest_losing_trade, average_holding_time, max_consecutive_wins, max_consecutive_losses, trading_sessions_days, trading_sessions_years
 from backtester.reporting import plot_equity_curve, plot_trades_on_price, save_trade_log, generate_html_report
 from strategies.bbands_scalper import BBandsScalperStrategy
+from strategies.bbands_rsi_stochastic import BBandsRSIStochasticStrategy
 from strategies.ema10_scalper import EMA10ScalperStrategy
 from strategies.ema44_scalper import EMA44ScalperStrategy
 from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
@@ -80,6 +81,7 @@ def main():
     # Initialize strategy
     strategy_params = {'debug': args.debug}
     strategy = RSIMiddayReversionScalper(params=strategy_params)
+    # strategy = BBandsRSIStochasticStrategy(params=strategy_params)
     # strategy = AwesomeScalperStrategy(params=strategy_params)
     # strategy = IntradayEmaTradeStrategy(params=strategy_params)
     # strategy = MeanReversionConfirmedScalper(params=strategy_params)
