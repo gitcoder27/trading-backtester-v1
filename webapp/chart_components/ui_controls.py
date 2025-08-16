@@ -28,23 +28,39 @@ class ChartControls:
         safe_end = max(min_date, min(current_end, max_date))
         
         col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
-        
+
+        # Sanitize widget state for start date picker
+        start_key = 'adv_chart_start_date_picker'
+        start_session_val = st.session_state.get(start_key, safe_start)
+        if start_session_val < min_date or start_session_val > max_date:
+            st.session_state[start_key] = safe_start
+        else:
+            st.session_state.setdefault(start_key, start_session_val)
+
         with col1:
             start_date = st.date_input(
                 "Start Date",
-                value=safe_start,
+                value=st.session_state[start_key],
                 min_value=min_date,
                 max_value=max_date,
-                key='adv_chart_start_date_picker'
+                key=start_key
             )
-        
+
+        # Sanitize widget state for end date picker
+        end_key = 'adv_chart_end_date_picker'
+        end_session_val = st.session_state.get(end_key, safe_end)
+        if end_session_val < min_date or end_session_val > max_date:
+            st.session_state[end_key] = safe_end
+        else:
+            st.session_state.setdefault(end_key, end_session_val)
+
         with col2:
             end_date = st.date_input(
                 "End Date",
-                value=safe_end,
+                value=st.session_state[end_key],
                 min_value=min_date,
                 max_value=max_date,
-                key='adv_chart_end_date_picker'
+                key=end_key
             )
         
         with col3:
@@ -70,13 +86,21 @@ class ChartControls:
 
         col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
 
+        # Sanitize widget state for single day picker
+        day_key = 'adv_chart_single_day_picker'
+        day_session_val = st.session_state.get(day_key, current_day)
+        if day_session_val < min_date or day_session_val > max_date:
+            st.session_state[day_key] = current_day
+        else:
+            st.session_state.setdefault(day_key, day_session_val)
+
         with col1:
             single_day = st.date_input(
                 "Single Day",
-                value=current_day,
+                value=st.session_state[day_key],
                 min_value=min_date,
                 max_value=max_date,
-                key='adv_chart_single_day_picker'
+                key=day_key
             )
 
         prev_day = max([d for d in available_dates if d < single_day], default=single_day)
@@ -87,6 +111,7 @@ class ChartControls:
                 st.session_state.adv_chart_single_day = prev_day
                 st.session_state.adv_chart_start_date = prev_day
                 st.session_state.adv_chart_end_date = prev_day
+                st.session_state[day_key] = prev_day
                 st.session_state.render_advanced_chart = True
                 st.rerun()
 
@@ -95,6 +120,7 @@ class ChartControls:
                 st.session_state.adv_chart_single_day = next_day
                 st.session_state.adv_chart_start_date = next_day
                 st.session_state.adv_chart_end_date = next_day
+                st.session_state[day_key] = next_day
                 st.session_state.render_advanced_chart = True
                 st.rerun()
 
@@ -103,6 +129,7 @@ class ChartControls:
                 st.session_state.adv_chart_single_day = single_day
                 st.session_state.adv_chart_start_date = single_day
                 st.session_state.adv_chart_end_date = single_day
+                st.session_state[day_key] = single_day
                 st.session_state.render_advanced_chart = True
                 st.rerun()
     
