@@ -160,6 +160,7 @@ def main():
             "apply_weekday_filter",
             "weekdays",
             "apply_filters_to_charts",
+            "intraday",
         ]:
             if k in st.session_state:
                 set_pref(_prefs, k, st.session_state[k])
@@ -230,6 +231,7 @@ def main():
                 sidebar_config["end_hour"],
                 sidebar_config["apply_weekday_filter"],
                 sidebar_config["weekdays"],
+                sidebar_config["intraday"],
             )
 
         # Persist this run's results for use across reruns

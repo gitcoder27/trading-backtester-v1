@@ -9,7 +9,22 @@ from backtester.performance_monitor import PerformanceMonitor, performance_timer
 from webapp.analytics import filter_trades
 
 @performance_timer
-def run_backtest(data, strategy, option_delta, lots, price_per_unit, fee_per_trade, direction_filter, apply_time_filter, start_hour, end_hour, apply_weekday_filter, weekdays):
+def run_backtest(
+    data,
+    strategy,
+    option_delta,
+    lots,
+    price_per_unit,
+    fee_per_trade,
+    direction_filter,
+    apply_time_filter,
+    start_hour,
+    end_hour,
+    apply_weekday_filter,
+    weekdays,
+    intraday=False,
+    session_close_time="15:15",
+):
     """
     Enhanced backtest runner with performance monitoring.
     """
@@ -27,6 +42,8 @@ def run_backtest(data, strategy, option_delta, lots, price_per_unit, fee_per_tra
             lots=lots,
             option_price_per_unit=price_per_unit,
             fee_per_trade=fee_per_trade,
+            intraday=intraday,
+            session_close_time=session_close_time,
         )
         
         # Run backtest
