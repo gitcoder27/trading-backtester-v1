@@ -283,3 +283,55 @@ def test_intraday_session_close():
     assert len(trade_log) == 1
     assert trade_log['exit_reason'].iloc[0] == 'Session Close'
     assert trade_log['exit_time'].iloc[0] == ts[2]
+
+
+class IntradayShortStrategy(StrategyBase):
+    _use_fast_vectorized = False
+
+    def generate_signals(self, data):
+        df = data.copy()
+        df['signal'] = [-1, 0, 0, 1]
+        return df
+
+    def should_exit(self, position, row, entry_price):
+        return False, ''
+
+
+def test_intraday_session_close_short_no_reentry():
+    ts = pd.to_datetime(
+        [
+            '2024-01-01 15:00',
+            '2024-01-01 15:14',
+            '2024-01-01 15:15',
+            '2024-01-01 15:16',
+        ]
+    )
+    data = pd.DataFrame({'timestamp': ts, 'close': [100.0, 101.0, 102.0, 103.0]})
+    engine = BacktestEngine(data, IntradayShortStrategy(), intraday=True)
+    result = engine.run()
+    trade_log = result['trade_log']
+    assert len(trade_log) == 1
+    assert trade_log['direction'].iloc[0] == 'short'
+    assert trade_log['exit_reason'].iloc[0] == 'Session Close'
+    assert trade_log['exit_time'].iloc[0] == ts[2]
+
+
+class IntradayNoReentryStrategy(StrategyBase):
+    _use_fast_vectorized = False
+
+    def generate_signals(self, data):
+        df = data.copy()
+        df['signal'] = [0, 1]
+        return df
+
+    def should_exit(self, position, row, entry_price):
+        return False, ''
+
+
+def test_session_closed_prevents_new_entry():
+    ts = pd.to_datetime(['2024-01-01 15:16', '2024-01-01 15:14'])
+    data = pd.DataFrame({'timestamp': ts, 'close': [100.0, 101.0]})
+    engine = BacktestEngine(data, IntradayNoReentryStrategy(), intraday=True)
+    result = engine.run()
+    trade_log = result['trade_log']
+    assert trade_log.empty
