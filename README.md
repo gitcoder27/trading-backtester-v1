@@ -163,7 +163,7 @@ python main.py -f data/nifty_2024_1min_22Dec_14Jan.csv -s 2024-01-01 -e 2024-01-
 1.  Create a new Python file in the `strategies/` directory (e.g., `my_strategy.py`).
 2.  In your new file, create a class that inherits from `StrategyBase` (from `backtester.strategy_base`).
 3.  Implement the `generate_signals` method in your class. This method should return a DataFrame with a `signal` column (`1` for long, `-1` for short, `0` for no signal).
-4.  Import your new strategy class in `webapp/strategies_registry.py` and add it to the `STRATEGY_MAP` dictionary.
+4.  The app automatically discovers strategies placed in the `strategies/` directory—no manual registration required.
 
 ---
 

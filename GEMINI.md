@@ -64,7 +64,7 @@ To add a new trading strategy:
 1.  Create a new Python file in the `strategies/` directory (e.g., `my_strategy.py`).
 2.  Define a new class that inherits from `backtester.strategy_base.StrategyBase`.
 3.  Implement the `generate_signals` and `should_exit` methods in your new class.
-4.  Register your new strategy in `webapp/strategies_registry.py` by adding it to the `STRATEGY_MAP` dictionary.
+4.  Strategies in the `strategies/` directory are auto-discovered; no manual registry edits are needed.
 
 ### Code Style
 
@@ -94,7 +94,7 @@ trading-backtester-v1/
 │   └── ...
 │
 ├── webapp/                      # Code specific to the Streamlit web app
-│   ├── strategies_registry.py   # Registration of available strategies
+│   ├── strategies_registry.py   # Auto-discovery of available strategies
 │   └── ...
 │
 ├── data/                        # Directory for historical data (CSV files)

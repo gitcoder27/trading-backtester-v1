@@ -1,26 +1,26 @@
 from __future__ import annotations
-from strategies.ema10_scalper import EMA10ScalperStrategy
-from strategies.ema44_scalper import EMA44ScalperStrategy
-from strategies.ema50_scalper import EMA50ScalperStrategy
-from strategies.bbands_scalper import BBandsScalperStrategy
-from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
-from strategies.intraday_ema_trade import IntradayEmaTradeStrategy
-from strategies.rsi_cross_strategy import RSICrossStrategy
-from strategies.mean_reversion_scalper import MeanReversionScalper
-from strategies.mean_reversion_confirmed_scalper import MeanReversionConfirmedScalper
-from strategies.awesome_scalper import AwesomeScalperStrategy
 
-__all__ = ['STRATEGY_MAP']
+import importlib
+import inspect
+import pkgutil
+from typing import Dict, Type
 
-STRATEGY_MAP = {
-    "EMA10Scalper": EMA10ScalperStrategy,
-    "EMA44Scalper": EMA44ScalperStrategy,
-    "EMA50Scalper": EMA50ScalperStrategy,
-    "BBandsScalper": BBandsScalperStrategy,
-    "FirstCandleBreakout": FirstCandleBreakoutStrategy,
-    "RSICross": RSICrossStrategy,
-    "MeanReversionScalper": MeanReversionScalper,
-    "MeanReversionConfirmedScalper": MeanReversionConfirmedScalper,
-    "AwesomeScalper": AwesomeScalperStrategy,
-    "IntradayEmaTradeStrategy": IntradayEmaTradeStrategy,
-}
+from backtester.strategy_base import StrategyBase
+import strategies
+
+__all__ = ["STRATEGY_MAP"]
+
+
+def _discover_strategies() -> Dict[str, Type[StrategyBase]]:
+    """Dynamically discover strategy classes in the strategies package."""
+    strategy_map: Dict[str, Type[StrategyBase]] = {}
+    for module_info in pkgutil.iter_modules(strategies.__path__):
+        module = importlib.import_module(f"{strategies.__name__}.{module_info.name}")
+        for _, obj in inspect.getmembers(module, inspect.isclass):
+            if issubclass(obj, StrategyBase) and obj is not StrategyBase:
+                key = obj.__name__[:-8] if obj.__name__.endswith("Strategy") else obj.__name__
+                strategy_map[key] = obj
+    return strategy_map
+
+
+STRATEGY_MAP = _discover_strategies()
