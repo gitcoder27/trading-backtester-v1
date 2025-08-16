@@ -69,6 +69,7 @@ class PerformanceSettings:
     """Settings for chart performance optimization."""
     tooltip_enabled: bool = True
     animation_enabled: bool = False
+    vertical_zoom_enabled: bool = True
     max_points: int = 2000
     progressive_threshold: int = 500
     large_threshold: int = 1000

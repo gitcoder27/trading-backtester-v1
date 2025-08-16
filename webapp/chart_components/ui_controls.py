@@ -70,6 +70,10 @@ class ChartControls:
             st.session_state.adv_chart_animation_enabled = bool(
                 get_pref(prefs, 'adv_chart_animation_enabled', False)
             )
+        if 'adv_chart_vertical_zoom_enabled' not in st.session_state:
+            st.session_state.adv_chart_vertical_zoom_enabled = bool(
+                get_pref(prefs, 'adv_chart_vertical_zoom_enabled', True)
+            )
         if 'adv_chart_height' not in st.session_state:
             st.session_state.adv_chart_height = int(
                 get_pref(prefs, 'adv_chart_height', 600)
@@ -77,7 +81,7 @@ class ChartControls:
         
         st.subheader("Performance Settings", help="Adjust these settings to optimize chart performance")
         
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         
         with col1:
             tooltip_enabled = st.checkbox(
@@ -95,6 +99,14 @@ class ChartControls:
                 key="adv_chart_animation_enabled"
             )
 
+        with col3:
+            vertical_zoom_enabled = st.checkbox(
+                "Vertical Zoom",
+                value=st.session_state.adv_chart_vertical_zoom_enabled,
+                help="Allow zooming on the price axis",
+                key="adv_chart_vertical_zoom_enabled"
+            )
+
         chart_height = st.number_input(
             "Chart Height (px)",
             min_value=300,
@@ -106,15 +118,28 @@ class ChartControls:
         )
 
         # Update preferences if changed
-        ChartControls._update_preferences(prefs, tooltip_enabled, animation_enabled, chart_height)
-        
+        ChartControls._update_preferences(
+            prefs,
+            tooltip_enabled,
+            animation_enabled,
+            chart_height,
+            vertical_zoom_enabled,
+        )
+
         return PerformanceSettings(
             tooltip_enabled=tooltip_enabled,
-            animation_enabled=animation_enabled
+            animation_enabled=animation_enabled,
+            vertical_zoom_enabled=vertical_zoom_enabled,
         )
     
     @staticmethod
-    def _update_preferences(prefs: dict, tooltip_enabled: bool, animation_enabled: bool, chart_height: int) -> None:
+    def _update_preferences(
+        prefs: dict,
+        tooltip_enabled: bool,
+        animation_enabled: bool,
+        chart_height: int,
+        vertical_zoom_enabled: bool,
+    ) -> None:
         """Update user preferences if they changed."""
         changed = False
 
@@ -128,6 +153,10 @@ class ChartControls:
 
         if prefs.get('adv_chart_height', 600) != chart_height:
             set_pref(prefs, 'adv_chart_height', chart_height)
+            changed = True
+
+        if prefs.get('adv_chart_vertical_zoom_enabled', True) != vertical_zoom_enabled:
+            set_pref(prefs, 'adv_chart_vertical_zoom_enabled', vertical_zoom_enabled)
             changed = True
 
         if changed:
