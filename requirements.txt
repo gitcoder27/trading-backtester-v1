@@ -10,3 +10,5 @@ streamlit-lightweight-charts
 streamlit-echarts
 numba
 psutil
+pytest
+pytest-cov
