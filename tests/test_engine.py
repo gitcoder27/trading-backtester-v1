@@ -33,7 +33,7 @@ class DummyStrategy(StrategyBase):
 
 def test_backtest_engine_run():
     data = pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=3, freq='T'),
+        'timestamp': pd.date_range('2024-01-01', periods=3, freq='min'),
         'close': [100.0, 101.0, 102.0],
     })
     engine = BacktestEngine(
@@ -74,7 +74,7 @@ def test_vectorized_backtest_core_extended():
 
 def test_generate_trade_log_from_signals():
     data = pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=4, freq='T'),
+        'timestamp': pd.date_range('2024-01-01', periods=4, freq='min'),
         'close': [100.0, 102.0, 101.0, 103.0],
         'signal': [1, -1, 1, 1],
     })
@@ -95,7 +95,7 @@ def test_generate_trade_log_from_signals():
 
 def test_generate_trade_log_from_signals_short_entry():
     data = pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=2, freq='T'),
+        'timestamp': pd.date_range('2024-01-01', periods=2, freq='min'),
         'close': [100.0, 99.0],
         'signal': [-1, 0],
     })
@@ -132,7 +132,7 @@ class TraditionalStrategy(StrategyBase):
 
 def test_backtest_engine_traditional_run():
     data = pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=5, freq='T'),
+        'timestamp': pd.date_range('2024-01-01', periods=5, freq='min'),
         'close': [100.0, 102.0, 100.0, 101.0, 101.0],
     })
     engine = BacktestEngine(
@@ -168,7 +168,7 @@ class ShortOnlyStrategy(StrategyBase):
 
 def test_backtest_engine_traditional_run_final_short():
     data = pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=2, freq='T'),
+        'timestamp': pd.date_range('2024-01-01', periods=2, freq='min'),
         'close': [100.0, 99.0],
     })
     engine = BacktestEngine(
@@ -203,7 +203,7 @@ class NoSignalStrategy(StrategyBase):
 
 def test_run_traditional_backtest_no_entry():
     data = pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=1, freq='T'),
+        'timestamp': pd.date_range('2024-01-01', periods=1, freq='min'),
         'close': [100.0],
     })
     strategy = NoSignalStrategy()
@@ -238,7 +238,7 @@ def test_backtest_engine_run_equal_length_equity_curve(monkeypatch):
 
     monkeypatch.setattr('backtester.engine._vectorized_backtest_core', fake_core)
     data = pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=2, freq='T'),
+        'timestamp': pd.date_range('2024-01-01', periods=2, freq='min'),
         'close': [100.0, 101.0],
     })
     engine = BacktestEngine(

@@ -6,15 +6,15 @@ from backtester import metrics
 
 def make_equity_curve():
     return pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=5, freq='T'),
+        'timestamp': pd.date_range('2024-01-01', periods=5, freq='min'),
         'equity': [100, 110, 105, 115, 120],
     })
 
 
 def make_trade_log():
     return pd.DataFrame({
-        'entry_time': pd.date_range('2024-01-01', periods=3, freq='T'),
-        'exit_time': pd.date_range('2024-01-01 00:01', periods=3, freq='T'),
+        'entry_time': pd.date_range('2024-01-01', periods=3, freq='min'),
+        'exit_time': pd.date_range('2024-01-01 00:01', periods=3, freq='min'),
         'pnl': [10, -5, 15],
     })
 
@@ -66,12 +66,12 @@ def test_trading_sessions():
 
 
 def test_sharpe_ratio_zero_std():
-    eq = pd.DataFrame({'timestamp': pd.date_range('2024-01-01', periods=3, freq='T'), 'equity': [100, 100, 100]})
+    eq = pd.DataFrame({'timestamp': pd.date_range('2024-01-01', periods=3, freq='min'), 'equity': [100, 100, 100]})
     assert np.isnan(metrics.sharpe_ratio(eq))
 
 
 def test_profit_factor_no_losses():
-    tl = pd.DataFrame({'pnl': [5, 10], 'entry_time': pd.date_range('2024', periods=2, freq='T'), 'exit_time': pd.date_range('2024', periods=2, freq='T')})
+    tl = pd.DataFrame({'pnl': [5, 10], 'entry_time': pd.date_range('2024', periods=2, freq='min'), 'exit_time': pd.date_range('2024', periods=2, freq='min')})
     assert metrics.profit_factor(tl) == np.inf
 
 

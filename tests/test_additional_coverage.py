@@ -99,7 +99,7 @@ def test_html_report_generation(tmp_path, monkeypatch):
 
 
 def test_plotting_functions(monkeypatch):
-    ts = pd.date_range('2024', periods=3, freq='T')
+    ts = pd.date_range('2024', periods=3, freq='min')
     data = pd.DataFrame({
         'timestamp': ts,
         'open': [1, 1, 1],
@@ -138,7 +138,7 @@ def test_trade_log_empty(tmp_path):
 
 
 def test_metrics_edge_cases():
-    eq = pd.DataFrame({'timestamp': pd.date_range('2024', periods=2, freq='T'), 'equity': [100, 100]})
+    eq = pd.DataFrame({'timestamp': pd.date_range('2024', periods=2, freq='min'), 'equity': [100, 100]})
     empty_tl = pd.DataFrame({'pnl': [], 'entry_time': [], 'exit_time': []})
     assert np.isnan(metrics.sharpe_ratio(eq))
     assert np.isnan(metrics.win_rate(empty_tl))

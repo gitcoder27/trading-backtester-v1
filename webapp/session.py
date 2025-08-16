@@ -31,7 +31,7 @@ def seed_session_defaults(st, STRATEGY_MAP):
     if st.session_state.get('_prefs_applied', False):
         return
     st.session_state.setdefault('mode', get_pref(_prefs, 'mode', "Choose from data/"))
-    st.session_state.setdefault('timeframe', get_pref(_prefs, 'timeframe', "1T"))
+    st.session_state.setdefault('timeframe', get_pref(_prefs, 'timeframe', "1min"))
     st.session_state.setdefault('data_file', get_pref(_prefs, 'data_file', None))
     st.session_state.setdefault('start_date', _parse_date(get_pref(_prefs, 'start_date', None)))
     st.session_state.setdefault('end_date', _parse_date(get_pref(_prefs, 'end_date', None)))

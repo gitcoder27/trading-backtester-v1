@@ -5,7 +5,7 @@ from backtester.data_loader import load_csv, optimize_dataframe_memory
 
 def test_load_csv_basic(tmp_path):
     data = pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=4, freq='T'),
+        'timestamp': pd.date_range('2024-01-01', periods=4, freq='min'),
         'open': [1, 2, 3, 4],
         'high': [1, 2, 3, 4],
         'low': [1, 2, 3, 4],
@@ -22,7 +22,7 @@ def test_load_csv_basic(tmp_path):
 
 def test_load_csv_resample(tmp_path):
     data = pd.DataFrame({
-        'timestamp': pd.date_range('2024-01-01', periods=4, freq='T'),
+        'timestamp': pd.date_range('2024-01-01', periods=4, freq='min'),
         'open': [1, 2, 3, 4],
         'high': [1, 2, 3, 4],
         'low': [1, 2, 3, 4],
@@ -32,7 +32,7 @@ def test_load_csv_resample(tmp_path):
     file_path = tmp_path / 'data.csv'
     data.to_csv(file_path, index=False)
 
-    df = load_csv(file_path, timeframe='2T')
+    df = load_csv(file_path, timeframe='2min')
     assert len(df) == 2
     assert df['volume'].tolist() == [30, 70]
 

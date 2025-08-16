@@ -6,10 +6,10 @@ Optimized utility functions for loading and preprocessing historical trading dat
 import pandas as pd
 import numpy as np
 
-def load_csv(filepath, timeframe='1T'):
+def load_csv(filepath, timeframe='1min'):
     """
     Optimized loading of historical data from a CSV file with memory efficiency.
-    timeframe: pandas offset alias (e.g. '1T', '2T', '5T', '10T').
+    timeframe: pandas offset alias (e.g. '1min', '2min', '5min', '10min').
     Returns a pandas DataFrame.
     """
     # Specify dtypes for better memory usage
@@ -38,7 +38,7 @@ def load_csv(filepath, timeframe='1T'):
     df = df.set_index('timestamp')
     
     # Only resample if needed (avoid unnecessary computation)
-    if timeframe != '1T':
+    if timeframe != '1min':
         # Use efficient aggregation
         agg_dict = {
             'open': 'first',

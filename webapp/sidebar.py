@@ -69,9 +69,9 @@ def render_sidebar():
             mode_index = mode_options.index(st.session_state.get('mode', "Choose from data/")) if st.session_state.get('mode', "Choose from data/") in mode_options else 0
             mode = st.radio("Data Source", mode_options, index=mode_index, key='mode')
 
-            tf_options = ["1T", "2T", "5T", "10T"]
-            tf_index = tf_options.index(st.session_state.get('timeframe', "1T")) if st.session_state.get('timeframe', "1T") in tf_options else 0
-            timeframe = st.selectbox("Timeframe", tf_options, index=tf_index, help="Pandas resample alias: 1T=1min, etc.", key='timeframe')
+            tf_options = ["1min", "2min", "5min", "10min"]
+            tf_index = tf_options.index(st.session_state.get('timeframe', "1min")) if st.session_state.get('timeframe', "1min") in tf_options else 0
+            timeframe = st.selectbox("Timeframe", tf_options, index=tf_index, help="Pandas resample alias: 1min, 2min, etc.", key='timeframe')
 
             refresh_files = st.button("Refresh file list", key="refresh_files")
 
