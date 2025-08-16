@@ -8,7 +8,6 @@ __all__ = [
     'compute_drawdown',
     'rolling_sharpe',
     'monthly_returns_heatmap',
-    'adjust_equity_for_fees',
     'filter_trades',
 ]
 
@@ -51,26 +50,15 @@ def monthly_returns_heatmap(equity_curve: pd.DataFrame):
     piv['Year'] = piv['month'].str[:4]
     piv['Mon'] = piv['month'].str[5:7]
     table = piv.pivot(index='Year', columns='Mon', values='ret').fillna(0.0)
-    fig = px.imshow(table, text_auto=True, color_continuous_scale='RdYlGn', aspect='auto', origin='lower', title='Monthly Returns Heatmap')
+    fig = px.imshow(
+        table,
+        text_auto=True,
+        color_continuous_scale='RdYlGn',
+        aspect='auto',
+        origin='lower',
+        title='Monthly Returns Heatmap',
+    )
     return fig
-
-
-def adjust_equity_for_fees(equity_curve: pd.DataFrame, trade_log: pd.DataFrame, fee: float) -> pd.DataFrame:
-    if fee <= 0 or trade_log is None or trade_log.empty:
-        return equity_curve.copy()
-    adj = equity_curve.copy()
-    ts = adj['timestamp']
-    for _, t in trade_log.iterrows():
-        exit_t = t.get('exit_time')
-        if pd.isna(exit_t):
-            continue
-        # apply fee at first index >= exit_time
-        idxs = ts.index[ts >= exit_t]
-        if len(idxs) == 0:
-            continue
-        start_i = idxs[0]
-        adj.loc[adj.index >= start_i, 'equity'] = adj.loc[adj.index >= start_i, 'equity'] - fee
-    return adj
 
 
 def filter_trades(trades: pd.DataFrame, directions: list[str], hours=None, weekdays=None) -> pd.DataFrame:
