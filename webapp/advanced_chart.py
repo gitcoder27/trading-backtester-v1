@@ -88,7 +88,7 @@ class AdvancedChartManager:
             )
             
             # Render UI controls
-            self._render_ui_controls(min_date, max_date)
+            self._render_ui_controls(min_date, max_date, data)
 
             # Update chart options from user-selected height
             selected_height = st.session_state.get('adv_chart_height', 600)
@@ -137,7 +137,7 @@ class AdvancedChartManager:
             st.error(f"❌ Data validation failed: {e}")
             return False
     
-    def _render_ui_controls(self, min_date, max_date) -> None:
+    def _render_ui_controls(self, min_date, max_date, data) -> None:
         """Render all UI controls for the chart."""
         # Date range controls
         start_date, end_date, go_clicked = ChartControls.render_date_range_controls(
@@ -146,7 +146,7 @@ class AdvancedChartManager:
             current_start=self.chart_state.start_date,
             current_end=self.chart_state.end_date
         )
-        
+
         # Handle Go button click
         if go_clicked:
             if ChartControls.validate_date_range(start_date, end_date):
@@ -154,7 +154,11 @@ class AdvancedChartManager:
                 st.rerun()
             else:
                 st.error("❌ Invalid date range: Start date must be before end date.")
-        
+
+        # Single day controls
+        available_dates = sorted([ts.date() for ts in pd.to_datetime(data.index).normalize().unique()])
+        ChartControls.render_single_day_controls(min_date, max_date, available_dates)
+
         # Performance controls (only show if chart will be rendered)
         if ChartControls.should_render_chart():
             self.performance_settings = ChartControls.render_performance_controls()

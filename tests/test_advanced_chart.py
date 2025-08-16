@@ -76,23 +76,26 @@ def test_render_ui_controls(st_mock, monkeypatch):
         render_date_range_controls=lambda **k: ('2024-01-01','2024-01-10',True),
         validate_date_range=lambda s,e: True,
         update_chart_state_for_render=lambda s,e: st_mock.session_state.update({'updated':True}),
+        render_single_day_controls=lambda *a, **k: None,
         should_render_chart=lambda: True,
         render_performance_controls=lambda: SimpleNamespace(max_points=100),
     )
     monkeypatch.setattr(ac, 'ChartControls', cc)
     monkeypatch.setattr(st_mock, 'rerun', lambda : st_mock.session_state.update({'rerun':True}))
-    mgr._render_ui_controls('2024-01-01','2024-01-10')
+    data = pd.DataFrame({'a': range(10)}, index=pd.date_range('2024-01-01','2024-01-10'))
+    mgr._render_ui_controls('2024-01-01','2024-01-10', data)
     assert st_mock.session_state.get('rerun')
     # invalid date range
     cc_invalid = SimpleNamespace(
         render_date_range_controls=lambda **k: ('2024-01-10','2024-01-01',True),
         validate_date_range=lambda s,e: False,
         update_chart_state_for_render=lambda s,e: None,
+        render_single_day_controls=lambda *a, **k: None,
         should_render_chart=lambda: False,
         render_performance_controls=lambda: None,
     )
     monkeypatch.setattr(ac, 'ChartControls', cc_invalid)
-    mgr._render_ui_controls('2024-01-01','2024-01-10')
+    mgr._render_ui_controls('2024-01-01','2024-01-10', data)
 
 
 def test_process_and_filter(st_mock, monkeypatch):
@@ -202,6 +205,7 @@ def test_render_chart_section_variants(st_mock, monkeypatch):
     cc = SimpleNamespace(
         manage_chart_state=manage_chart_state,
         render_date_range_controls=lambda **k: ('2024-01-01','2024-01-02',False),
+        render_single_day_controls=lambda *a, **k: None,
         should_render_chart=lambda : False,
         show_chart_instructions=lambda : st_mock.session_state.update({'inst':True})
     )
@@ -212,7 +216,7 @@ def test_render_chart_section_variants(st_mock, monkeypatch):
     assert st_mock.session_state.get('inst')
     # no candles
     cc.should_render_chart=lambda : True
-    monkeypatch.setattr(mgr, '_render_ui_controls', lambda a,b: None)
+    monkeypatch.setattr(mgr, '_render_ui_controls', lambda a,b,c=None: None)
     monkeypatch.setattr(mgr, '_process_chart_data', lambda *a, **k: SimpleNamespace(candles=[]))
     mgr.render_chart_section(data, trades, strategy, None)
     # full path with high height
@@ -242,7 +246,7 @@ def test_render_chart_section_exception(st_mock, monkeypatch):
         render_performance_controls=lambda: SimpleNamespace(max_points=100)
     )
     monkeypatch.setattr(ac, 'ChartControls', cc)
-    monkeypatch.setattr(mgr, '_render_ui_controls', lambda a,b: None)
+    monkeypatch.setattr(mgr, '_render_ui_controls', lambda a,b,c=None: None)
     def boom(*a, **k):
         raise Exception('boom')
     monkeypatch.setattr(mgr, '_process_chart_data', boom)

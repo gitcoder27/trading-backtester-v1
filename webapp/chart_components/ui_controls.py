@@ -5,7 +5,7 @@ UI controls for advanced chart functionality.
 from __future__ import annotations
 import streamlit as st
 from datetime import date
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 
 from .models import DateRange, PerformanceSettings, ChartState
 from ..prefs import load_prefs, save_prefs, get_pref, set_pref
@@ -53,6 +53,58 @@ class ChartControls:
             go_clicked = st.button("Go", use_container_width=True, type="primary")
         
         return start_date, end_date, go_clicked
+
+    @staticmethod
+    def render_single_day_controls(
+        min_date: date,
+        max_date: date,
+        available_dates: List[date]
+    ) -> None:
+        """Render controls for viewing a single trading day."""
+
+        # Get current day from session or default to first available
+        current_day = st.session_state.get('adv_chart_single_day', available_dates[0])
+        if current_day not in available_dates:
+            current_day = available_dates[0]
+            st.session_state.adv_chart_single_day = current_day
+
+        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+
+        with col1:
+            single_day = st.date_input(
+                "Single Day",
+                value=current_day,
+                min_value=min_date,
+                max_value=max_date,
+                key='adv_chart_single_day_picker'
+            )
+
+        prev_day = max([d for d in available_dates if d < single_day], default=single_day)
+        next_day = min([d for d in available_dates if d > single_day], default=single_day)
+
+        with col2:
+            if st.button("Prev Day", key='adv_chart_prev_day', use_container_width=True, disabled=prev_day == single_day):
+                st.session_state.adv_chart_single_day = prev_day
+                st.session_state.adv_chart_start_date = prev_day
+                st.session_state.adv_chart_end_date = prev_day
+                st.session_state.render_advanced_chart = True
+                st.rerun()
+
+        with col3:
+            if st.button("Next Day", key='adv_chart_next_day', use_container_width=True, disabled=next_day == single_day):
+                st.session_state.adv_chart_single_day = next_day
+                st.session_state.adv_chart_start_date = next_day
+                st.session_state.adv_chart_end_date = next_day
+                st.session_state.render_advanced_chart = True
+                st.rerun()
+
+        with col4:
+            if st.button("Go", key='adv_chart_single_day_go', use_container_width=True, type="primary"):
+                st.session_state.adv_chart_single_day = single_day
+                st.session_state.adv_chart_start_date = single_day
+                st.session_state.adv_chart_end_date = single_day
+                st.session_state.render_advanced_chart = True
+                st.rerun()
     
     @staticmethod
     def render_performance_controls() -> PerformanceSettings:
@@ -171,11 +223,13 @@ class ChartControls:
         backtest_end: Optional[date] = None
     ) -> ChartState:
         """Manage chart session state."""
-        
+
         # Initialize session state if needed
         if 'adv_chart_data_id' not in st.session_state:
             st.session_state.adv_chart_data_id = -1
             st.session_state.render_advanced_chart = False
+        if 'adv_chart_single_day' not in st.session_state:
+            st.session_state.adv_chart_single_day = min_date
         
         # Create chart state object
         state = ChartState(
@@ -192,10 +246,11 @@ class ChartControls:
         if data_id != state.data_id:
             # New data detected, reset chart state
             state.reset_for_new_data(data_id, min_date, max_date)
-            
+
             # Use backtest dates if available, otherwise use data range
             state.start_date = backtest_start or min_date
             state.end_date = backtest_end or max_date
+            st.session_state.adv_chart_single_day = state.start_date
             
             # Update session state
             ChartControls._update_session_state_from_chart_state(state)
@@ -220,6 +275,8 @@ class ChartControls:
         st.session_state.adv_chart_start_date = start_date
         st.session_state.adv_chart_end_date = end_date
         st.session_state.render_advanced_chart = True
+        if start_date == end_date:
+            st.session_state.adv_chart_single_day = start_date
     
     @staticmethod
     def should_render_chart() -> bool:
@@ -229,7 +286,7 @@ class ChartControls:
     @staticmethod
     def show_chart_instructions() -> None:
         """Show instructions for using the chart."""
-        st.info("Select a date range and click 'Go' to render the chart.")
+        st.info("Select a date range and click 'Go', or choose a single day and navigate with the controls below.")
     
     @staticmethod
     def validate_date_range(start_date: date, end_date: date) -> bool:
