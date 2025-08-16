@@ -63,3 +63,17 @@ def test_trading_sessions():
     years = metrics.trading_sessions_years(eq, trading_days_per_year=252)
     assert days == 1
     assert years == pytest.approx(1/252)
+
+
+def test_sharpe_ratio_zero_std():
+    eq = pd.DataFrame({'timestamp': pd.date_range('2024-01-01', periods=3, freq='T'), 'equity': [100, 100, 100]})
+    assert np.isnan(metrics.sharpe_ratio(eq))
+
+
+def test_profit_factor_no_losses():
+    tl = pd.DataFrame({'pnl': [5, 10], 'entry_time': pd.date_range('2024', periods=2, freq='T'), 'exit_time': pd.date_range('2024', periods=2, freq='T')})
+    assert metrics.profit_factor(tl) == np.inf
+
+
+def test_max_consecutive_count_empty():
+    assert metrics._max_consecutive_count([]) == 0

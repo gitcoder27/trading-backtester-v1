@@ -52,6 +52,7 @@ def test_strategy_base_not_implemented():
         base.generate_signals(pd.DataFrame())
     with pytest.raises(NotImplementedError):
         base.should_exit('long', {}, 0)
+    assert strategy_base.StrategyBase.get_params_config() == []
 
 
 def test_reporting_imports():
@@ -117,12 +118,15 @@ def test_plotting_functions(monkeypatch):
     indicators = pd.DataFrame({'timestamp': ts, 'rsi': [30, 50, 80]})
     indicator_cfg = [{'column': 'rsi', 'panel': 2, 'plot': True, 'label': 'RSI'}]
     monkeypatch.setattr(plotting.go.Figure, 'show', lambda self: None)
-    fig = plotting.plot_trades_on_candlestick_plotly(data, trades, indicators, indicator_cfg, show=False)
+    # Call with list and dict to cover both branches
+    plotting.plot_trades_on_candlestick_plotly(data, trades, indicators, indicator_cfg, show=False)
+    fig = plotting.plot_trades_on_candlestick_plotly(data, trades, indicators, indicator_cfg[0], show=True)
     assert isinstance(fig, plotting.go.Figure)
     eq_curve = pd.DataFrame({'timestamp': ts, 'equity': [100, 110, 105]})
     plotting.plot_equity_curve(eq_curve)
     plotting.plot_equity_curve(eq_curve, interactive=True)
-    plotting.plot_trades_on_price(data, trades, indicators, indicator_cfg, interactive=False)
+    indicators_ema = pd.DataFrame({'timestamp': ts, 'ema': [1, 2, 3]})
+    plotting.plot_trades_on_price(data, trades, indicators_ema, interactive=False)
     plotting.plot_trades_on_price(data, trades, indicators, indicator_cfg, interactive=True)
 
 
@@ -169,6 +173,7 @@ def test_performance_monitor_extras(monkeypatch):
             pass
     monkeypatch.setattr(performance_monitor.st, 'columns', lambda n: [Dummy(), Dummy(), Dummy(), Dummy()])
     pm.display_metrics()
+    Dummy().metric()
 
     monkeypatch.setattr(performance_monitor.st, 'session_state', {})
     @performance_monitor.performance_timer

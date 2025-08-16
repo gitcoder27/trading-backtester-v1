@@ -1,3 +1,6 @@
+import os
+os.environ["NUMBA_DISABLE_JIT"] = "1"
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -23,9 +26,15 @@ def test_fast_bollinger_bands():
 
 
 def test_fast_rsi():
-    prices = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
+    prices = np.array([1, 2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6, 7, 6, 7, 8, 7, 8])
     rsi = ou.fast_rsi(prices, period=14)
-    assert rsi[-1] > 70
+    assert not np.isnan(rsi[-1])
+
+
+def test_fast_rsi_all_gains():
+    prices = np.arange(1, 40, dtype=float)
+    rsi = ou.fast_rsi(prices, period=14)
+    assert rsi[-1] == 100
 
 
 def test_optimize_dataframe_memory():
@@ -48,3 +57,10 @@ def test_performance_optimizer():
     assert est > 0
     suggestions = ou.PerformanceOptimizer.suggest_optimizations(200000, 'ema_strategy')
     assert any('vectorized' in s.lower() for s in suggestions)
+
+
+def test_suggest_optimizations_high_rows_rsi():
+    suggestions = ou.PerformanceOptimizer.suggest_optimizations(600000, 'rsi_strategy')
+    joined = ' '.join(suggestions).lower()
+    assert 'chunking' in joined
+    assert 'fast_rsi' in joined
