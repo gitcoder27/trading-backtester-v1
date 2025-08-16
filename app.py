@@ -23,7 +23,6 @@ from backtester.metrics import (
 from backtester.plotting import plot_equity_curve, plot_trades_on_candlestick_plotly
 from backtester.optimization_utils import PerformanceOptimizer
 from webapp.analytics import (
-    adjust_equity_for_fees,
     compute_drawdown,
     filter_trades,
     monthly_returns_heatmap,
@@ -306,10 +305,6 @@ def main():
             )
 
         eq_for_display = lr["equity_curve"]
-        if sidebar_config["fee_per_trade"] > 0:
-            eq_for_display = adjust_equity_for_fees(
-                lr["equity_curve"], trade_log, sidebar_config["fee_per_trade"]
-            )
 
         # Re-render dashboard with cached data and new UI settings
         render_dashboard(
