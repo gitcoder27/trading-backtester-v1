@@ -19,6 +19,7 @@ from strategies.mean_reversion_scalper import MeanReversionScalper
 from strategies.mean_reversion_confirmed_scalper import MeanReversionConfirmedScalper
 from strategies.awesome_scalper import AwesomeScalperStrategy
 from strategies.intraday_ema_trade import IntradayEmaTradeStrategy
+from strategies.stoch_rsi_scalper import StochRSIScalperStrategy
 import argparse
 import pandas as pd
 
@@ -72,15 +73,16 @@ def main():
     # Initialize strategy
     strategy_params = {'debug': args.debug}
     # strategy = AwesomeScalperStrategy(params=strategy_params)
-    strategy = IntradayEmaTradeStrategy(params=strategy_params)
+    # strategy = IntradayEmaTradeStrategy(params=strategy_params)
     # strategy = MeanReversionConfirmedScalper(params=strategy_params)
     # strategy = MomentumScalperStrategy(params=strategy_params)
     # strategy = EMA44ScalperStrategy()
     # strategy = BBandsScalperStrategy()
     # strategy = FirstCandleBreakoutStrategy(params=strategy_params)
     # strategy = RSICrossStrategy(params=strategy_params)
-    # strategy = EMA50ScalperStrategy(params=strategy_params) # Use new strategy
+    # strategy = EMA50ScalperStrategy(params=strategy_params)
     # strategy = EMA10ScalperStrategy(params=strategy_params)
+    strategy = StochRSIScalperStrategy(params=strategy_params)
 
     # Run backtest
     engine = BacktestEngine(
