@@ -192,17 +192,6 @@ class BacktestEngine:
     
     def _run_traditional_backtest(self, df, option_qty, indicator_cols):
         """Traditional row-by-row backtest for complex strategies."""
-        equity = self.initial_cash
-        position = None  # None, 'long', 'short'
-        entry_price = 0
-        entry_idx = None
-        trade_log = []
-        equity_curve = []
-        last_signal = 0
-        option_qty = self.lots * 75
-
-    def _run_traditional_backtest(self, df, option_qty, indicator_cols):
-        """Traditional row-by-row backtest for complex strategies."""
         exit_col = indicator_cols[0] if indicator_cols else None
         equity = self.initial_cash
         position = None  # None, 'long', 'short'
