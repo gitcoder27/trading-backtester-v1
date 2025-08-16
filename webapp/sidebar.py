@@ -115,14 +115,38 @@ def render_sidebar():
                     for config in params_config:
                         # Currently only supports number_input, can be extended
                         if config["type"] == "number_input":
-                            value = st.number_input(
-                                label=config["label"],
-                                value=int(st.session_state.get(config["name"], config["default"])),
-                                min_value=config.get("min"),
-                                max_value=config.get("max"),
-                                step=config.get("step"),
-                                key=config["name"]
+                            default_val = config["default"]
+                            min_val = config.get("min")
+                            max_val = config.get("max")
+                            step_val = config.get("step")
+                            session_val = st.session_state.get(config["name"], default_val)
+
+                            # Determine if any of the values require float handling
+                            numeric_vals = [default_val, min_val, max_val, step_val]
+                            use_float = any(
+                                isinstance(v, float) and not float(v).is_integer()
+                                for v in numeric_vals
+                                if v is not None
                             )
+
+                            if use_float:
+                                value = st.number_input(
+                                    label=config["label"],
+                                    value=float(session_val),
+                                    min_value=float(min_val) if min_val is not None else None,
+                                    max_value=float(max_val) if max_val is not None else None,
+                                    step=float(step_val) if step_val is not None else None,
+                                    key=config["name"],
+                                )
+                            else:
+                                value = st.number_input(
+                                    label=config["label"],
+                                    value=int(session_val),
+                                    min_value=int(min_val) if min_val is not None else None,
+                                    max_value=int(max_val) if max_val is not None else None,
+                                    step=int(step_val) if step_val is not None else None,
+                                    key=config["name"],
+                                )
                             strat_params[config["param_key"]] = value
                 else:
                     st.caption(f"{strat_choice} uses its internal defaults.")
