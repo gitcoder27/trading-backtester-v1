@@ -70,6 +70,10 @@ class ChartControls:
             st.session_state.adv_chart_animation_enabled = bool(
                 get_pref(prefs, 'adv_chart_animation_enabled', False)
             )
+        if 'adv_chart_height' not in st.session_state:
+            st.session_state.adv_chart_height = int(
+                get_pref(prefs, 'adv_chart_height', 600)
+            )
         
         st.subheader("Performance Settings", help="Adjust these settings to optimize chart performance")
         
@@ -90,9 +94,19 @@ class ChartControls:
                 help="Disable for better performance",
                 key="adv_chart_animation_enabled"
             )
-        
+
+        chart_height = st.number_input(
+            "Chart Height (px)",
+            min_value=300,
+            max_value=1200,
+            step=50,
+            value=st.session_state.adv_chart_height,
+            key="adv_chart_height",
+            help="Total height of the rendered chart"
+        )
+
         # Update preferences if changed
-        ChartControls._update_preferences(prefs, tooltip_enabled, animation_enabled)
+        ChartControls._update_preferences(prefs, tooltip_enabled, animation_enabled, chart_height)
         
         return PerformanceSettings(
             tooltip_enabled=tooltip_enabled,
@@ -100,18 +114,22 @@ class ChartControls:
         )
     
     @staticmethod
-    def _update_preferences(prefs: dict, tooltip_enabled: bool, animation_enabled: bool) -> None:
+    def _update_preferences(prefs: dict, tooltip_enabled: bool, animation_enabled: bool, chart_height: int) -> None:
         """Update user preferences if they changed."""
         changed = False
-        
+
         if prefs.get('adv_chart_tooltip_enabled', True) != tooltip_enabled:
             set_pref(prefs, 'adv_chart_tooltip_enabled', tooltip_enabled)
             changed = True
-        
+
         if prefs.get('adv_chart_animation_enabled', False) != animation_enabled:
             set_pref(prefs, 'adv_chart_animation_enabled', animation_enabled)
             changed = True
-        
+
+        if prefs.get('adv_chart_height', 600) != chart_height:
+            set_pref(prefs, 'adv_chart_height', chart_height)
+            changed = True
+
         if changed:
             save_prefs(prefs)
     

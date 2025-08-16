@@ -35,7 +35,16 @@ class AdvancedChartManager:
     """Main manager class for advanced chart functionality."""
     
     def __init__(self):
-        self.options = ChartOptions()
+        default_height = st.session_state.get('adv_chart_height', 600)
+        if default_height < 500:
+            main_ratio, osc_ratio = 60, 30
+        else:
+            main_ratio, osc_ratio = 65, 25
+        self.options = ChartOptions(
+            height=f"{default_height}px",
+            main_panel_ratio=main_ratio,
+            oscillator_panel_ratio=osc_ratio
+        )
         self.performance_settings = None
         self.chart_state = None
     
@@ -80,7 +89,17 @@ class AdvancedChartManager:
             
             # Render UI controls
             self._render_ui_controls(min_date, max_date)
-            
+
+            # Update chart options from user-selected height
+            selected_height = st.session_state.get('adv_chart_height', 600)
+            self.options.height = f"{selected_height}px"
+            if selected_height < 500:
+                self.options.main_panel_ratio = 60
+                self.options.oscillator_panel_ratio = 30
+            else:
+                self.options.main_panel_ratio = 65
+                self.options.oscillator_panel_ratio = 25
+
             # Check if chart should be rendered
             if not ChartControls.should_render_chart():
                 ChartControls.show_chart_instructions()
