@@ -12,8 +12,6 @@ This framework allows you to test and analyze your trading strategies on histori
 - **Real-time performance monitoring**
 - **Intelligent optimization suggestions**
 
-[📊 See Performance Benchmarks →](PERFORMANCE_GUIDE.md)
-
 ---
 
 ## Key Features
@@ -21,7 +19,7 @@ This framework allows you to test and analyze your trading strategies on histori
 ### Core Backtesting Engine
 - **High-Performance Processing:** Vectorized operations with numba JIT compilation for lightning-fast backtesting
 - **Modular Strategy Interface:** Easily add your own custom trading strategies by inheriting from a base class.
-- **Multiple Strategies:** Comes with several built-in strategies, including EMA Scalpers, Bollinger Bands, RSI Cross, and First Candle Breakout.
+- **Multiple Strategies:** Comes with several built-in strategies, including EMA scalpers, Bollinger Bands, RSI Cross, First Candle Breakout, and mean-reversion variants.
 - **Performance Metrics:** A wide range of performance metrics are calculated, including Sharpe Ratio, Max Drawdown, Profit Factor, Win Rate, Largest Win/Loss, Average Holding Time, and more. Now includes:
   - **Trading Sessions (days/years):** Accurately counts trading days and converts to years, excluding holidays/weekends.
   - **PnL Columns:** Both raw price difference (`normal_pnl`) and options-style (`pnl`) are shown in the Trades tab.
@@ -90,7 +88,7 @@ The web app provides a user-friendly interface for all your backtesting needs.
 1.  **Clone the repository:**
     ```bash
     git clone <repository-url>
-    cd trading-backtester-pro
+    cd trading-backtester-v1
     ```
 
 2.  **Create a virtual environment (recommended):**
@@ -138,23 +136,26 @@ python main.py [OPTIONS]
 
 **Command-Line Arguments:**
 
-| Argument                  | Description                                                              | Example                        |
-| ------------------------- | ------------------------------------------------------------------------ | ------------------------------ |
-| `-f`, `--file`            | Path to CSV data file.                                                   | `-f data/my_data.csv`          |
-| `-s`, `--start`           | Start date (YYYY-MM-DD).                                                 | `-s 2024-01-01`                |
-| `-e`, `--end`             | End date (YYYY-MM-DD).                                                   | `-e 2024-01-31`                |
-| `-r`, `--report`          | Generate an HTML report.                                                 | `-r`                           |
-| `-t`, `--timeframe`       | Timeframe for resampling (e.g., `1T`, `5T`, `15T`). Default is `1T`.      | `-t 5T`                        |
-| `--debug`                 | Enable debug logging for strategy internals.                             | `--debug`                      |
-| `--option-delta`          | Option delta for trade calculations.                                     | `--option-delta 0.6`           |
-| `--lots`                  | Number of lots to trade.                                                 | `--lots 3`                     |
-| `--option-price-per-unit` | Multiplier for the option price per unit.                                | `--option-price-per-unit 1.2`  |
 
+| Argument | Description | Example |
+| --- | --- | --- |
+| `-f`, `--file` | Path to CSV data file. | `-f data/my_data.csv` |
+| `-s`, `--start` | Start date (YYYY-MM-DD). | `-s 2024-01-01` |
+| `-e`, `--end` | End date (YYYY-MM-DD). | `-e 2024-01-31` |
+| `-r`, `--report` | Generate an HTML report. | `-r` |
+| `-t`, `--timeframe` | Timeframe for resampling (e.g., `1T`, `5T`, `15T`). Default is `1T`. | `-t 5T` |
+| `--debug` | Enable debug logging for strategy internals. | `--debug` |
+| `--option-delta` | Option delta for trade calculations. | `--option-delta 0.6` |
+| `--lots` | Number of lots to trade. | `--lots 3` |
+| `--option-price-per-unit` | Multiplier for the option price per unit. | `--option-price-per-unit 1.2` |
+| `--non-interactive` | Run without interactive prompts. | `--non-interactive` |
 **Example:**
 
 ```bash
-python main.py -f data/nifty_2024_1min_22Dec_14Jan.csv -s 2024-01-01 -e 2024-01-10 -r --strategy EMA10ScalperStrategy
+python main.py -f data/nifty_2024_1min_22Dec_14Jan.csv -s 2024-01-01 -e 2024-01-10 -r
 ```
+
+The CLI runs the `RSIMiddayReversionScalper` strategy by default. To try a different strategy, edit `main.py` and select the desired class.
 
 ---
 
