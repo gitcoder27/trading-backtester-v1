@@ -68,6 +68,17 @@ def _vectorized_backtest_core(signals, prices, option_delta, option_qty, option_
 
         equity_curve[i] = current_equity
 
+    if position != 0:
+        last_price = prices[-1]
+        option_move = option_delta * (last_price - entry_price)
+        if position == 1:
+            pnl = option_move * option_qty * option_price_per_unit
+        else:
+            pnl = -option_move * option_qty * option_price_per_unit
+        current_equity += pnl - fee_per_trade
+
+    equity_curve = np.append(equity_curve, current_equity)
+
     return equity_curve
 
 class BacktestEngine:
@@ -111,10 +122,14 @@ class BacktestEngine:
                 self.fee_per_trade,
                 self.initial_cash,
             )
-            
+
             # Build results
+            if len(equity_curve_values) > len(timestamps):
+                ts = np.append(timestamps, timestamps[-1])
+            else:
+                ts = timestamps
             equity_curve_df = pd.DataFrame({
-                'timestamp': timestamps,
+                'timestamp': ts,
                 'equity': equity_curve_values
             })
             
