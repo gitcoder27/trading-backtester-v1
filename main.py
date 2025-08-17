@@ -20,6 +20,7 @@ from strategies.mean_reversion_confirmed_scalper import MeanReversionConfirmedSc
 from strategies.awesome_scalper import AwesomeScalperStrategy
 from strategies.intraday_ema_trade import IntradayEmaTradeStrategy
 from strategies.rsi_midday_reversion_scalper import RSIMiddayReversionScalper
+from strategies.ema_crossover_daily_target import EMACrossoverDailyTargetStrategy
 import argparse
 import pandas as pd
 
@@ -43,6 +44,7 @@ def main():
         help='Disable intraday mode and allow trades past 15:15',
     )
     parser.set_defaults(intraday=True)
+    parser.add_argument('--daily-target', type=float, default=30.0, help='Daily profit target in points')
     args = parser.parse_args()
 
     # Set up logging for debug/info output
@@ -79,7 +81,7 @@ def main():
 
     # Initialize strategy
     strategy_params = {'debug': args.debug}
-    strategy = RSIMiddayReversionScalper(params=strategy_params)
+    strategy = EMACrossoverDailyTargetStrategy(params=strategy_params)
     # strategy = AwesomeScalperStrategy(params=strategy_params)
     # strategy = IntradayEmaTradeStrategy(params=strategy_params)
     # strategy = MeanReversionConfirmedScalper(params=strategy_params)
@@ -98,6 +100,7 @@ def main():
         option_delta=args.option_delta,
         lots=args.lots,
         option_price_per_unit=args.option_price_per_unit,
+        daily_target=args.daily_target,
         intraday=args.intraday,
     )
     results = engine.run()

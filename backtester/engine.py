@@ -112,6 +112,7 @@ class BacktestEngine:
         slippage=0.0,
         intraday=False,
         session_close_time="15:15",
+        daily_target=None,
     ):
         self.data = data
         self.strategy = strategy
@@ -125,6 +126,7 @@ class BacktestEngine:
         self.session_close_time = (
             pd.to_datetime(session_close_time).time() if session_close_time else None
         )
+        self.daily_target = daily_target
 
     def run(self):
         """
@@ -277,6 +279,7 @@ class BacktestEngine:
         current_day = None
         session_closed = False
         trade = None
+        day_pnl = 0.0
 
         for idx, row in df.iterrows():
             ts = row['timestamp']
@@ -284,70 +287,71 @@ class BacktestEngine:
             price = row['close']
             ref = row.get(exit_col) if exit_col else None
 
-            if self.intraday:
-                day = ts.date()
-                if day != current_day:
-                    current_day = day
-                    session_closed = False
-                if end_time and ts.time() >= end_time:
-                    if position is not None and trade is not None:
-                        trade['exit_time'] = ts
-                        if position == 'long':
-                            trade['exit_price'] = price - self.slippage
-                            exit_price = trade['exit_price']
-                        else:
-                            trade['exit_price'] = price + self.slippage
-                            exit_price = trade['exit_price']
-                        option_move = self.option_delta * (exit_price - entry_price)
-                        if position == 'long':
-                            trade['normal_pnl'] = exit_price - entry_price
-                            trade['pnl'] = option_move * option_qty * self.option_price_per_unit
-                        else:
-                            trade['normal_pnl'] = entry_price - exit_price
-                            trade['pnl'] = -option_move * option_qty * self.option_price_per_unit
-                        trade['pnl'] -= self.fee_per_trade
-                        trade['exit_reason'] = 'Session Close'
-                        trade_log.append(trade)
-                        equity += trade['pnl']
-                        position = None
-                        entry_price = 0
-                        entry_idx = None
-                        trade = None
-                    equity_curve.append(equity)
-                    session_closed = True
-                    continue
+            day = ts.date()
+            if day != current_day:
+                current_day = day
+                session_closed = False
+                day_pnl = 0.0
+
+            if self.intraday and end_time and ts.time() >= end_time:
+                if position is not None and trade is not None:
+                    trade['exit_time'] = ts
+                    if position == 'long':
+                        trade['exit_price'] = price - self.slippage
+                        exit_price = trade['exit_price']
+                    else:
+                        trade['exit_price'] = price + self.slippage
+                        exit_price = trade['exit_price']
+                    option_move = self.option_delta * (exit_price - entry_price)
+                    if position == 'long':
+                        trade['normal_pnl'] = exit_price - entry_price
+                        trade['pnl'] = option_move * option_qty * self.option_price_per_unit
+                    else:
+                        trade['normal_pnl'] = entry_price - exit_price
+                        trade['pnl'] = -option_move * option_qty * self.option_price_per_unit
+                    trade['pnl'] -= self.fee_per_trade
+                    trade['exit_reason'] = 'Session Close'
+                    trade_log.append(trade)
+                    equity += trade['pnl']
+                    day_pnl += trade['normal_pnl']
+                    position = None
+                    entry_price = 0
+                    entry_idx = None
+                    trade = None
+                    if self.daily_target is not None and day_pnl >= self.daily_target:
+                        session_closed = True
+                equity_curve.append(equity)
+                session_closed = True
+                continue
 
             # Entry logic
-            if position is None:
-                if not (self.intraday and session_closed):
-                    if signal == 1:
-                        position = 'long'
-                        entry_price = price + self.slippage
-                        entry_idx = idx
-                        trade = {
-                            'entry_time': ts,
-                            'entry_price': entry_price,
-                            'direction': 'long',
-                            'exit_time': None,
-                            'exit_price': None,
-                            'pnl': None,
-                            'exit_reason': None,
-                        }
-                    elif signal == -1:
-                        position = 'short'
-                        entry_price = price - self.slippage
-                        entry_idx = idx
-                        trade = {
-                            'entry_time': ts,
-                            'entry_price': entry_price,
-                            'direction': 'short',
-                            'exit_time': None,
-                            'exit_price': None,
-                            'pnl': None,
-                            'exit_reason': None,
-                        }
-                    else:
-                        trade = None
+            if position is None and not session_closed:
+                if signal == 1:
+                    position = 'long'
+                    entry_price = price + self.slippage
+                    entry_idx = idx
+                    trade = {
+                        'entry_time': ts,
+                        'entry_price': entry_price,
+                        'direction': 'long',
+                        'exit_time': None,
+                        'exit_price': None,
+                        'pnl': None,
+                        'exit_reason': None,
+                    }
+                elif signal == -1:
+                    position = 'short'
+                    entry_price = price - self.slippage
+                    entry_idx = idx
+                    trade = {
+                        'entry_time': ts,
+                        'entry_price': entry_price,
+                        'direction': 'short',
+                        'exit_time': None,
+                        'exit_price': None,
+                        'pnl': None,
+                        'exit_reason': None,
+                    }
                 else:
                     trade = None
             else:
@@ -374,16 +378,18 @@ class BacktestEngine:
                     trade['exit_reason'] = exit_reason
                     trade_log.append(trade)
                     equity += trade['pnl']
+                    day_pnl += trade['normal_pnl']
                     position = None
                     entry_price = 0
                     entry_idx = None
                     trade = None
 
+                    if self.daily_target is not None and day_pnl >= self.daily_target:
+                        session_closed = True
+
                     # Immediate re-entry if exit was indicator-based and signal flips
-                    if exit_reason.lower().endswith('exit'):
-                        if position is None and signal != 0 and not (
-                            self.intraday and session_closed
-                        ):
+                    if not session_closed and exit_reason.lower().endswith('exit'):
+                        if position is None and signal != 0:
                             if signal == 1:
                                 position = 'long'
                                 entry_price = price + self.slippage
