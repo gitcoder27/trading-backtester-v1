@@ -112,6 +112,7 @@ class BacktestEngine:
         slippage=0.0,
         intraday=False,
         session_close_time="15:15",
+        daily_profit_target=None,
     ):
         self.data = data
         self.strategy = strategy
@@ -125,6 +126,7 @@ class BacktestEngine:
         self.session_close_time = (
             pd.to_datetime(session_close_time).time() if session_close_time else None
         )
+        self.daily_profit_target = daily_profit_target
 
     def run(self):
         """
@@ -277,6 +279,7 @@ class BacktestEngine:
         current_day = None
         session_closed = False
         trade = None
+        daily_points = 0.0
 
         for idx, row in df.iterrows():
             ts = row['timestamp']
@@ -289,6 +292,7 @@ class BacktestEngine:
                 if day != current_day:
                     current_day = day
                     session_closed = False
+                    daily_points = 0.0
                 if end_time and ts.time() >= end_time:
                     if position is not None and trade is not None:
                         trade['exit_time'] = ts
@@ -374,6 +378,12 @@ class BacktestEngine:
                     trade['exit_reason'] = exit_reason
                     trade_log.append(trade)
                     equity += trade['pnl']
+                    daily_points += trade.get('normal_pnl', 0)
+                    if (
+                        self.daily_profit_target is not None
+                        and daily_points >= self.daily_profit_target
+                    ):
+                        session_closed = True
                     position = None
                     entry_price = 0
                     entry_idx = None
