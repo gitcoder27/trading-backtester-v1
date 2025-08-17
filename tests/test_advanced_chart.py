@@ -25,6 +25,7 @@ def setup_streamlit(monkeypatch):
         spinner=lambda *a, **k: DummyCM(),
         success=lambda *a, **k: None,
         expander=lambda *a, **k: DummyCM(),
+        markdown=lambda *a, **k: None,
     )
     monkeypatch.setitem(sys.modules, 'streamlit', st)
     return st
@@ -141,12 +142,9 @@ def test_render_chart_paths(st_mock, monkeypatch):
             return True
         def render_chart(self, **k):
             pass
-        @staticmethod
-        def show_performance_tips():
-            st_mock.session_state['tips']=True
     monkeypatch.setattr(ac, 'EChartsRenderer', DummyRenderer)
     mgr._render_chart(chart_data, trade_data)
-    assert st_mock.session_state.get('tips')
+
     # Exception path
     class FailRenderer(DummyRenderer):
         def render_chart(self, **k):
@@ -202,12 +200,14 @@ def test_render_chart_section_variants(st_mock, monkeypatch):
     # should_render_chart False
     def manage_chart_state(**k):
         return SimpleNamespace(start_date='2024-01-01', end_date='2024-01-02', run_uid=1, force_update=False, force_rebuild=False)
+
     cc = SimpleNamespace(
         manage_chart_state=manage_chart_state,
         render_date_range_controls=lambda **k: ('2024-01-01','2024-01-02',False),
         render_single_day_controls=lambda *a, **k: None,
         should_render_chart=lambda : False,
-        show_chart_instructions=lambda : st_mock.session_state.update({'inst':True})
+        show_chart_instructions=lambda : st_mock.session_state.update({'inst':True}),
+        get_performance_settings=lambda : SimpleNamespace()
     )
     monkeypatch.setattr(ac, 'ChartControls', cc)
     monkeypatch.setattr(mgr, '_validate_input_data', lambda d: True)

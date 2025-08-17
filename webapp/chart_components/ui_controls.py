@@ -210,6 +210,35 @@ class ChartControls:
             animation_enabled=animation_enabled,
             vertical_zoom_enabled=vertical_zoom_enabled,
         )
+
+    @staticmethod
+    def get_performance_settings() -> PerformanceSettings:
+        """Retrieve performance settings from session state without rendering UI."""
+
+        prefs = load_prefs()
+
+        if 'adv_chart_tooltip_enabled' not in st.session_state:
+            st.session_state.adv_chart_tooltip_enabled = bool(
+                get_pref(prefs, 'adv_chart_tooltip_enabled', True)
+            )
+        if 'adv_chart_animation_enabled' not in st.session_state:
+            st.session_state.adv_chart_animation_enabled = bool(
+                get_pref(prefs, 'adv_chart_animation_enabled', False)
+            )
+        if 'adv_chart_vertical_zoom_enabled' not in st.session_state:
+            st.session_state.adv_chart_vertical_zoom_enabled = bool(
+                get_pref(prefs, 'adv_chart_vertical_zoom_enabled', True)
+            )
+        if 'adv_chart_height' not in st.session_state:
+            st.session_state.adv_chart_height = int(
+                get_pref(prefs, 'adv_chart_height', 600)
+            )
+
+        return PerformanceSettings(
+            tooltip_enabled=st.session_state.adv_chart_tooltip_enabled,
+            animation_enabled=st.session_state.adv_chart_animation_enabled,
+            vertical_zoom_enabled=st.session_state.adv_chart_vertical_zoom_enabled,
+        )
     
     @staticmethod
     def _update_preferences(
