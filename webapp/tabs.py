@@ -86,7 +86,4 @@ def render_tabs(data, trade_log, shown_trades, strategy, indicators, eq_for_disp
     # End performance monitoring
     PerformanceMonitor.end_timer(timer_key, "Total tab rendering")
     
-    # Show performance metrics in sidebar or expander
-    PerformanceMonitor.show_performance_metrics()
-
     return tabs
