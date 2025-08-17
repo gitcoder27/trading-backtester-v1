@@ -20,6 +20,7 @@ from strategies.mean_reversion_confirmed_scalper import MeanReversionConfirmedSc
 from strategies.awesome_scalper import AwesomeScalperStrategy
 from strategies.intraday_ema_trade import IntradayEmaTradeStrategy
 from strategies.rsi_midday_reversion_scalper import RSIMiddayReversionScalper
+from strategies.thirty_point_scalper import ThirtyPointScalperStrategy
 import argparse
 import pandas as pd
 
@@ -42,6 +43,7 @@ def main():
         action='store_false',
         help='Disable intraday mode and allow trades past 15:15',
     )
+    parser.add_argument('--strategy', default='thirty_point', help='Strategy key to run')
     parser.set_defaults(intraday=True)
     args = parser.parse_args()
 
@@ -79,17 +81,22 @@ def main():
 
     # Initialize strategy
     strategy_params = {'debug': args.debug}
-    strategy = RSIMiddayReversionScalper(params=strategy_params)
-    # strategy = AwesomeScalperStrategy(params=strategy_params)
-    # strategy = IntradayEmaTradeStrategy(params=strategy_params)
-    # strategy = MeanReversionConfirmedScalper(params=strategy_params)
-    # strategy = MomentumScalperStrategy(params=strategy_params)
-    # strategy = EMA44ScalperStrategy()
-    # strategy = BBandsScalperStrategy()
-    # strategy = FirstCandleBreakoutStrategy(params=strategy_params)
-    # strategy = RSICrossStrategy(params=strategy_params)
-    # strategy = EMA50ScalperStrategy(params=strategy_params)
-    # strategy = EMA10ScalperStrategy(params=strategy_params)
+    strategy_map = {
+        'thirty_point': lambda p: ThirtyPointScalperStrategy(params=p),
+        'rsi_midday': lambda p: RSIMiddayReversionScalper(params=p),
+        'awesome': lambda p: AwesomeScalperStrategy(params=p),
+        'intraday_ema': lambda p: IntradayEmaTradeStrategy(params=p),
+        'mean_reversion_confirmed': lambda p: MeanReversionConfirmedScalper(params=p),
+        'ema44': lambda p: EMA44ScalperStrategy(),
+        'bbands': lambda p: BBandsScalperStrategy(),
+        'first_candle': lambda p: FirstCandleBreakoutStrategy(params=p),
+        'rsi_cross': lambda p: RSICrossStrategy(params=p),
+        'ema50': lambda p: EMA50ScalperStrategy(params=p),
+        'ema10': lambda p: EMA10ScalperStrategy(params=p),
+    }
+    if args.strategy not in strategy_map:
+        raise ValueError(f"Unknown strategy {args.strategy}")
+    strategy = strategy_map[args.strategy](strategy_params)
 
     # Run backtest
     engine = BacktestEngine(
@@ -99,6 +106,7 @@ def main():
         lots=args.lots,
         option_price_per_unit=args.option_price_per_unit,
         intraday=args.intraday,
+        daily_target=30,
     )
     results = engine.run()
 

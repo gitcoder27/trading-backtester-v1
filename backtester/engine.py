@@ -112,6 +112,7 @@ class BacktestEngine:
         slippage=0.0,
         intraday=False,
         session_close_time="15:15",
+        daily_target=None,
     ):
         self.data = data
         self.strategy = strategy
@@ -125,6 +126,7 @@ class BacktestEngine:
         self.session_close_time = (
             pd.to_datetime(session_close_time).time() if session_close_time else None
         )
+        self.daily_target = daily_target
 
     def run(self):
         """
@@ -277,18 +279,20 @@ class BacktestEngine:
         current_day = None
         session_closed = False
         trade = None
+        day_normal_pnl = 0
 
         for idx, row in df.iterrows():
             ts = row['timestamp']
             signal = row['signal']
             price = row['close']
             ref = row.get(exit_col) if exit_col else None
+            day = ts.date()
+            if day != current_day:
+                current_day = day
+                session_closed = False
+                day_normal_pnl = 0
 
             if self.intraday:
-                day = ts.date()
-                if day != current_day:
-                    current_day = day
-                    session_closed = False
                 if end_time and ts.time() >= end_time:
                     if position is not None and trade is not None:
                         trade['exit_time'] = ts
@@ -308,6 +312,9 @@ class BacktestEngine:
                         trade['pnl'] -= self.fee_per_trade
                         trade['exit_reason'] = 'Session Close'
                         trade_log.append(trade)
+                        day_normal_pnl += trade['normal_pnl']
+                        if self.daily_target is not None and day_normal_pnl >= self.daily_target:
+                            session_closed = True
                         equity += trade['pnl']
                         position = None
                         entry_price = 0
@@ -319,7 +326,7 @@ class BacktestEngine:
 
             # Entry logic
             if position is None:
-                if not (self.intraday and session_closed):
+                if not session_closed:
                     if signal == 1:
                         position = 'long'
                         entry_price = price + self.slippage
@@ -373,6 +380,9 @@ class BacktestEngine:
                     trade['pnl'] -= self.fee_per_trade
                     trade['exit_reason'] = exit_reason
                     trade_log.append(trade)
+                    day_normal_pnl += trade['normal_pnl']
+                    if self.daily_target is not None and day_normal_pnl >= self.daily_target:
+                        session_closed = True
                     equity += trade['pnl']
                     position = None
                     entry_price = 0
@@ -433,6 +443,9 @@ class BacktestEngine:
             trade['pnl'] -= self.fee_per_trade
             trade['exit_reason'] = 'End of Data'
             trade_log.append(trade)
+            day_normal_pnl += trade['normal_pnl']
+            if self.daily_target is not None and day_normal_pnl >= self.daily_target:
+                session_closed = True
             equity += trade['pnl']
             equity_curve.append(equity)
 
