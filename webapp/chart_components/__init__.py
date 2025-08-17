@@ -2,7 +2,7 @@
 Chart components package for advanced charting functionality.
 """
 
-from .models import ChartData, TradeData, ChartOptions, PerformanceSettings, ChartState, DateRange
+from .models import ChartData, TradeData, ChartOptions, PerformanceSettings, ChartState
 from .utils import TimeUtil, DataProcessor
 from .renderers import EChartsRenderer, PlotlyFallbackRenderer
 from .config import ChartConfig, ChartConstants
@@ -15,7 +15,6 @@ __all__ = [
     'ChartOptions',
     'PerformanceSettings',
     'ChartState',
-    'DateRange',
     'TimeUtil',
     'DataProcessor',
     'EChartsRenderer',

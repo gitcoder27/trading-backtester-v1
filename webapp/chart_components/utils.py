@@ -87,16 +87,22 @@ class DataProcessor:
     @staticmethod
     def get_data_date_range(data: pd.DataFrame) -> Tuple[date, date]:
         """Get date range from data DataFrame."""
-        if DataProcessor.TIMESTAMP_COLUMN in data.columns:
-            data_timestamps = pd.to_datetime(data[DataProcessor.TIMESTAMP_COLUMN])
-            min_date = data_timestamps.min().date()
-            max_date = data_timestamps.max().date()
-        elif isinstance(data.index, pd.DatetimeIndex):
-            min_date = data.index.min().date()
-            max_date = data.index.max().date()
-        else:
-            # Use current date as fallback
+        try:
+            if DataProcessor.TIMESTAMP_COLUMN in data.columns:
+                data_timestamps = pd.to_datetime(data[DataProcessor.TIMESTAMP_COLUMN])
+                min_date = data_timestamps.min().date()
+                max_date = data_timestamps.max().date()
+            elif isinstance(data.index, pd.DatetimeIndex):
+                min_date = data.index.min().date()
+                max_date = data.index.max().date()
+            else:
+                # Use current date as fallback
+                from datetime import date
+                min_date = max_date = date.today()
+        except Exception as e:
+            # Fallback to current date if there's any error in date processing
             from datetime import date
+            logger.warning(f"Error getting data date range: {e}. Using current date as fallback.")
             min_date = max_date = date.today()
         
         return min_date, max_date

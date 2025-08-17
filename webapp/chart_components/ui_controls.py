@@ -7,7 +7,7 @@ import streamlit as st
 from datetime import date
 from typing import Tuple, Optional, List
 
-from .models import DateRange, PerformanceSettings, ChartState
+from .models import PerformanceSettings, ChartState
 from ..prefs import load_prefs, save_prefs, get_pref, set_pref
 
 
@@ -27,15 +27,18 @@ class ChartControls:
         safe_start = max(min_date, min(current_start, max_date))
         safe_end = max(min_date, min(current_end, max_date))
         
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 2])
+        col1, col2, col3 = st.columns([2, 2, 1])
 
         # Sanitize widget state for start date picker
         start_key = 'adv_chart_start_date_picker'
-        start_session_val = st.session_state.get(start_key, safe_start)
-        if start_session_val < min_date or start_session_val > max_date:
+        
+        # Initialize session state with safe value if not present or invalid
+        if start_key not in st.session_state:
             st.session_state[start_key] = safe_start
         else:
-            st.session_state.setdefault(start_key, start_session_val)
+            current_val = st.session_state[start_key]
+            if current_val < min_date or current_val > max_date:
+                st.session_state[start_key] = safe_start
 
         with col1:
             start_date = st.date_input(
@@ -48,11 +51,14 @@ class ChartControls:
 
         # Sanitize widget state for end date picker
         end_key = 'adv_chart_end_date_picker'
-        end_session_val = st.session_state.get(end_key, safe_end)
-        if end_session_val < min_date or end_session_val > max_date:
+        
+        # Initialize session state with safe value if not present or invalid
+        if end_key not in st.session_state:
             st.session_state[end_key] = safe_end
         else:
-            st.session_state.setdefault(end_key, end_session_val)
+            current_val = st.session_state[end_key]
+            if current_val < min_date or current_val > max_date:
+                st.session_state[end_key] = safe_end
 
         with col2:
             end_date = st.date_input(
@@ -64,8 +70,6 @@ class ChartControls:
             )
         
         with col3:
-            st.write("")  # Spacer
-            st.write("")  # Spacer
             go_clicked = st.button("Go", use_container_width=True, type="primary")
         
         return start_date, end_date, go_clicked
@@ -78,58 +82,56 @@ class ChartControls:
     ) -> None:
         """Render controls for viewing a single trading day."""
 
-        # Get current day from session or default to first available
-        current_day = st.session_state.get('adv_chart_single_day', available_dates[0])
-        if current_day not in available_dates:
-            current_day = available_dates[0]
-            st.session_state.adv_chart_single_day = current_day
+        if not available_dates:
+            st.warning("⚠️ No trading days available for single day navigation.")
+            return
 
-        col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+        col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
 
-        # Sanitize widget state for single day picker
-        day_key = 'adv_chart_single_day_picker'
-        day_session_val = st.session_state.get(day_key, current_day)
-        if day_session_val < min_date or day_session_val > max_date:
-            st.session_state[day_key] = current_day
-        else:
-            st.session_state.setdefault(day_key, day_session_val)
-
+        # Use a simpler approach - let the user control the date picker manually
+        # and use buttons to navigate or apply the selection
         with col1:
             single_day = st.date_input(
                 "Single Day",
-                value=st.session_state[day_key],
+                value=st.session_state.get('adv_chart_single_day', available_dates[0]),
                 min_value=min_date,
                 max_value=max_date,
-                key=day_key
+                key='adv_chart_single_day_picker'
             )
 
-        prev_day = max([d for d in available_dates if d < single_day], default=single_day)
-        next_day = min([d for d in available_dates if d > single_day], default=single_day)
+        # Find previous and next available dates
+        current_single_day = st.session_state.get('adv_chart_single_day', available_dates[0])
+        prev_day = max([d for d in available_dates if d < current_single_day], default=current_single_day)
+        next_day = min([d for d in available_dates if d > current_single_day], default=current_single_day)
 
         with col2:
-            if st.button("Prev Day", key='adv_chart_prev_day', use_container_width=True, disabled=prev_day == single_day):
+            if st.button("Prev Day", key='adv_chart_prev_day', use_container_width=True, disabled=prev_day == current_single_day):
                 st.session_state.adv_chart_single_day = prev_day
                 st.session_state.adv_chart_start_date = prev_day
                 st.session_state.adv_chart_end_date = prev_day
-                st.session_state[day_key] = prev_day
                 st.session_state.render_advanced_chart = True
+                # Clear the widget state to force refresh
+                if 'adv_chart_single_day_picker' in st.session_state:
+                    del st.session_state['adv_chart_single_day_picker']
                 st.rerun()
 
         with col3:
-            if st.button("Next Day", key='adv_chart_next_day', use_container_width=True, disabled=next_day == single_day):
+            if st.button("Next Day", key='adv_chart_next_day', use_container_width=True, disabled=next_day == current_single_day):
                 st.session_state.adv_chart_single_day = next_day
                 st.session_state.adv_chart_start_date = next_day
                 st.session_state.adv_chart_end_date = next_day
-                st.session_state[day_key] = next_day
                 st.session_state.render_advanced_chart = True
+                # Clear the widget state to force refresh
+                if 'adv_chart_single_day_picker' in st.session_state:
+                    del st.session_state['adv_chart_single_day_picker']
                 st.rerun()
 
         with col4:
             if st.button("Go", key='adv_chart_single_day_go', use_container_width=True, type="primary"):
+                # Use the value from the date picker widget
                 st.session_state.adv_chart_single_day = single_day
                 st.session_state.adv_chart_start_date = single_day
                 st.session_state.adv_chart_end_date = single_day
-                st.session_state[day_key] = single_day
                 st.session_state.render_advanced_chart = True
                 st.rerun()
     
@@ -157,8 +159,6 @@ class ChartControls:
             st.session_state.adv_chart_height = int(
                 get_pref(prefs, 'adv_chart_height', 600)
             )
-        
-        st.subheader("Performance Settings", help="Adjust these settings to optimize chart performance")
         
         col1, col2, col3 = st.columns(3)
         
@@ -251,11 +251,28 @@ class ChartControls:
     ) -> ChartState:
         """Manage chart session state."""
 
-        # Initialize session state if needed
+        # Initialize session state if needed with valid defaults
         if 'adv_chart_data_id' not in st.session_state:
             st.session_state.adv_chart_data_id = -1
             st.session_state.render_advanced_chart = False
+        
+        # Ensure all date-related session state has valid defaults
         if 'adv_chart_single_day' not in st.session_state:
+            st.session_state.adv_chart_single_day = min_date
+        if 'adv_chart_start_date' not in st.session_state:
+            st.session_state.adv_chart_start_date = backtest_start or min_date
+        if 'adv_chart_end_date' not in st.session_state:
+            st.session_state.adv_chart_end_date = backtest_end or max_date
+        
+        # Sanitize existing values to ensure they're within range
+        current_start = st.session_state.get('adv_chart_start_date', min_date)
+        current_end = st.session_state.get('adv_chart_end_date', max_date)
+        
+        if current_start < min_date or current_start > max_date:
+            st.session_state.adv_chart_start_date = backtest_start or min_date
+        if current_end < min_date or current_end > max_date:
+            st.session_state.adv_chart_end_date = backtest_end or max_date
+        if st.session_state.get('adv_chart_single_day', min_date) < min_date or st.session_state.get('adv_chart_single_day', min_date) > max_date:
             st.session_state.adv_chart_single_day = min_date
         
         # Create chart state object
