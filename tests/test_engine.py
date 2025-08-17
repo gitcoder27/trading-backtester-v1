@@ -335,3 +335,39 @@ def test_session_closed_prevents_new_entry():
     result = engine.run()
     trade_log = result['trade_log']
     assert trade_log.empty
+
+
+class ProfitTargetStrategy(StrategyBase):
+    def generate_signals(self, data):
+        df = data.copy()
+        df['signal'] = [1, 0]
+        df['exit_indicator'] = df['close']
+        return df
+
+    def should_exit(self, position, row, entry_price):
+        if row['close'] > entry_price + 1:
+            return True, 'Take Profit Exit'
+        return False, ''
+
+    def indicator_config(self):
+        return [{'column': 'exit_indicator'}]
+
+
+def test_daily_profit_target_triggers(monkeypatch):
+    data = pd.DataFrame({
+        'timestamp': pd.date_range('2024-01-01', periods=2, freq='min'),
+        'close': [100.0, 102.0],
+    })
+    engine = BacktestEngine(
+        data,
+        ProfitTargetStrategy(),
+        daily_profit_target=1.0,
+        option_delta=1.0,
+        lots=1,
+        option_price_per_unit=1.0,
+        fee_per_trade=0.0,
+        slippage=0.0,
+    )
+    result = engine.run()
+    trade_log = result['trade_log']
+    assert len(trade_log) == 1

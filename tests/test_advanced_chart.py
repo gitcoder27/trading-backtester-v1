@@ -99,6 +99,46 @@ def test_render_ui_controls(st_mock, monkeypatch):
     mgr._render_ui_controls('2024-01-01','2024-01-10', data)
 
 
+def test_render_ui_controls_no_dates_and_exception(st_mock, monkeypatch):
+    ac = import_ac(monkeypatch)
+    mgr = ac.AdvancedChartManager()
+    mgr.chart_state = SimpleNamespace(start_date='2024-01-01', end_date='2024-01-05')
+
+    # Setup ChartControls where go_clicked is False to avoid rerun
+    cc = SimpleNamespace(
+        render_date_range_controls=lambda **k: ('2024-01-01','2024-01-02',False),
+        validate_date_range=lambda s,e: True,
+        update_chart_state_for_render=lambda s,e: None,
+        render_single_day_controls=lambda *a, **k: st_mock.session_state.update({'called':True}),
+        should_render_chart=lambda: True,
+        render_performance_controls=lambda: SimpleNamespace(max_points=100),
+    )
+    monkeypatch.setattr(ac, 'ChartControls', cc)
+
+    # No dates available -> warning path
+    warnings = []
+    st_mock.warning = lambda *a, **k: warnings.append(a)
+    mgr._render_ui_controls('2024-01-01','2024-01-02', pd.DataFrame())
+    assert warnings and 'called' not in st_mock.session_state
+
+    # Exception path from single day controls
+    errors, infos = [], []
+    st_mock.error = lambda *a, **k: errors.append(a)
+    st_mock.info = lambda *a, **k: infos.append(a)
+    cc_exc = SimpleNamespace(
+        render_date_range_controls=lambda **k: ('2024-01-01','2024-01-02',False),
+        validate_date_range=lambda s,e: True,
+        update_chart_state_for_render=lambda s,e: None,
+        render_single_day_controls=lambda *a, **k: (_ for _ in ()).throw(Exception('boom')),
+        should_render_chart=lambda: True,
+        render_performance_controls=lambda: SimpleNamespace(max_points=100),
+    )
+    monkeypatch.setattr(ac, 'ChartControls', cc_exc)
+    data = pd.DataFrame({'timestamp': pd.date_range('2024-01-01', periods=1)})
+    mgr._render_ui_controls('2024-01-01','2024-01-02', data)
+    assert errors and infos
+
+
 def test_process_and_filter(st_mock, monkeypatch):
     ac = import_ac(monkeypatch)
     mgr = ac.AdvancedChartManager()
