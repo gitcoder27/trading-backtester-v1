@@ -109,23 +109,6 @@ class ChartOptions:
 
 
 @dataclass
-class DateRange:
-    """Date range for chart filtering."""
-    start_date: date
-    end_date: date
-    
-    def to_datetime_range(self) -> tuple[datetime, datetime]:
-        """Convert to datetime range with proper time bounds."""
-        start_dt = pd.to_datetime(self.start_date)
-        end_dt = pd.to_datetime(self.end_date).replace(hour=23, minute=59, second=59)
-        return start_dt, end_dt
-    
-    def is_valid(self) -> bool:
-        """Check if date range is valid."""
-        return self.start_date <= self.end_date
-
-
-@dataclass
 class ChartState:
     """Chart session state management."""
     data_id: int = -1

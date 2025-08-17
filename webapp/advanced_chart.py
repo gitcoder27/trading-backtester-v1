@@ -67,6 +67,42 @@ class AdvancedChartManager:
         try:
             st.subheader("Advanced Chart (Beta)")
             
+            # Add custom CSS for compact styling
+            st.markdown("""
+            <style>
+            .stExpander > div:first-child {
+                font-size: 0.9rem !important;
+                font-weight: 500 !important;
+            }
+            .stExpander [data-testid="stExpanderDetails"] {
+                padding-top: 0.5rem !important;
+                padding-bottom: 0.5rem !important;
+            }
+            .stDateInput > div > div > label {
+                font-size: 0.85rem !important;
+            }
+            .stDateInput > div > div {
+                margin-bottom: 0.5rem !important;
+            }
+            .stButton > button {
+                font-size: 0.85rem !important;
+                height: 2.4rem !important;
+                margin-top: 0rem !important;
+                padding: 0.25rem 0.75rem !important;
+            }
+            .stCheckbox > label {
+                font-size: 0.85rem !important;
+            }
+            .stNumberInput > div > div > label {
+                font-size: 0.85rem !important;
+            }
+            /* Align buttons with form inputs */
+            div[data-testid="column"] > div > div > div > button {
+                margin-top: 1.7rem !important;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
             # Early validation
             if not self._validate_input_data(data):
                 return
@@ -88,7 +124,7 @@ class AdvancedChartManager:
             )
             
             # Render UI controls
-            self._render_ui_controls(min_date, max_date)
+            self._render_ui_controls(min_date, max_date, data)
 
             # Update chart options from user-selected height
             selected_height = st.session_state.get('adv_chart_height', 600)
@@ -137,27 +173,51 @@ class AdvancedChartManager:
             st.error(f"❌ Data validation failed: {e}")
             return False
     
-    def _render_ui_controls(self, min_date, max_date) -> None:
+    def _render_ui_controls(self, min_date, max_date, data) -> None:
         """Render all UI controls for the chart."""
-        # Date range controls
-        start_date, end_date, go_clicked = ChartControls.render_date_range_controls(
-            min_date=min_date,
-            max_date=max_date,
-            current_start=self.chart_state.start_date,
-            current_end=self.chart_state.end_date
-        )
         
-        # Handle Go button click
-        if go_clicked:
-            if ChartControls.validate_date_range(start_date, end_date):
-                ChartControls.update_chart_state_for_render(start_date, end_date)
-                st.rerun()
-            else:
-                st.error("❌ Invalid date range: Start date must be before end date.")
-        
-        # Performance controls (only show if chart will be rendered)
+        # Single day controls in collapsible section (moved to first position)
+        with st.expander("📅 Single Day Navigation", expanded=True):
+            try:
+                # Calculate available dates from data, handling both index and timestamp column
+                if 'timestamp' in data.columns:
+                    timestamps = pd.to_datetime(data['timestamp'])
+                else:
+                    timestamps = pd.to_datetime(data.index)
+                
+                # Extract unique dates
+                available_dates = sorted(list(set([ts.date() for ts in timestamps])))
+                
+                if available_dates:
+                    ChartControls.render_single_day_controls(min_date, max_date, available_dates)
+                else:
+                    st.warning("⚠️ No valid dates found in data for single day navigation.")
+                    
+            except Exception as e:
+                st.error(f"❌ Error in single day navigation setup: {e}")
+                st.info("💡 Single day navigation is temporarily unavailable. You can still use the date range controls below.")
+
+        # Date range controls in collapsible section (moved to second position)
+        with st.expander("📊 Chart Date Range", expanded=False):
+            start_date, end_date, go_clicked = ChartControls.render_date_range_controls(
+                min_date=min_date,
+                max_date=max_date,
+                current_start=self.chart_state.start_date,
+                current_end=self.chart_state.end_date
+            )
+
+            # Handle Go button click
+            if go_clicked:
+                if ChartControls.validate_date_range(start_date, end_date):
+                    ChartControls.update_chart_state_for_render(start_date, end_date)
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid date range: Start date must be before end date.")
+
+        # Performance controls in collapsible section (only show if chart will be rendered)
         if ChartControls.should_render_chart():
-            self.performance_settings = ChartControls.render_performance_controls()
+            with st.expander("⚙️ Performance Settings", expanded=False):
+                self.performance_settings = ChartControls.render_performance_controls()
     
     def _process_chart_data(self, data: pd.DataFrame, strategy, indicators: Optional[pd.DataFrame]) -> ChartData:
         """Process and prepare chart data."""
