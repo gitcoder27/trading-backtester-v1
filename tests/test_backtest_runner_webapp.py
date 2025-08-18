@@ -47,7 +47,7 @@ def test_run_backtest_basic(st_mock, monkeypatch):
     mon = SimpleNamespace(start_monitoring=lambda: None, stop_monitoring=lambda data_rows: {'total_time':1.0}, display_metrics=lambda: None)
     monkeypatch.setattr(br, 'PerformanceMonitor', lambda: mon)
     monkeypatch.setattr(br, 'filter_trades', lambda *a, **k: pd.DataFrame({'a':[2]}))
-    out = br.run_backtest(data, strategy, 0,1,1,0, [], False,0,0, False, [])
+    out = br.run_backtest(data, strategy, 0,1,1,0, [], False,0,0, False, [], 0, False)
     assert 'equity_curve' in out
 
 
@@ -67,6 +67,6 @@ def test_run_backtest_with_filters(st_mock, monkeypatch):
         called['args'] = (directions, hours, weekdays)
         return trades
     monkeypatch.setattr(br, 'filter_trades', fake_filter)
-    out = br.run_backtest(data, strategy,0,1,1,0,['LONG'], True,1,2, True,[1,2])
+    out = br.run_backtest(data, strategy,0,1,1,0,['LONG'], True,1,2, True,[1,2], 0, False)
     assert called['args'][0]==['long'] and called['args'][1]==(1,2) and called['args'][2]==[1,2]
     assert isinstance(out['trade_log'], pd.DataFrame)

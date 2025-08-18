@@ -19,6 +19,7 @@ from backtester.metrics import (
     max_consecutive_losses,
     trading_sessions_days,
     trading_sessions_years,
+    daily_profit_target_stats,
 )
 from backtester.plotting import plot_trades_on_candlestick_plotly, plot_equity_curve
 from backtester.html_report import generate_html_report
@@ -105,7 +106,7 @@ def cached_analytics_charts(eq_for_display: pd.DataFrame, shown_trades: pd.DataF
     return charts
 
 
-def render_metrics(equity_curve: pd.DataFrame, trade_log: pd.DataFrame):
+def render_metrics(equity_curve: pd.DataFrame, trade_log: pd.DataFrame, daily_target=None):
     if equity_curve is None or len(equity_curve) == 0 or 'equity' not in equity_curve.columns:
         st.info("No equity data to compute metrics.")
         return
@@ -126,9 +127,33 @@ def render_metrics(equity_curve: pd.DataFrame, trade_log: pd.DataFrame):
         "Avg Holding (min)": average_holding_time(trade_log) if len(trade_log) else 0,
         "Max Consec Wins": max_consecutive_wins(trade_log),
         "Max Consec Losses": max_consecutive_losses(trade_log),
-    "Trading Sessions (days)": trading_sessions_days(equity_curve),
-    "Trading Sessions (years)": trading_sessions_years(equity_curve),
+        "Trading Sessions (days)": trading_sessions_days(equity_curve),
+        "Trading Sessions (years)": trading_sessions_years(equity_curve),
     }
+
+    if len(trade_log) > 0 and 'direction' in trade_log.columns:
+        long_trades = trade_log[trade_log['direction'].str.lower().isin(['buy', 'long'])]
+        short_trades = trade_log[trade_log['direction'].str.lower().isin(['sell', 'short'])]
+        win_long_trades = long_trades[long_trades['pnl'] > 0]
+        win_short_trades = short_trades[short_trades['pnl'] > 0]
+        kpis.update({
+            "Total Long Trades": len(long_trades),
+            "Total Short Trades": len(short_trades),
+            "Winning Long Trades": len(win_long_trades),
+            "Winning Short Trades": len(win_short_trades),
+        })
+
+    if daily_target is not None:
+        stats = daily_profit_target_stats(trade_log, daily_target)
+        hit_rate = stats['target_hit_rate'] * 100 if stats['target_hit_rate'] == stats['target_hit_rate'] else float('nan')
+        kpis.update({
+            "Days Traded": stats['days_traded'],
+            "Days Target Hit": stats['days_target_hit'],
+            "Daily Target Hit Rate (%)": hit_rate,
+            "Best Day PnL": stats['max_daily_pnl'],
+            "Worst Day PnL": stats['min_daily_pnl'],
+            "Avg Day PnL": stats['avg_daily_pnl'],
+        })
 
     cols = st.columns(4)
     items = list(kpis.items())

@@ -186,7 +186,22 @@ class BacktestEngine:
         # Include all configured indicators
         if indicator_cols:
             result['indicators'] = df[['timestamp'] + indicator_cols]
-        
+        trade_log = result['trade_log']
+        if trade_log is not None and not trade_log.empty:
+            tl = trade_log.copy()
+            tl['trade_date'] = pd.to_datetime(tl['entry_time']).dt.date
+            daily = tl.groupby('trade_date').agg(pnl=('pnl', 'sum'), trades=('pnl', 'count'))
+            if self.daily_profit_target is not None:
+                daily['hit_target'] = daily['pnl'] >= self.daily_profit_target
+                hit_map = daily['hit_target'].to_dict()
+                tl['daily_target_hit'] = tl['trade_date'].map(hit_map)
+            result['trade_log'] = tl
+            result['daily_summary'] = daily.reset_index().rename(columns={'trade_date': 'date'})
+        else:
+            result['daily_summary'] = pd.DataFrame(
+                columns=['date', 'pnl', 'trades'] + ([] if self.daily_profit_target is None else ['hit_target'])
+            )
+
         return result
     
     def _can_use_fast_vectorized(self, df):

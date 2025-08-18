@@ -77,3 +77,23 @@ def test_profit_factor_no_losses():
 
 def test_max_consecutive_count_empty():
     assert metrics._max_consecutive_count([]) == 0
+
+
+def test_daily_profit_target_stats():
+    tl = pd.DataFrame({
+        'entry_time': pd.to_datetime([
+            '2024-01-01 09:30',
+            '2024-01-01 10:00',
+            '2024-01-02 09:30',
+            '2024-01-02 10:00',
+        ]),
+        'exit_time': pd.date_range('2024-01-01 09:45', periods=4, freq='30min'),
+        'pnl': [8, 5, -2, 3],
+    })
+    stats = metrics.daily_profit_target_stats(tl, daily_target=10)
+    assert stats['days_traded'] == 2
+    assert stats['days_target_hit'] == 1
+    assert stats['target_hit_rate'] == pytest.approx(0.5)
+    assert stats['max_daily_pnl'] == 13
+    assert stats['min_daily_pnl'] == 1
+    assert stats['avg_daily_pnl'] == pytest.approx(7.0)
