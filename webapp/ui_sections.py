@@ -252,8 +252,9 @@ def _render_trades_content(trades: pd.DataFrame):
         return
     # Show both normal_pnl and options pnl columns if present
     display_cols = [
-        'entry_time', 'entry_price', 'direction', 'exit_time', 'exit_price',
-        'normal_pnl', 'pnl', 'exit_reason'
+        'trade_date', 'entry_time', 'entry_price', 'direction',
+        'exit_time', 'exit_price', 'normal_pnl', 'pnl',
+        'exit_reason', 'daily_target_hit'
     ]
     # Only show columns that exist in the DataFrame
     display_cols = [c for c in display_cols if c in trades.columns]
