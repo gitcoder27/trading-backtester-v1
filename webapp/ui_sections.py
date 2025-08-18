@@ -253,9 +253,15 @@ def _render_trades_content(trades: pd.DataFrame):
     # Show both normal_pnl and options pnl columns if present
     display_cols = [
         'trade_date', 'entry_time', 'entry_price', 'direction',
-        'exit_time', 'exit_price', 'normal_pnl', 'pnl',
+        'exit_time', 'exit_price', 'normal_pnl', 'pnl', 'day_pnl',
         'exit_reason', 'daily_target_hit'
     ]
+    trades = trades.copy()
+    if 'pnl' in trades.columns:
+        if 'trade_date' not in trades.columns and 'entry_time' in trades.columns:
+            trades['trade_date'] = pd.to_datetime(trades['entry_time']).dt.date
+        if 'trade_date' in trades.columns:
+            trades['day_pnl'] = trades.groupby('trade_date')['pnl'].cumsum()
     # Only show columns that exist in the DataFrame
     display_cols = [c for c in display_cols if c in trades.columns]
     st.dataframe(trades[display_cols])
