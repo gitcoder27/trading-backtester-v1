@@ -7,7 +7,7 @@ import os
 import sys
 from backtester.data_loader import load_csv
 from backtester.engine import BacktestEngine
-from backtester.metrics import total_return, sharpe_ratio, max_drawdown, win_rate, profit_factor, largest_winning_trade, largest_losing_trade, average_holding_time, max_consecutive_wins, max_consecutive_losses, trading_sessions_days, trading_sessions_years
+from backtester.metrics import total_return, sharpe_ratio, max_drawdown, win_rate, profit_factor, largest_winning_trade, largest_losing_trade, average_holding_time, max_consecutive_wins, max_consecutive_losses, trading_sessions_days, trading_sessions_years, daily_profit_target_stats
 from backtester.reporting import plot_equity_curve, plot_trades_on_price, save_trade_log, generate_html_report
 from strategies.bbands_scalper import BBandsScalperStrategy
 from strategies.ema10_scalper import EMA10ScalperStrategy
@@ -132,6 +132,32 @@ def main():
     print(f"Trading Sessions (days): {trading_sessions_days(equity_curve)}")
     print(f"Trading Sessions (years): {trading_sessions_years(equity_curve):.2f}")
 
+    # Daily profit target statistics
+    daily_stats = daily_profit_target_stats(trade_log, args.daily_target)
+    print(f"Days Traded: {daily_stats['days_traded']}")
+    print(f"Days Target Hit: {daily_stats['days_target_hit']}")
+    hit_rate = daily_stats['target_hit_rate']
+    print(
+        f"Daily Target Hit Rate: {hit_rate*100:.2f}%"
+        if hit_rate == hit_rate
+        else "Daily Target Hit Rate: N/A"
+    )
+    print(
+        f"Best Day PnL: {daily_stats['max_daily_pnl']:.2f}"
+        if daily_stats['max_daily_pnl'] == daily_stats['max_daily_pnl']
+        else "Best Day PnL: N/A"
+    )
+    print(
+        f"Worst Day PnL: {daily_stats['min_daily_pnl']:.2f}"
+        if daily_stats['min_daily_pnl'] == daily_stats['min_daily_pnl']
+        else "Worst Day PnL: N/A"
+    )
+    print(
+        f"Average Day PnL: {daily_stats['avg_daily_pnl']:.2f}"
+        if daily_stats['avg_daily_pnl'] == daily_stats['avg_daily_pnl']
+        else "Average Day PnL: N/A"
+    )
+
     # Trade stats
     if len(trade_log) > 0:
         long_trades = trade_log[trade_log['direction'].str.lower().isin(['buy', 'long'])]
@@ -179,7 +205,13 @@ def main():
             'Total Long Trades': len(long_trades),
             'Total Short Trades': len(short_trades),
             'Winning Long Trades': len(win_long_trades),
-            'Winning Short Trades': len(win_short_trades)
+            'Winning Short Trades': len(win_short_trades),
+            'Days Traded': daily_stats['days_traded'],
+            'Days Target Hit': daily_stats['days_target_hit'],
+            'Daily Target Hit Rate (%)': daily_stats['target_hit_rate'] * 100 if daily_stats['target_hit_rate'] == daily_stats['target_hit_rate'] else None,
+            'Best Day PnL': daily_stats['max_daily_pnl'],
+            'Worst Day PnL': daily_stats['min_daily_pnl'],
+            'Average Day PnL': daily_stats['avg_daily_pnl'],
         }
         # Attach indicator configuration for HTML report
         if hasattr(strategy, 'indicator_config'): # Check if method exists

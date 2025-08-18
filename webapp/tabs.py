@@ -3,16 +3,31 @@ Tab rendering logic for Streamlit app with lazy loading and performance optimiza
 """
 import streamlit as st
 from webapp.ui_sections import (
-    render_metrics, 
-    section_overview, 
-    section_chart, 
-    section_advanced_chart_lazy, 
-    section_trades, 
+    render_metrics,
+    section_overview,
+    section_chart,
+    section_advanced_chart_lazy,
+    section_trades,
     section_analytics
 )
 from webapp.performance_optimization import LazyTabManager, PerformanceMonitor
 
-def render_tabs(data, trade_log, shown_trades, strategy, indicators, eq_for_display, apply_filters_to_charts, strat_choice, strat_params, STRATEGY_MAP, option_delta=1.0, lots=1, price_per_unit=1.0):
+def render_tabs(
+    data,
+    trade_log,
+    shown_trades,
+    strategy,
+    indicators,
+    eq_for_display,
+    apply_filters_to_charts,
+    strat_choice,
+    strat_params,
+    STRATEGY_MAP,
+    option_delta=1.0,
+    lots=1,
+    price_per_unit=1.0,
+    daily_target=None,
+):
     """Renders tabs with lazy loading for improved performance."""
     
     # Start performance monitoring
@@ -22,7 +37,7 @@ def render_tabs(data, trade_log, shown_trades, strategy, indicators, eq_for_disp
 
     # Always render Overview tab (most commonly used)
     with tabs[0]:
-        render_metrics(eq_for_display, shown_trades)
+        render_metrics(eq_for_display, shown_trades, daily_target)
         section_overview(eq_for_display)
 
     # Lazy load other tabs

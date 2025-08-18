@@ -49,6 +49,7 @@ def seed_session_defaults(st, STRATEGY_MAP):
     st.session_state.setdefault('lots', int(get_pref(_prefs, 'lots', 2)))
     st.session_state.setdefault('price_per_unit', float(get_pref(_prefs, 'price_per_unit', 1.0)))
     st.session_state.setdefault('fee_per_trade', float(get_pref(_prefs, 'fee_per_trade', 0.0)))
+    st.session_state.setdefault('daily_target', float(get_pref(_prefs, 'daily_target', 30.0)))
     st.session_state.setdefault('intraday', bool(get_pref(_prefs, 'intraday', False)))
     st.session_state.setdefault('direction_filter', list(get_pref(_prefs, 'direction_filter', ["long", "short"])))
     st.session_state.setdefault('apply_time_filter', bool(get_pref(_prefs, 'apply_time_filter', False)))

@@ -71,6 +71,7 @@ def render_dashboard(
         config.get("option_delta", 1.0),
         config.get("lots", 1),
         config.get("price_per_unit", 1.0),
+        config.get("daily_target"),
     )
 
     with tabs[6]:
@@ -151,6 +152,7 @@ def main():
             "option_delta",
             "lots",
             "price_per_unit",
+            "daily_target",
             "fee_per_trade",
             "direction_filter",
             "apply_time_filter",
@@ -230,6 +232,7 @@ def main():
                 sidebar_config["end_hour"],
                 sidebar_config["apply_weekday_filter"],
                 sidebar_config["weekdays"],
+                sidebar_config["daily_target"],
                 sidebar_config["intraday"],
             )
 
@@ -250,6 +253,7 @@ def main():
             "option_delta": sidebar_config["option_delta"],
             "lots": sidebar_config["lots"],
             "price_per_unit": sidebar_config["price_per_unit"],
+            "daily_target": sidebar_config["daily_target"],
         }
 
         # Mark all tabs for loading (fresh backtest)

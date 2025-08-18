@@ -371,3 +371,7 @@ def test_daily_profit_target_triggers(monkeypatch):
     result = engine.run()
     trade_log = result['trade_log']
     assert len(trade_log) == 1
+    assert 'daily_summary' in result
+    summary = result['daily_summary']
+    assert bool(summary['hit_target'].iloc[0])
+    assert bool(trade_log['daily_target_hit'].iloc[0])

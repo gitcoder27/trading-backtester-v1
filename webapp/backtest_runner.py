@@ -22,6 +22,7 @@ def run_backtest(
     end_hour,
     apply_weekday_filter,
     weekdays,
+    daily_target,
     intraday=False,
     session_close_time="15:15",
 ):
@@ -44,6 +45,7 @@ def run_backtest(
             fee_per_trade=fee_per_trade,
             intraday=intraday,
             session_close_time=session_close_time,
+            daily_profit_target=daily_target,
         )
         
         # Run backtest
@@ -80,4 +82,5 @@ def run_backtest(
         'shown_trades': shown_trades,
         'eq_for_display': eq_for_display,
         'performance_metrics': metrics,
+        'daily_summary': results.get('daily_summary'),
     }

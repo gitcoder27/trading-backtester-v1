@@ -139,3 +139,51 @@ def trading_sessions_years(equity_curve: pd.DataFrame, trading_days_per_year: in
     if trading_days_per_year <= 0:
         return np.nan
     return days / float(trading_days_per_year)
+
+
+def daily_profit_target_stats(trade_log: pd.DataFrame, daily_target: float):
+    """Compute statistics on daily PnL and how often a daily profit target was hit.
+
+    Parameters
+    ----------
+    trade_log : pd.DataFrame
+        Log of trades with at least 'entry_time' and 'pnl' columns.
+    daily_target : float
+        Daily profit target expressed in the same units as 'pnl'.
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - days_traded: number of unique trading days
+        - days_target_hit: number of days where cumulative PnL >= daily_target
+        - target_hit_rate: fraction of days target was hit
+        - max_daily_pnl: best daily PnL
+        - min_daily_pnl: worst daily PnL
+        - avg_daily_pnl: average daily PnL
+    """
+
+    if trade_log is None or len(trade_log) == 0:
+        return {
+            'days_traded': 0,
+            'days_target_hit': 0,
+            'target_hit_rate': np.nan,
+            'max_daily_pnl': np.nan,
+            'min_daily_pnl': np.nan,
+            'avg_daily_pnl': np.nan,
+        }
+
+    tl = trade_log.copy()
+    tl['trade_date'] = pd.to_datetime(tl['entry_time']).dt.date
+    daily_pnl = tl.groupby('trade_date')['pnl'].sum()
+    days_traded = len(daily_pnl)
+    days_target_hit = int((daily_pnl >= daily_target).sum())
+
+    return {
+        'days_traded': days_traded,
+        'days_target_hit': days_target_hit,
+        'target_hit_rate': days_target_hit / days_traded if days_traded else np.nan,
+        'max_daily_pnl': daily_pnl.max(),
+        'min_daily_pnl': daily_pnl.min(),
+        'avg_daily_pnl': daily_pnl.mean(),
+    }
