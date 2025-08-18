@@ -1,4 +1,4 @@
-"""EMA Pullback Scalper (EPS-30).
+"""EMA Pullback DailyTarget Scalper (EPS-30).
 
 This strategy trades pullbacks to the 9-period EMA in the direction of the
 21-period EMA trend. It aims for quick scalps with a 10 point target and an
@@ -13,7 +13,7 @@ import pandas as pd
 from backtester.strategy_base import StrategyBase
 
 
-class EMAPullbackScalperStrategy(StrategyBase):
+class EMAPullbackScalperDailyTargetStrategy(StrategyBase):
     """EMA Pullback Scalper with daily goal and trade limits."""
 
     def __init__(self, params=None):
