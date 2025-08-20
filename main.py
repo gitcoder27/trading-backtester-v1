@@ -16,13 +16,14 @@ from strategies.first_candle_breakout import FirstCandleBreakoutStrategy
 from strategies.rsi_cross_strategy import RSICrossStrategy
 from strategies.ema50_scalper import EMA50ScalperStrategy
 from strategies.mean_reversion_scalper import MeanReversionScalper
-from strategies.mean_reversion_confirmed_scalper import MeanReversionConfirmedScalper
+from strategies.mean_reversion_confirmed_scalper_daily_target import MeanReversionConfirmedScalperDailyTargetStrategy
 from strategies.awesome_scalper import AwesomeScalperStrategy
 from strategies.intraday_ema_trade import IntradayEmaTradeStrategy
 from strategies.rsi_midday_reversion_scalper import RSIMiddayReversionScalper
 from strategies.opening_range_breakout_scalper import OpeningRangeBreakoutScalper
 from strategies.ema_pullback_scalper import EMAPullbackScalperStrategy
 from strategies.dual_ema_pullback_scalper import DualEMAPullbackScalperStrategy
+
 import argparse
 import pandas as pd
 
@@ -83,11 +84,11 @@ def main():
 
     # Initialize strategy
     strategy_params = {'debug': args.debug}
-    strategy = DualEMAPullbackScalperStrategy(params=strategy_params)
+    strategy = DualEMAPullbackScalperStrategy(params=strategy_params
     # strategy = OpeningRangeBreakoutScalper(params=strategy_params)
     # strategy = AwesomeScalperStrategy(params=strategy_params)
     # strategy = IntradayEmaTradeStrategy(params=strategy_params)
-    # strategy = MeanReversionConfirmedScalper(params=strategy_params)
+    # strategy = MeanReversionConfirmedScalperDailyTargetStrategy(params=strategy_params)
     # strategy = MomentumScalperStrategy(params=strategy_params)
     # strategy = EMA44ScalperStrategy()
     # strategy = BBandsScalperStrategy()

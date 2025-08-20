@@ -1,9 +1,9 @@
 from backtester.strategy_base import StrategyBase
 import pandas as pd
 
-class MeanReversionConfirmedScalper(StrategyBase):
+class MeanReversionConfirmedScalperDailyTargetStrategy(StrategyBase):
     """
-    This script defines the MeanReversionConfirmedScalper, a mean reversion scalping strategy.
+    This script defines the MeanReversionConfirmedScalperDailyTargetStrategy, a mean reversion scalping strategy.
 
     Strategy Logic:
     - This strategy aims to profit from prices returning to their mean after a significant deviation.
