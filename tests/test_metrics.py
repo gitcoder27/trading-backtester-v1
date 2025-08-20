@@ -97,3 +97,55 @@ def test_daily_profit_target_stats():
     assert stats['max_daily_pnl'] == 13
     assert stats['min_daily_pnl'] == 1
     assert stats['avg_daily_pnl'] == pytest.approx(7.0)
+
+
+def test_empty_trade_log():
+    empty_trade_log = pd.DataFrame(columns=['entry_time', 'exit_time', 'pnl'])
+    assert np.isnan(metrics.win_rate(empty_trade_log))
+    assert np.isnan(metrics.profit_factor(empty_trade_log))
+    assert np.isnan(metrics.largest_winning_trade(empty_trade_log))
+    assert np.isnan(metrics.largest_losing_trade(empty_trade_log))
+    assert np.isnan(metrics.average_holding_time(empty_trade_log))
+    assert metrics.max_consecutive_wins(empty_trade_log) == 0
+    assert metrics.max_consecutive_losses(empty_trade_log) == 0
+    stats = metrics.daily_profit_target_stats(empty_trade_log, daily_target=10)
+    assert stats['days_traded'] == 0
+    assert stats['days_target_hit'] == 0
+    assert np.isnan(stats['target_hit_rate'])
+    assert np.isnan(stats['max_daily_pnl'])
+    assert np.isnan(stats['min_daily_pnl'])
+    assert np.isnan(stats['avg_daily_pnl'])
+
+def test_max_drawdown_with_drawdown():
+    eq_curve = pd.DataFrame({
+        'timestamp': pd.to_datetime(['2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04', '2024-01-05']),
+        'equity': [100, 120, 110, 100, 130]
+    })
+    assert metrics.max_drawdown(eq_curve) == pytest.approx(0.16666666666666669)
+
+def test_profit_factor_zero_loss():
+    trade_log_wins = pd.DataFrame({'pnl': [10, 20]})
+    assert metrics.profit_factor(trade_log_wins) == np.inf
+    trade_log_no_wins = pd.DataFrame({'pnl': [0, 0]})
+    assert np.isnan(metrics.profit_factor(trade_log_no_wins))
+
+def test_trading_sessions_days_non_empty():
+    eq_curve = pd.DataFrame({
+        'timestamp': pd.to_datetime(['2024-01-01', '2024-01-01', '2024-01-02']),
+        'equity': [100, 110, 105]
+    })
+    assert metrics.trading_sessions_days(eq_curve) == 2
+
+def test_trading_sessions_years_invalid_input():
+    eq_curve = pd.DataFrame({
+        'timestamp': pd.to_datetime(['2024-01-01']),
+        'equity': [100]
+    })
+    assert np.isnan(metrics.trading_sessions_years(eq_curve, trading_days_per_year=0))
+    assert np.isnan(metrics.trading_sessions_years(eq_curve, trading_days_per_year=-1))
+
+
+def test_trading_sessions_days_empty_and_none():
+    assert metrics.trading_sessions_days(None) == 0
+    assert metrics.trading_sessions_days(pd.DataFrame()) == 0
+    assert metrics.trading_sessions_days(pd.DataFrame({'equity': [100]})) == 0
