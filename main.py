@@ -21,7 +21,9 @@ from strategies.awesome_scalper import AwesomeScalperStrategy
 from strategies.intraday_ema_trade import IntradayEmaTradeStrategy
 from strategies.rsi_midday_reversion_scalper import RSIMiddayReversionScalper
 from strategies.opening_range_breakout_scalper import OpeningRangeBreakoutScalper
-from strategies.ema_pullback_scalper_daily_target import EMAPullbackScalperDailyTargetStrategy
+from strategies.ema_pullback_scalper import EMAPullbackScalperStrategy
+from strategies.dual_ema_pullback_scalper import DualEMAPullbackScalperStrategy
+
 import argparse
 import pandas as pd
 
@@ -82,7 +84,7 @@ def main():
 
     # Initialize strategy
     strategy_params = {'debug': args.debug}
-    strategy = EMAPullbackScalperDailyTargetStrategy(params=strategy_params)
+    strategy = DualEMAPullbackScalperStrategy(params=strategy_params
     # strategy = OpeningRangeBreakoutScalper(params=strategy_params)
     # strategy = AwesomeScalperStrategy(params=strategy_params)
     # strategy = IntradayEmaTradeStrategy(params=strategy_params)
@@ -104,6 +106,7 @@ def main():
         option_price_per_unit=args.option_price_per_unit,
         intraday=args.intraday,
         daily_profit_target=args.daily_target,
+        fee_per_trade=0.5,
     )
     results = engine.run()
 
