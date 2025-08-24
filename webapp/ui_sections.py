@@ -33,6 +33,10 @@ from .performance_optimization import (
     PerformanceMonitor,
     show_cache_stats
 )
+from .chart_components import (
+    ChartData, TradeData, ChartOptions, PerformanceSettings, ChartState,
+    TimeUtil, DataProcessor, ChartControls, TradeVisualizer, TVLwRenderer,
+)
 
 
 @cached_chart("equity_curve", ttl=300)
@@ -303,6 +307,189 @@ def section_advanced_chart_lazy(data: pd.DataFrame, trades: pd.DataFrame, strate
         section_advanced_chart, 
         data, trades, strategy, indicators,
         description="Shows interactive ECharts/Plotly candlestick chart with advanced features"
+    )
+
+
+def section_tv_chart(data: pd.DataFrame, trades: pd.DataFrame, strategy, indicators):
+    """TradingView Lightweight Chart section (mirrors advanced chart flow)."""
+    import streamlit as st
+    st.subheader("TV Chart (Beta)")
+
+    if data is None or len(data) == 0:
+        st.info("No price data to chart. Run a backtest first.")
+        return
+
+    # Chart state setup (TV chart uses its own namespaced session keys to avoid conflicts)
+    min_date, max_date = DataProcessor.get_data_date_range(data)
+    last_results = st.session_state.get('last_results', {})
+    backtest_start = last_results.get('start_date') or min_date
+    backtest_end = last_results.get('end_date') or max_date
+
+    # Reset TV chart dates if data_id changes
+    if st.session_state.get('tv_chart_data_id', -1) != id(data):
+        st.session_state['tv_chart_data_id'] = id(data)
+        st.session_state['tv_chart_start_date'] = backtest_start
+        st.session_state['tv_chart_end_date'] = backtest_end
+        st.session_state['tv_chart_single_day'] = backtest_start
+        st.session_state['tv_chart_render'] = False
+
+    # Ensure defaults exist
+    st.session_state.setdefault('tv_chart_start_date', backtest_start)
+    st.session_state.setdefault('tv_chart_end_date', backtest_end)
+    st.session_state.setdefault('tv_chart_single_day', backtest_start)
+    st.session_state.setdefault('tv_chart_render', False)
+
+    with st.expander("📊 Chart Date Range", expanded=False):
+        # Sanitize values within range
+        cur_start = max(min_date, min(st.session_state['tv_chart_start_date'], max_date))
+        cur_end = max(min_date, min(st.session_state['tv_chart_end_date'], max_date))
+        col1, col2, col3 = st.columns([2, 2, 1])
+        with col1:
+            sdt = st.date_input(
+                "Start Date",
+                value=cur_start,
+                min_value=min_date,
+                max_value=max_date,
+                key='tv_chart_start_date_picker'
+            )
+        with col2:
+            edt = st.date_input(
+                "End Date",
+                value=cur_end,
+                min_value=min_date,
+                max_value=max_date,
+                key='tv_chart_end_date_picker'
+            )
+        with col3:
+            go = st.button("Go", use_container_width=True, type="primary", key='tv_chart_go')
+        if go:
+            if sdt <= edt:
+                st.session_state['tv_chart_start_date'] = sdt
+                st.session_state['tv_chart_end_date'] = edt
+                st.session_state['tv_chart_render'] = True
+                st.rerun()
+            else:
+                st.error("❌ Invalid date range: Start date must be before end date.")
+
+    with st.expander("📅 Single Day Navigation", expanded=True):
+        try:
+            timestamps = pd.to_datetime(data['timestamp'] if 'timestamp' in data.columns else data.index)
+            available_dates = sorted(list(set([ts.date() for ts in timestamps])))
+            if available_dates:
+                col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
+                with col1:
+                    single_day = st.date_input(
+                        "Single Day",
+                        value=st.session_state.get('tv_chart_single_day', available_dates[0]),
+                        min_value=min_date,
+                        max_value=max_date,
+                        key='tv_chart_single_day_picker'
+                    )
+                cur_day = st.session_state.get('tv_chart_single_day', available_dates[0])
+                prev_day = max([d for d in available_dates if d < cur_day], default=cur_day)
+                next_day = min([d for d in available_dates if d > cur_day], default=cur_day)
+                with col2:
+                    if st.button("Prev Day", key='tv_chart_prev_day', use_container_width=True, disabled=prev_day == cur_day):
+                        st.session_state['tv_chart_single_day'] = prev_day
+                        st.session_state['tv_chart_start_date'] = prev_day
+                        st.session_state['tv_chart_end_date'] = prev_day
+                        st.session_state['tv_chart_render'] = True
+                        if 'tv_chart_single_day_picker' in st.session_state:
+                            del st.session_state['tv_chart_single_day_picker']
+                        st.rerun()
+                with col3:
+                    if st.button("Next Day", key='tv_chart_next_day', use_container_width=True, disabled=next_day == cur_day):
+                        st.session_state['tv_chart_single_day'] = next_day
+                        st.session_state['tv_chart_start_date'] = next_day
+                        st.session_state['tv_chart_end_date'] = next_day
+                        st.session_state['tv_chart_render'] = True
+                        if 'tv_chart_single_day_picker' in st.session_state:
+                            del st.session_state['tv_chart_single_day_picker']
+                        st.rerun()
+                with col4:
+                    if st.button("Go", key='tv_chart_single_day_go', use_container_width=True, type="primary"):
+                        st.session_state['tv_chart_single_day'] = single_day
+                        st.session_state['tv_chart_start_date'] = single_day
+                        st.session_state['tv_chart_end_date'] = single_day
+                        st.session_state['tv_chart_render'] = True
+                        st.rerun()
+            else:
+                st.warning("⚠️ No valid dates found in data for single day navigation.")
+        except Exception:
+            st.info("Single day navigation unavailable.")
+
+    if not st.session_state.get('tv_chart_render', False):
+        st.info("Select a date range and click 'Go', or choose a single day and navigate with the controls below.")
+        return
+
+    # Prepare data
+    start_dt = pd.to_datetime(st.session_state['tv_chart_start_date'])
+    end_dt = pd.to_datetime(st.session_state['tv_chart_end_date']).replace(hour=23, minute=59, second=59)
+
+    filtered_data = DataProcessor.filter_data_by_date_range(data, start_dt, end_dt)
+    filtered_ind = DataProcessor.filter_data_by_date_range(indicators, start_dt, end_dt) if indicators is not None else None
+    aligned_data, aligned_ind = DataProcessor.align_data_timestamps(filtered_data, filtered_ind)
+    clean_data = DataProcessor.clean_and_validate_ohlc_data(aligned_data)
+
+    # Performance: sampling consistent with advanced chart
+    perf = ChartControls.get_performance_settings()
+    sampled_data, _ = DataProcessor.sample_data_for_performance(clean_data, perf.max_points)
+    candles = DataProcessor.convert_to_candlestick_data(sampled_data)
+
+    indicator_cfg = strategy.indicator_config() if hasattr(strategy, 'indicator_config') else []
+    overlays, oscillators = DataProcessor.build_overlay_data(aligned_ind, indicator_cfg)
+
+    cdata = ChartData(
+        candles=candles,
+        overlays=overlays,
+        oscillators=oscillators,
+        original_length=len(clean_data),
+        sampled_length=len(sampled_data),
+    )
+
+    tlog = DataProcessor.filter_trades_by_date_range(trades, start_dt, end_dt) if trades is not None else None
+    tdata = TradeVisualizer.process_trades_for_chart(tlog if tlog is not None else pd.DataFrame(), ChartOptions())
+
+    # Enhanced full-width styling for TV chart section
+    st.markdown("""
+    <style>
+    /* Comprehensive TV chart width optimization */
+    .element-container:has(> div > iframe[title="streamlit.components.v1.html"]) {
+        width: 100% !important;
+        max-width: none !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+    }
+    
+    /* Ensure block containers don't constrain the TV chart */
+    div[data-testid="stVerticalBlock"]:has(iframe[title="streamlit.components.v1.html"]) {
+        width: 100% !important;
+        max-width: none !important;
+        padding: 0 !important;
+    }
+    
+    /* Ensure the main content area uses full width for charts */
+    .main .block-container:has(iframe[title="streamlit.components.v1.html"]) {
+        max-width: none !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    renderer = TVLwRenderer(ChartOptions(height=f"{st.session_state.get('adv_chart_height', 600)}px"), perf)
+    renderer.render_chart(cdata, tdata, overlays_enabled=True)
+
+
+def section_tv_chart_lazy(data: pd.DataFrame, trades: pd.DataFrame, strategy, indicators):
+    """Lazy-loaded wrapper for TV chart section."""
+    return LazyTabManager.conditional_render(
+        "TV_Chart",
+        section_tv_chart,
+        data, trades, strategy, indicators,
+        description="Shows candlesticks + trades using TradingView Lightweight Charts"
     )
 
 

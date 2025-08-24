@@ -8,6 +8,7 @@ from .renderers import EChartsRenderer, PlotlyFallbackRenderer
 from .config import ChartConfig, ChartConstants
 from .ui_controls import ChartControls
 from .trade_viz import TradeVisualizer
+from .tv_renderer import TVLwRenderer
 
 __all__ = [
     'ChartData',
@@ -19,6 +20,7 @@ __all__ = [
     'DataProcessor',
     'EChartsRenderer',
     'PlotlyFallbackRenderer',
+    'TVLwRenderer',
     'ChartConfig',
     'ChartConstants',
     'ChartControls',

@@ -7,6 +7,7 @@ from webapp.ui_sections import (
     section_overview,
     section_chart,
     section_advanced_chart_lazy,
+    section_tv_chart_lazy,
     section_trades,
     section_analytics
 )
@@ -33,7 +34,7 @@ def render_tabs(
     # Start performance monitoring
     timer_key = PerformanceMonitor.start_timer("tab_rendering")
     
-    tabs = st.tabs(["Overview", "Chart", "Advanced Chart (Beta)", "Trades", "Analytics", "Sweep", "Compare", "Export"])
+    tabs = st.tabs(["Overview", "Chart", "Advanced Chart (Beta)", "TV Chart (Beta)", "Trades", "Analytics", "Sweep", "Compare", "Export"])
 
     # Always render Overview tab (most commonly used)
     with tabs[0]:
@@ -54,13 +55,19 @@ def render_tabs(
         section_advanced_chart_lazy(data, shown_trades if apply_filters_to_charts else trade_log, strategy, indicators)
 
     with tabs[3]:
-        section_trades(shown_trades)
+        if strategy is None:
+            strat_cls = STRATEGY_MAP[strat_choice]
+            strategy = strat_cls(params=strat_params)
+        section_tv_chart_lazy(data, shown_trades if apply_filters_to_charts else trade_log, strategy, indicators)
 
     with tabs[4]:
+        section_trades(shown_trades)
+
+    with tabs[5]:
         section_analytics(eq_for_display, shown_trades)
 
     # Sweep, Compare, Export tabs with lazy loading
-    with tabs[5]:
+    with tabs[6]:
         if LazyTabManager.should_load_tab("Sweep"):
             from webapp.sweep import run_sweep
             st.subheader("Parameter Sweep")
@@ -83,7 +90,7 @@ def render_tabs(
         else:
             LazyTabManager.render_tab_placeholder("Sweep", "Parameter optimization functionality")
 
-    with tabs[6]:
+    with tabs[7]:
         if LazyTabManager.should_load_tab("Compare"):
             from webapp.comparison import render_comparison_tab
             render_comparison_tab(data, shown_trades, strat_choice, strat_params, 
@@ -91,7 +98,7 @@ def render_tabs(
         else:
             LazyTabManager.render_tab_placeholder("Compare", "Multi-strategy comparison")
 
-    with tabs[7]:
+    with tabs[8]:
         if LazyTabManager.should_load_tab("Export"):
             from webapp.export import render_export_tab
             render_export_tab(eq_for_display, data, shown_trades, indicators, strategy)
