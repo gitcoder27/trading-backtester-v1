@@ -78,8 +78,22 @@ The web app provides a user-friendly interface for all your backtesting needs.
 
 ## Requirements
 
+### Python Dependencies
 - Python 3.8+
 - The required Python packages are listed in `requirements.txt`.
+
+### Chart Library Management
+The application uses **TradingView Lightweight Charts** for interactive financial charting. The chart library is managed through an automated npm-based system:
+
+- **Node.js 11.0+** (for chart library management)
+- Chart library automatically managed via npm
+- No manual downloads required - stays updated automatically
+
+**Key Chart Features:**
+- Interactive candlestick charts with trades
+- Real-time price overlays and indicators
+- Performance-optimized rendering
+- Offline-capable (local library files)
 
 ---
 
@@ -100,6 +114,15 @@ The web app provides a user-friendly interface for all your backtesting needs.
 3.  **Install the dependencies:**
     ```bash
     pip install -r requirements.txt
+    ```
+
+4.  **Install chart library dependencies (one-time setup):**
+    ```bash
+    # Install Node.js dependencies for chart library management
+    npm install
+
+    # Download the latest chart library
+    npm run update-charts
     ```
 
 ---
@@ -125,6 +148,32 @@ The web app provides an interactive and intuitive way to run backtests and analy
     - **Execution & Options:** Set your execution parameters, such as lots, fees, and trade filters.
 
 4.  **Run the backtest:** Click the "Run Backtest" button to start the backtest. The results will be displayed in the various tabs.
+
+### Chart Library Management
+
+The TradingView chart library is automatically managed and kept up-to-date:
+
+```bash
+# Update chart library to latest version
+npm run update-charts
+
+# Check for updates without downloading
+npm run check-updates
+
+# Build specific version (if needed)
+npm run build
+
+# Clean chart library files
+npm run clean
+```
+
+**Chart Library Features:**
+- **TV Chart Beta**: Interactive TradingView-style charts with trades and indicators
+- **Automatic Updates**: Library stays current with latest features and bug fixes
+- **Offline Support**: Charts work without internet connection
+- **Performance Optimized**: Local files load faster than CDN
+
+**Current Version**: The system automatically manages the latest version (currently v5.0.8).
 
 ### Command-Line Interface (CLI)
 

@@ -5,3 +5,20 @@ __pycache__/
 # Ignore results directory
 results/
 backtester/__pycache__/__init__.cpython-313.pyc
+
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs
+*.log
