@@ -82,18 +82,7 @@ def main():
 
     # Initialize strategy
     strategy_params = {'debug': args.debug}
-    strategy = EMAPullbackScalperDailyTargetStrategy(params=strategy_params)
-    # strategy = OpeningRangeBreakoutScalper(params=strategy_params)
-    # strategy = AwesomeScalperStrategy(params=strategy_params)
-    # strategy = IntradayEmaTradeStrategy(params=strategy_params)
-    # strategy = MeanReversionConfirmedScalperDailyTargetStrategy(params=strategy_params)
-    # strategy = MomentumScalperStrategy(params=strategy_params)
-    # strategy = EMA44ScalperStrategy()
-    # strategy = BBandsScalperStrategy()
-    # strategy = FirstCandleBreakoutStrategy(params=strategy_params)
-    # strategy = RSICrossStrategy(params=strategy_params)
-    # strategy = EMA50ScalperStrategy(params=strategy_params)
-    # strategy = EMA10ScalperStrategy(params=strategy_params)
+    strategy = EMA10ScalperStrategy(params=strategy_params)
 
     # Run backtest
     engine = BacktestEngine(

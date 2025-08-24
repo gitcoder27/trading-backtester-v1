@@ -115,12 +115,34 @@ def render_sidebar():
                     for config in params_config:
                         # Currently only supports number_input, can be extended
                         if config["type"] == "number_input":
-                            value = st.number_input(
+                            # Determine if this should be float or int based on step
+                            step = config.get("step", 1)
+                            is_float = isinstance(step, float) or step != int(step)
+                            default_value = st.session_state.get(config["name"], config["default"])
+                            
+                            if is_float:
+                                value = st.number_input(
+                                    label=config["label"],
+                                    value=float(default_value),
+                                    min_value=config.get("min"),
+                                    max_value=config.get("max"),
+                                    step=step,
+                                    key=config["name"]
+                                )
+                            else:
+                                value = st.number_input(
+                                    label=config["label"],
+                                    value=int(default_value),
+                                    min_value=config.get("min"),
+                                    max_value=config.get("max"),
+                                    step=step,
+                                    key=config["name"]
+                                )
+                            strat_params[config["param_key"]] = value
+                        elif config["type"] == "text_input":
+                            value = st.text_input(
                                 label=config["label"],
-                                value=int(st.session_state.get(config["name"], config["default"])),
-                                min_value=config.get("min"),
-                                max_value=config.get("max"),
-                                step=config.get("step"),
+                                value=str(st.session_state.get(config["name"], config["default"])),
                                 key=config["name"]
                             )
                             strat_params[config["param_key"]] = value
