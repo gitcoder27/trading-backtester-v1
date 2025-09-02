@@ -5,6 +5,101 @@ class AwesomeScalperStrategy(StrategyBase):
     """
     A scalping strategy that combines Bollinger Bands and RSI for entry signals.
     """
+    
+    @classmethod
+    def get_params_config(cls):
+        """Return parameter configuration for UI generation"""
+        return [
+            {
+                "name": "bb_length",
+                "label": "Bollinger Bands Period",
+                "type": "number_input",
+                "default": 20,
+                "min": 5,
+                "max": 50,
+                "step": 1,
+                "param_key": "bb_length",
+                "description": "Period for Bollinger Bands calculation"
+            },
+            {
+                "name": "bb_std",
+                "label": "Bollinger Bands Std Dev",
+                "type": "number_input",
+                "default": 2.0,
+                "min": 0.5,
+                "max": 5.0,
+                "step": 0.1,
+                "param_key": "bb_std",
+                "description": "Standard deviation multiplier for Bollinger Bands"
+            },
+            {
+                "name": "rsi_period",
+                "label": "RSI Period",
+                "type": "number_input",
+                "default": 14,
+                "min": 5,
+                "max": 30,
+                "step": 1,
+                "param_key": "rsi_period",
+                "description": "Period for RSI calculation"
+            },
+            {
+                "name": "rsi_overbought",
+                "label": "RSI Overbought Level",
+                "type": "number_input",
+                "default": 70,
+                "min": 60,
+                "max": 90,
+                "step": 1,
+                "param_key": "rsi_overbought",
+                "description": "RSI level considered overbought"
+            },
+            {
+                "name": "rsi_oversold",
+                "label": "RSI Oversold Level",
+                "type": "number_input",
+                "default": 30,
+                "min": 10,
+                "max": 40,
+                "step": 1,
+                "param_key": "rsi_oversold",
+                "description": "RSI level considered oversold"
+            },
+            {
+                "name": "ema_period",
+                "label": "EMA Trend Period",
+                "type": "number_input",
+                "default": 200,
+                "min": 50,
+                "max": 500,
+                "step": 10,
+                "param_key": "ema_period",
+                "description": "Period for trend-following EMA"
+            },
+            {
+                "name": "atr_period",
+                "label": "ATR Period",
+                "type": "number_input",
+                "default": 14,
+                "min": 5,
+                "max": 30,
+                "step": 1,
+                "param_key": "atr_period",
+                "description": "Period for ATR calculation"
+            },
+            {
+                "name": "atr_multiplier",
+                "label": "ATR Stop Loss Multiplier",
+                "type": "number_input",
+                "default": 2.0,
+                "min": 0.5,
+                "max": 5.0,
+                "step": 0.1,
+                "param_key": "atr_multiplier",
+                "description": "ATR multiplier for stop loss calculation"
+            }
+        ]
+    
     def __init__(self, params=None):
         super().__init__(params)
         p = params or {}

@@ -1,0 +1,38 @@
+"""
+Backend-specific requirements for FastAPI trading backtester
+Extends the main requirements.txt with backend dependencies
+"""
+
+# Core FastAPI dependencies
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Database and ORM
+sqlalchemy>=2.0.23
+alembic>=1.13.1
+
+# Background tasks and async support
+python-multipart>=0.0.6
+
+# Existing dependencies from main requirements.txt
+pandas
+numpy
+matplotlib
+seaborn
+plotly
+tqdm
+jinja2
+numba
+psutil
+
+# Testing (backend-specific)
+pytest
+pytest-cov
+pytest-asyncio
+httpx  # for testing FastAPI endpoints
+
+# Optional: Will be added in later phases
+# redis>=5.0.1
+# celery>=5.3.4

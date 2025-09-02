@@ -1,0 +1,75 @@
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+export interface UploadResponse {
+  dataset_id: string;
+  filename: string;
+  size: number;
+  rows: number;
+  preview: any[];
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface SystemHealth {
+  status: 'healthy' | 'degraded' | 'down';
+  database: boolean;
+  api: boolean;
+  jobs: {
+    running: number;
+    queued: number;
+    failed: number;
+  };
+  memory_usage: number;
+  disk_usage: number;
+  uptime: number;
+}
+
+export type Theme = 'light' | 'dark' | 'auto';
+
+export interface UserPreferences {
+  theme: Theme;
+  default_commission: number;
+  default_slippage: number;
+  default_initial_capital: number;
+  chart_preferences: {
+    show_trades: boolean;
+    show_signals: boolean;
+    chart_type: 'candlestick' | 'line' | 'area';
+  };
+  table_preferences: {
+    page_size: number;
+    auto_refresh: boolean;
+    refresh_interval: number;
+  };
+}
+
+export interface NotificationSettings {
+  backtest_completion: boolean;
+  optimization_completion: boolean;
+  job_failures: boolean;
+  system_alerts: boolean;
+}
