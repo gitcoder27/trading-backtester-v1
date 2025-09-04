@@ -375,3 +375,48 @@ def test_daily_profit_target_triggers(monkeypatch):
     summary = result['daily_summary']
     assert bool(summary['hit_target'].iloc[0])
     assert bool(trade_log['daily_target_hit'].iloc[0])
+
+
+class DailyProfitTargetPNLStrategy(StrategyBase):
+    _use_fast_vectorized = False
+
+    def generate_signals(self, data):
+        df = data.copy()
+        # Enter on the first bar, then generate another signal to check if it's ignored
+        df['signal'] = [1, 0, 1, 0]
+        return df
+
+    def should_exit(self, position, row, entry_price):
+        # Exit on the second bar
+        if row.name == 1:
+             return True, "Profit"
+        return False, ""
+
+def test_daily_profit_target_with_pnl():
+    ts = pd.to_datetime(
+        [
+            '2024-01-01 10:00',
+            '2024-01-01 10:01',
+            '2024-01-01 10:02',
+            '2024-01-01 10:03',
+        ]
+    )
+    data = pd.DataFrame({'timestamp': ts, 'close': [100.0, 102.0, 100.0, 101.0]})
+    engine = BacktestEngine(
+        data,
+        DailyProfitTargetPNLStrategy(),
+        intraday=True,
+        daily_profit_target=100, # PNL target
+        option_delta=1, # to make normal_pnl and pnl different
+        lots=1,
+        option_price_per_unit=75
+    )
+    result = engine.run()
+    trade_log = result['trade_log']
+    # normal_pnl will be 2. pnl will be 2 * 75 = 150.
+    # The daily profit target is 100.
+    # The bug is that daily_points accumulates normal_pnl, so it will be 2, which is less than 100.
+    # The session will not be closed, and a second trade will be opened.
+    # With the fix, daily_points will accumulate pnl, so it will be 150, which is > 100.
+    # The session will be closed, and only one trade should be in the log.
+    assert len(trade_log) == 1

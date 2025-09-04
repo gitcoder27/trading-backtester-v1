@@ -393,7 +393,7 @@ class BacktestEngine:
                     trade['exit_reason'] = exit_reason
                     trade_log.append(trade)
                     equity += trade['pnl']
-                    daily_points += trade.get('normal_pnl', 0)
+                    daily_points += trade.get('pnl', 0)
                     if (
                         self.daily_profit_target is not None
                         and daily_points >= self.daily_profit_target
