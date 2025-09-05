@@ -33,15 +33,29 @@ class BacktestService:
     
     def run_backtest(
         self,
-        data,
-        strategy: str,
+        data=None,
+        strategy: str = None,
         strategy_params=None,
         engine_options=None,
-        progress_callback=None
+        progress_callback=None,
+        dataset_path: str = None,
+        csv_bytes: bytes = None,
     ):
-        """Run backtest - uses modular service with full compatibility"""
+        """Run backtest - uses modular service with full compatibility.
+        Accepts legacy arguments like dataset_path/csv_bytes in addition to data.
+        """
+        # Coerce legacy args into the unified 'data' parameter
+        input_data = data
+        if input_data is None:
+            if csv_bytes is not None:
+                input_data = csv_bytes
+            elif dataset_path is not None:
+                input_data = dataset_path
+        if input_data is None:
+            raise ValueError("No data source provided: pass data, dataset_path, or csv_bytes")
+
         return self.modular_service.run_backtest(
-            data=data,
+            data=input_data,
             strategy=strategy,
             strategy_params=strategy_params,
             engine_options=engine_options,
@@ -142,6 +156,61 @@ class BacktestService:
         return self.modular_service.result_processor._serialize_results(
             equity_data, trades_data, metrics, {}
         )
+
+    # Compatibility helpers expected by existing tests
+    def load_strategy(self, strategy_path: str):
+        """Load a strategy class by module path."""
+        try:
+            return self.modular_service.strategy_loader.load_strategy_class(strategy_path)
+        except Exception as e:
+            # Match legacy behavior of raising ValueError
+            raise ValueError(str(e))
+
+    def load_data(self, data=None, dataset_path: str = None, csv_bytes: bytes = None):
+        """Load dataset from path or CSV bytes into a DataFrame."""
+        source = data if data is not None else (csv_bytes if csv_bytes is not None else dataset_path)
+        if source is None:
+            raise ValueError("No data source provided: pass data, dataset_path, or csv_bytes")
+        # Use execution engine's loader
+        return self.modular_service.execution_engine._load_and_validate_data(source)
+
+    def _serialize_timestamp(self, ts):
+        """Serialize timestamps to ISO string, handle NaT gracefully."""
+        import pandas as pd
+        try:
+            if ts is None or (hasattr(pd, 'isna') and pd.isna(ts)):
+                return None
+        except Exception:
+            return None
+        if hasattr(ts, 'isoformat'):
+            return ts.isoformat()
+        return str(ts) if ts is not None else None
+
+    def _serialize_trade(self, trade: dict) -> dict:
+        """Serialize a trade record with robust type coercion."""
+        out = {}
+        import numpy as np
+        import pandas as pd
+        for k, v in (trade or {}).items():
+            # Handle NaT/NaN early
+            try:
+                if hasattr(pd, 'isna') and pd.isna(v):
+                    out[k] = None
+                    continue
+            except Exception:
+                pass
+
+            if hasattr(v, 'isoformat'):
+                out[k] = v.isoformat()
+            elif isinstance(v, (np.integer,)):
+                out[k] = float(v)
+            elif isinstance(v, (np.floating,)):
+                out[k] = float(v)
+            elif isinstance(v, (np.bool_,)):
+                out[k] = bool(v)
+            else:
+                out[k] = v
+        return out
     
     # Enhanced methods available through modular architecture
     def discover_strategies(self):

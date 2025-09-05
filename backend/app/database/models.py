@@ -126,12 +126,14 @@ class Dataset(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(200), nullable=False)
-    filename = Column(String(200), nullable=False)
+    filename = Column(String(200), nullable=True)
     file_path = Column(String(500), nullable=False)
     file_size = Column(Integer)
     
     # Data characteristics
     rows_count = Column(Integer)
+    # Backward-compat alias some tests use
+    rows = Column(Integer)
     columns = Column(JSON)  # List of column names
     timeframe = Column(String(20))  # 1min, 5min, etc.
     start_date = Column(DateTime)

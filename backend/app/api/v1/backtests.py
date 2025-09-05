@@ -8,6 +8,7 @@ import json
 from sqlalchemy.orm import Session
 
 from backend.app.services.backtest_service import BacktestService
+from backend.app.services.backtest.backtest_service import BacktestServiceError
 from backend.app.database.models import get_session_factory, Backtest, Dataset
 from backend.app.schemas.backtest import (
     BacktestRequest, BacktestResponse, BacktestResult, ErrorResponse,
@@ -58,7 +59,7 @@ async def run_backtest(request: BacktestRequest):
             job_id=result_id
         )
         
-    except ValueError as e:
+    except (ValueError, BacktestServiceError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -115,7 +116,7 @@ async def run_backtest_with_upload(
             job_id=result_id
         )
         
-    except ValueError as e:
+    except (ValueError, BacktestServiceError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Backtest failed: {str(e)}")

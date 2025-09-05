@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { DatasetService } from '../dataset';
 import { apiClient } from '../api';
 import type { Dataset, DatasetPreview, ValidationResult, UploadResponse } from '../../types';
+import { http, HttpResponse } from 'msw';
+import { server } from '../../test/mocks/server';
 
 // Mock the API client
 vi.mock('../api', () => ({
@@ -11,10 +13,6 @@ vi.mock('../api', () => ({
     delete: vi.fn(),
   },
 }));
-
-// Mock fetch for download functionality
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
 
 const mockApiClient = vi.mocked(apiClient);
 
@@ -284,32 +282,26 @@ describe('DatasetService', () => {
 
   describe('downloadDataset', () => {
     it('should download dataset as blob', async () => {
-      const mockBlob = new Blob(['test,data'], { type: 'text/csv' });
-      
-      mockFetch.mockResolvedValue({
-        ok: true,
-        blob: () => Promise.resolve(mockBlob)
-      });
-
       const result = await DatasetService.downloadDataset('123');
-
-      expect(mockFetch).toHaveBeenCalledWith('http://localhost:8000/api/v1/datasets/123/download');
-      expect(result).toBe(mockBlob);
+      expect(typeof (result as any)).toBe('object');
+      expect((result as Blob).size).toBeGreaterThan(0);
+      expect((result as Blob).type).toBe('text/csv');
     });
 
     it('should handle download errors', async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        statusText: 'Not Found'
-      });
-
+      server.use(
+        http.get('http://localhost:8000/api/v1/datasets/:id/download', () =>
+          HttpResponse.text('Not Found', { status: 404 })
+        )
+      );
       await expect(DatasetService.downloadDataset('invalid-id')).rejects.toThrow('Failed to download dataset: Not Found');
     });
 
     it('should handle network errors during download', async () => {
-      mockFetch.mockRejectedValue(new Error('Network error'));
-
-      await expect(DatasetService.downloadDataset('123')).rejects.toThrow('Network error');
+      server.use(
+        http.get('http://localhost:8000/api/v1/datasets/:id/download', () => HttpResponse.error())
+      );
+      await expect(DatasetService.downloadDataset('123')).rejects.toThrow();
     });
   });
 

@@ -141,10 +141,18 @@ class ExecutionEngine:
                 csv_string = data.decode('utf-8')
                 validated_data = pd.read_csv(StringIO(csv_string))
                 logger.debug("Loaded data from CSV bytes")
-                
+            
             else:
                 raise ExecutionEngineError(f"Unsupported data type: {type(data)}")
             
+            # Normalize timestamp column if present
+            if 'timestamp' in validated_data.columns:
+                try:
+                    validated_data['timestamp'] = pd.to_datetime(validated_data['timestamp'])
+                except Exception:
+                    # Best-effort conversion with coercion
+                    validated_data['timestamp'] = pd.to_datetime(validated_data['timestamp'], errors='coerce')
+
             # Validate data structure
             self._validate_data_structure(validated_data)
             
@@ -316,14 +324,24 @@ class ExecutionEngine:
         try:
             # Convert to list of dictionaries
             processed = []
+            has_ts_col = 'timestamp' in equity_curve.columns
             for idx, row in equity_curve.iterrows():
                 record = {}
                 
-                # Handle index (timestamp)
-                if hasattr(idx, 'isoformat'):
-                    record['timestamp'] = idx.isoformat()
+                # Prefer explicit timestamp column if present
+                if has_ts_col:
+                    ts_val = row['timestamp']
+                    try:
+                        ts = pd.to_datetime(ts_val)
+                        record['timestamp'] = ts.isoformat()
+                    except Exception:
+                        record['timestamp'] = str(ts_val)
                 else:
-                    record['timestamp'] = str(idx)
+                    # Fallback to index
+                    if hasattr(idx, 'isoformat'):
+                        record['timestamp'] = idx.isoformat()
+                    else:
+                        record['timestamp'] = str(idx)
                 
                 # Handle equity value
                 if 'equity' in row:

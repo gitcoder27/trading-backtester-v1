@@ -478,3 +478,11 @@ class StrategyRegistry:
             result['default_parameters'] = strategy.default_parameters or {}
         
         return result
+
+# Backward-compatible alias expected by tests and docs
+class StrategyService(StrategyRegistry):
+    """Compatibility wrapper.
+    Historically this service was named StrategyService; keep alias to avoid
+    breaking imports in tests and external integrations.
+    """
+    pass

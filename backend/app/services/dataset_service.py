@@ -462,10 +462,10 @@ class DatasetService:
         result = {
             'id': dataset.id,
             'name': dataset.name,
-            'filename': dataset.filename,
+            'filename': dataset.filename or os.path.basename(dataset.file_path) if dataset.file_path else None,
             'file_path': dataset.file_path,
             'file_size': dataset.file_size,
-            'rows_count': dataset.rows_count,
+            'rows_count': dataset.rows_count or dataset.rows,
             'columns': dataset.columns,
             'timeframe': dataset.timeframe,
             'start_date': dataset.start_date.isoformat() if dataset.start_date else None,

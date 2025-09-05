@@ -305,6 +305,7 @@ class BacktestService:
     def get_service_info(self) -> Dict[str, Any]:
         """Get information about the backtest service and its components"""
         return {
+            'version': '1.0.0',
             'service_type': 'ModularBacktestService',
             'components': {
                 'strategy_loader': {

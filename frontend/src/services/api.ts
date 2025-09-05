@@ -2,9 +2,11 @@ const API_BASE_URL = 'http://localhost:8000/api/v1';
 
 export class ApiClient {
   private baseURL: string;
+  private fetchImpl: typeof fetch;
 
-  constructor(baseURL: string = API_BASE_URL) {
+  constructor(baseURL: string = API_BASE_URL, fetchImpl: typeof fetch = globalThis.fetch) {
     this.baseURL = baseURL;
+    this.fetchImpl = fetchImpl;
   }
 
   private async request<T>(
@@ -22,7 +24,7 @@ export class ApiClient {
     };
 
     try {
-      const response = await fetch(url, config);
+      const response = await this.fetchImpl(url, config);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -74,7 +76,7 @@ export class ApiClient {
   async upload<T>(endpoint: string, formData: FormData): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     
-    const response = await fetch(url, {
+    const response = await this.fetchImpl(url, {
       method: 'POST',
       body: formData,
     });

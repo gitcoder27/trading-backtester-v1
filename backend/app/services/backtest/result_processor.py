@@ -110,8 +110,7 @@ class ResultProcessor:
             
             # Ensure timestamp column exists and is properly formatted
             if 'timestamp' in df.columns:
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-                df = df.set_index('timestamp')
+                df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
             
             # Ensure equity column exists
             if 'equity' not in df.columns and len(df.columns) > 0:
@@ -170,11 +169,19 @@ class ResultProcessor:
             # Trade metrics
             if not trades.empty:
                 metrics.update(self._calculate_trade_metrics(trades))
+            else:
+                # Provide required defaults when no trades present
+                metrics.update({'total_trades': 0, 'win_rate': 0.0, 'profit_factor': 0.0})
             
             # Time-based metrics
             if not equity_curve.empty:
                 metrics.update(self._calculate_time_metrics(equity_curve))
             
+            # Ensure required keys exist for schema compliance
+            metrics.setdefault('total_trades', len(trades))
+            metrics.setdefault('win_rate', 0.0)
+            metrics.setdefault('profit_factor', 0.0)
+
             logger.debug(f"Calculated {len(metrics)} metrics")
             return metrics
             
@@ -185,20 +192,20 @@ class ResultProcessor:
     def _calculate_return_metrics(self, equity_curve: pd.DataFrame, initial_cash: float) -> Dict[str, Any]:
         """Calculate return-based metrics"""
         try:
-            equity_values = equity_curve['equity']
+            eq_df = equity_curve[['equity']] if 'equity' in equity_curve.columns else equity_curve
             
             # Total return
-            total_return_val = total_return(equity_values, initial_cash)
+            total_return_val = total_return(eq_df)
             total_return_pct = total_return_val * 100
             
             # Sharpe ratio
-            sharpe = sharpe_ratio(equity_values)
+            sharpe = sharpe_ratio(eq_df)
             
             return {
                 'total_return': total_return_val,
                 'total_return_pct': total_return_pct,
                 'sharpe_ratio': sharpe,
-                'final_equity': float(equity_values.iloc[-1]) if len(equity_values) > 0 else initial_cash
+                'final_equity': float(eq_df['equity'].iloc[-1]) if 'equity' in eq_df.columns and len(eq_df) > 0 else initial_cash
             }
             
         except Exception as e:
@@ -213,10 +220,10 @@ class ResultProcessor:
     def _calculate_risk_metrics(self, equity_curve: pd.DataFrame) -> Dict[str, Any]:
         """Calculate risk-based metrics"""
         try:
-            equity_values = equity_curve['equity'] if 'equity' in equity_curve.columns else equity_curve.iloc[:, 0]
+            eq_df = equity_curve[['equity']] if 'equity' in equity_curve.columns else equity_curve
             
             # Max drawdown
-            max_dd = max_drawdown(equity_values)
+            max_dd = max_drawdown(eq_df)
             max_dd_pct = max_dd * 100
             
             return {
@@ -299,11 +306,8 @@ class ResultProcessor:
     def _calculate_time_metrics(self, equity_curve: pd.DataFrame) -> Dict[str, Any]:
         """Calculate time-based metrics"""
         try:
-            # Trading sessions
-            if hasattr(equity_curve.index, 'date'):
-                trading_days = trading_sessions_days(equity_curve.index)
-            else:
-                trading_days = len(equity_curve)
+            # Trading sessions based on timestamp column
+            trading_days = trading_sessions_days(equity_curve)
             
             return {
                 'trading_sessions_days': trading_days,
@@ -325,15 +329,26 @@ class ResultProcessor:
         raw_results: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Serialize all results into final format"""
+        execution_info = raw_results.get('execution_info', {}) if isinstance(raw_results, dict) else {}
+        engine_cfg = execution_info.get('engine_config', {}) if isinstance(execution_info, dict) else {}
+        # Sanitize metrics for JSON (no NaN/Inf)
+        clean_metrics = {}
+        for k, v in (metrics or {}).items():
+            try:
+                if isinstance(v, float) and (pd.isna(v) or not np.isfinite(v)):
+                    clean_metrics[k] = 0.0
+                else:
+                    clean_metrics[k] = v
+            except Exception:
+                clean_metrics[k] = v
+
         return {
             'success': True,
             'equity_curve': equity_curve,
-            'trades': trades,
-            'metrics': metrics,
-            'raw_data': {
-                'engine_result': raw_results.get('raw_engine_result', {}),
-                'execution_info': raw_results.get('execution_info', {})
-            }
+            'trade_log': trades,
+            'metrics': clean_metrics,
+            'indicators': {},
+            'engine_config': engine_cfg,
         }
     
     def save_to_database(self, job_id: int, processed_results: Dict[str, Any]) -> bool:
