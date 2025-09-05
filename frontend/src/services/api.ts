@@ -2,11 +2,14 @@ const API_BASE_URL = 'http://localhost:8000/api/v1';
 
 export class ApiClient {
   private baseURL: string;
-  private fetchImpl: typeof fetch;
+  private fetchImpl: (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
 
-  constructor(baseURL: string = API_BASE_URL, fetchImpl: typeof fetch = globalThis.fetch) {
+  constructor(baseURL: string = API_BASE_URL, fetchImpl?: typeof fetch) {
     this.baseURL = baseURL;
-    this.fetchImpl = fetchImpl;
+    // Avoid storing bare window.fetch reference to prevent "Illegal invocation" in some environments
+    this.fetchImpl = fetchImpl
+      ? ((...args) => fetchImpl(...args))
+      : ((...args) => globalThis.fetch(...args));
   }
 
   private async request<T>(
