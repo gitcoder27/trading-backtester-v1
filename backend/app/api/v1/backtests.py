@@ -258,3 +258,11 @@ async def list_backtests(
         raise HTTPException(status_code=500, detail=f"Failed to retrieve backtests: {str(e)}")
     finally:
         db.close()
+
+# Alias without trailing slash for clients that call /api/v1/backtests
+@router.get("", response_model=Dict[str, Any])
+async def list_backtests_no_slash(
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(50, ge=1, le=100, description="Number of items per page")
+):
+    return await list_backtests(page=page, size=size)

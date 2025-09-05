@@ -249,6 +249,11 @@ async def list_jobs(limit: int = 50):
         "total": len(jobs)
     }
 
+# Alias without trailing slash for clients that call /api/v1/jobs
+@router.get("", response_model=Dict[str, Any])
+async def list_jobs_no_slash(limit: int = 50):
+    return await list_jobs(limit=limit)
+
 
 @router.get("/stats", response_model=Dict[str, Any])
 async def get_job_stats():
