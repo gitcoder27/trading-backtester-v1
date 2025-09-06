@@ -68,7 +68,7 @@ class AnalyticsService:
             risk_metrics = self.risk_calc.compute_risk_metrics(equity_curve)
             trade_analysis = self.trade_analyzer.analyze_trades_comprehensive(trades)
             
-            return {
+            response = {
                 'success': True,
                 'backtest_id': backtest_id,
                 'performance': {
@@ -78,6 +78,8 @@ class AnalyticsService:
                     'trade_analysis': trade_analysis
                 }
             }
+            # Sanitize for JSON (avoid NaN/Inf causing 500s)
+            return self.formatter.sanitize_json(response)
         finally:
             db.close()
     

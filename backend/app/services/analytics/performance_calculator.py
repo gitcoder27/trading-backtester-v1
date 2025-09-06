@@ -206,7 +206,12 @@ class PerformanceCalculator:
             return len(trades) if direction == 'long' else 0  # Default assumption
         
         direction_col = 'direction' if 'direction' in trades.columns else 'side'
-        direction_trades = trades[trades[direction_col].str.lower() == direction.lower()]
+        trades_copy = trades.copy()
+        try:
+            trades_copy[direction_col] = trades_copy[direction_col].astype(str).str.lower()
+        except Exception:
+            return len(trades_copy) if direction.lower() == 'long' else 0
+        direction_trades = trades_copy[trades_copy[direction_col] == direction.lower()]
         return len(direction_trades)
     
     def _count_winning_direction_trades(self, trades: pd.DataFrame, direction: str) -> int:
@@ -217,15 +222,20 @@ class PerformanceCalculator:
         direction_col = 'direction' if 'direction' in trades.columns else 'side'
         if direction_col not in trades.columns:
             # If no direction info, assume all long and count winning trades
-            if direction == 'long':
-                return len(trades[trades['pnl'] > 0])
+            pnl_series = pd.to_numeric(trades['pnl'], errors='coerce').fillna(0)
+            if direction.lower() == 'long':
+                return int((pnl_series > 0).sum())
             return 0
         
-        direction_trades = trades[
-            (trades[direction_col].str.lower() == direction.lower()) & 
-            (trades['pnl'] > 0)
-        ]
-        return len(direction_trades)
+        trades_copy = trades.copy()
+        try:
+            trades_copy[direction_col] = trades_copy[direction_col].astype(str).str.lower()
+        except Exception:
+            return 0
+        pnl_series = pd.to_numeric(trades_copy['pnl'], errors='coerce').fillna(0)
+        direction_mask = trades_copy[direction_col] == direction.lower()
+        winning_mask = pnl_series > 0
+        return int((direction_mask & winning_mask).sum())
     
     def compute_rolling_metrics(self, equity_curve: pd.DataFrame, window: int = 50) -> pd.DataFrame:
         """Compute rolling performance metrics"""
