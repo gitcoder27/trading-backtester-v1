@@ -50,6 +50,7 @@ interface TradingViewChartProps {
   loading?: boolean;
   showControls?: boolean;
   autoFit?: boolean;
+  dataBadge?: string; // small identifier like 'Real' or 'Sim'
 }
 
 const TradingViewChart: React.FC<TradingViewChartProps> = ({
@@ -61,7 +62,8 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   title = 'Price Chart',
   loading = false,
   showControls = true,
-  autoFit = true
+  autoFit = true,
+  dataBadge
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -373,8 +375,13 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     <div className={`relative bg-gray-900 rounded-lg overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700">
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3">
           <h3 className="text-lg font-semibold text-white">{title}</h3>
+          {dataBadge && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 border border-gray-600">
+              {dataBadge}
+            </span>
+          )}
           {candleData.length > 0 && (
             <span className="text-sm text-gray-400">
               {candleData.length.toLocaleString()} candles

@@ -37,11 +37,24 @@ async def run_backtest(request: BacktestRequest):
         # Convert Pydantic model to dict for service
         engine_options = request.engine_options.model_dump() if request.engine_options else {}
         
+        # Resolve dataset path if dataset ID provided
+        dataset_path = request.dataset_path
+        if request.dataset and not dataset_path:
+            SessionLocal = get_session_factory()
+            db = SessionLocal()
+            try:
+                ds = db.query(Dataset).filter(Dataset.id == int(request.dataset)).first()
+                if not ds:
+                    raise HTTPException(status_code=404, detail=f"Dataset with ID {request.dataset} not found")
+                dataset_path = ds.file_path
+            finally:
+                db.close()
+
         # Run the backtest
         result_data = backtest_service.run_backtest(
             strategy=request.strategy,
             strategy_params=request.strategy_params,
-            dataset_path=request.dataset_path,
+            dataset_path=dataset_path,
             engine_options=engine_options
         )
         

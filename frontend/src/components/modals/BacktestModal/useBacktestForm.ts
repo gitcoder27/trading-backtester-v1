@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { showToast } from '../../ui/Toast';
+import { apiClient } from '../../../services/api';
 import type { EnhancedBacktestConfig, Strategy, Dataset } from './types';
 import type { BacktestConfig as BaseBacktestConfig } from '../../../types';
 
@@ -41,13 +42,13 @@ export const useBacktestForm = (isOpen: boolean) => {
 
   const loadStrategies = async () => {
     try {
-      const response = await fetch('/api/v1/strategies/');
-      const data = await response.json();
-      if (data.success) {
-        setStrategies(data.strategies);
+      const data = await apiClient.get<{ success: boolean; strategies: Strategy[]; total?: number }>('/strategies/');
+      if ((data as any).success !== false) {
+        setStrategies((data as any).strategies || []);
         // Auto-select first strategy if none selected
-        if (data.strategies.length > 0 && !config.strategy_id) {
-          setConfig(prev => ({ ...prev, strategy_id: data.strategies[0].id.toString() }));
+        const list = ((data as any).strategies || []) as Strategy[];
+        if (list.length > 0 && !config.strategy_id) {
+          setConfig(prev => ({ ...prev, strategy_id: (list[0].id as any).toString() }));
         }
       }
     } catch (error) {
@@ -58,13 +59,13 @@ export const useBacktestForm = (isOpen: boolean) => {
 
   const loadDatasets = async () => {
     try {
-      const response = await fetch('/api/v1/datasets/');
-      const data = await response.json();
-      if (data.success) {
-        setDatasets(data.datasets);
+      const data = await apiClient.get<{ success: boolean; datasets: Dataset[]; total?: number }>('/datasets/');
+      if ((data as any).success !== false) {
+        setDatasets((data as any).datasets || []);
         // Auto-select first dataset if none selected
-        if (data.datasets.length > 0 && !config.dataset_id) {
-          setConfig(prev => ({ ...prev, dataset_id: data.datasets[0].id.toString() }));
+        const list = ((data as any).datasets || []) as Dataset[];
+        if (list.length > 0 && !config.dataset_id) {
+          setConfig(prev => ({ ...prev, dataset_id: (list[0].id as any).toString() }));
         }
       }
     } catch (error) {

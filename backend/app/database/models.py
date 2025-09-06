@@ -132,8 +132,11 @@ class Dataset(Base):
     
     # Data characteristics
     rows_count = Column(Integer)
-    # Backward-compat alias some tests use
-    rows = Column(Integer)
+    # Backward-compat alias for code/tests that reference `rows`.
+    # Do not map a separate DB column to avoid schema mismatch errors.
+    @property
+    def rows(self):  # type: ignore[override]
+        return self.rows_count
     columns = Column(JSON)  # List of column names
     timeframe = Column(String(20))  # 1min, 5min, etc.
     start_date = Column(DateTime)

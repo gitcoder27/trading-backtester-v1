@@ -11,6 +11,7 @@ from pathlib import Path
 import hashlib
 
 from backend.app.database.models import get_session_factory, Dataset
+from backend.app.utils.path_utils import resolve_dataset_path
 
 
 class DatasetService:
@@ -506,12 +507,13 @@ class DatasetService:
             if not dataset:
                 return {'success': False, 'error': 'Dataset not found'}
             
-            if not os.path.exists(dataset.file_path):
-                return {'success': False, 'error': 'Dataset file not found on disk'}
+            file_path = resolve_dataset_path(dataset.file_path)
+            if not os.path.exists(file_path):
+                return {'success': False, 'error': f'Dataset file not found on disk: {dataset.file_path}'}
             
             # Load the data
             try:
-                df = pd.read_csv(dataset.file_path)
+                df = pd.read_csv(file_path)
                 
                 # Try to identify timestamp column
                 timestamp_col = None
@@ -560,3 +562,5 @@ class DatasetService:
                 
         finally:
             db.close()
+
+    # path helpers provided by backend.app.utils.path_utils

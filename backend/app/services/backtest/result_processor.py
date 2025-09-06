@@ -65,7 +65,8 @@ class ResultProcessor:
             
             # Extract data from raw results
             equity_curve_data = raw_results.get('equity_curve', [])
-            trades_data = raw_results.get('trades', [])
+            # Accept both 'trades' and 'trade_log' from execution engine
+            trades_data = raw_results.get('trades') or raw_results.get('trade_log') or []
             
             # Convert to DataFrames for metrics calculation
             equity_df = self._create_equity_dataframe(equity_curve_data)
@@ -150,9 +151,9 @@ class ResultProcessor:
     
     def _calculate_comprehensive_metrics(
         self, 
-        equity_curve: pd.DataFrame, 
-        trades: pd.DataFrame, 
-        initial_cash: float
+            equity_curve: pd.DataFrame, 
+            trades: pd.DataFrame, 
+            initial_cash: float
     ) -> Dict[str, Any]:
         """Calculate comprehensive backtest metrics with error handling"""
         metrics = {}
