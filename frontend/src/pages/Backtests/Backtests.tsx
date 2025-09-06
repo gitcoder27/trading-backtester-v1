@@ -24,6 +24,7 @@ interface BacktestDisplay {
   totalTrades: number;
   winRate: string;
   createdAt: string;
+  createdAtTs: number; // for robust sorting
   duration: string;
 }
 
@@ -80,7 +81,6 @@ const Backtests: React.FC = () => {
         loadBacktests(),
         loadRecentJobs(),
       ]);
-      calculateStats();
     } catch (error) {
       console.error('Failed to load data:', error);
       showToast.error('Failed to load backtest data');
@@ -131,6 +131,20 @@ const Backtests: React.FC = () => {
         const cleanStrategyName = strategyName.includes('.') 
           ? strategyName.split('.').pop() || strategyName
           : strategyName;
+
+        // Normalize return percent with sign for consistent coloring
+        const deriveReturnPercent = (): string => {
+          let pct: number | null = null;
+          if (typeof metrics.total_return_percent === 'number') {
+            pct = metrics.total_return_percent;
+          } else if (typeof metrics.total_return === 'number') {
+            // If backend provided a fraction, convert to percentage
+            pct = Math.abs(metrics.total_return) <= 1 ? metrics.total_return * 100 : metrics.total_return;
+          }
+          if (pct === null || Number.isNaN(pct)) return 'N/A';
+          const sign = pct > 0 ? '+' : '';
+          return `${sign}${pct.toFixed(2)}%`;
+        };
         
         return {
           id: bt.id,
@@ -140,11 +154,7 @@ const Backtests: React.FC = () => {
             ? bt.dataset_name 
             : 'NIFTY Aug 2025 (1min)',
           status: (bt.status === 'error' ? 'failed' : bt.status) || 'pending',
-          totalReturn: metrics.total_return_percent 
-            ? `${metrics.total_return_percent.toFixed(2)}%` 
-            : metrics.total_return 
-            ? `${(metrics.total_return * 100).toFixed(2)}%` 
-            : 'N/A',
+          totalReturn: deriveReturnPercent(),
           sharpeRatio: metrics.sharpe_ratio || 0,
           maxDrawdown: metrics.max_drawdown_percent
             ? `${metrics.max_drawdown_percent.toFixed(2)}%`
@@ -154,6 +164,7 @@ const Backtests: React.FC = () => {
           totalTrades: metrics.total_trades || 0,
           winRate: metrics.win_rate ? `${(metrics.win_rate * 100).toFixed(1)}%` : 'N/A',
           createdAt: new Date(bt.created_at).toLocaleDateString(),
+          createdAtTs: new Date(bt.created_at).getTime(),
           duration: bt.completed_at 
             ? formatDuration(bt.created_at, bt.completed_at)
             : bt.status === 'running' ? 'In Progress' : 'Pending'
@@ -166,8 +177,8 @@ const Backtests: React.FC = () => {
         const bNum = extractJobIdNumber(b.jobId);
         if (aNum !== bNum) return bNum - aNum;
         // Fallback to createdAt date desc if no jobId or equal
-        const aDate = new Date(a.createdAt).getTime();
-        const bDate = new Date(b.createdAt).getTime();
+        const aDate = a.createdAtTs;
+        const bDate = b.createdAtTs;
         return bDate - aDate;
       });
 
@@ -193,23 +204,37 @@ const Backtests: React.FC = () => {
     }
   };
 
-  const calculateStats = () => {
+  // Recalculate stats whenever backtests change and fetch running job count
+  useEffect(() => {
     const completed = backtests.filter(bt => bt.status === 'completed');
-    const running = backtests.filter(bt => bt.status === 'running');
-    const avgReturn = completed.length > 0 
+    const avgReturn = completed.length > 0
       ? completed.reduce((acc, bt) => {
-          const returnValue = parseFloat(bt.totalReturn.replace('%', '').replace('+', ''));
-          return acc + (isNaN(returnValue) ? 0 : returnValue);
+          const value = parseFloat(bt.totalReturn.replace('%', '').replace('+', ''));
+          return acc + (Number.isNaN(value) ? 0 : value);
         }, 0) / completed.length
       : 0;
 
-    setStats({
+    // Set base stats from backtests
+    setStats(prev => ({
+      ...prev,
       totalBacktests: backtests.length,
       completedBacktests: completed.length,
-      runningJobs: running.length,
       avgReturn
-    });
-  };
+    }));
+
+    // Then update running jobs from the jobs stats endpoint
+    (async () => {
+      try {
+        const res = await JobService.getJobStats();
+        const running = (res as any)?.stats?.running ?? 0;
+        setStats(prev => ({ ...prev, runningJobs: running }));
+      } catch (e) {
+        // Fallback: estimate running jobs from backtests list
+        const running = backtests.filter(bt => bt.status === 'running').length;
+        setStats(prev => ({ ...prev, runningJobs: running }));
+      }
+    })();
+  }, [backtests]);
 
   const formatDuration = (startTime: string, endTime: string) => {
     const start = new Date(startTime);
@@ -300,10 +325,9 @@ const Backtests: React.FC = () => {
   };
 
   const getReturnColor = (returnStr: string) => {
+    if (returnStr === 'N/A') return 'text-gray-400';
     const isPositive = returnStr.startsWith('+');
-    return isPositive 
-      ? 'text-green-400' 
-      : 'text-red-400';
+    return isPositive ? 'text-green-400' : 'text-red-400';
   };
 
   const handleViewBacktest = (id: string) => {
