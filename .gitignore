@@ -22,3 +22,31 @@ yarn-error.log*
 # Logs
 logs
 *.log
+
+# Python virtual environments
+.venv/
+venv/
+backend/venv/
+
+# Python cache
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+# Coverage and test artifacts
+.coverage
+coverage/
+coverage.xml
+htmlcov/
+frontend/coverage/
+
+# Data artifacts (avoid committing large/private data)
+data/**/*.csv
+data/market_data/
+
+# Local SQLite databases (dev-only)
+backend/database/*.db
+
+# IDE/editor/auxiliary
+.vscode/
+.playwright-mcp/
