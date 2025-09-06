@@ -96,6 +96,24 @@ Default strategy: `strategies.rsi_midday_reversion_scalper.RSIMiddayReversionSca
 
 Outputs include Performance Metrics, Advanced Analytics, and Risk Metrics; equity curve and trades can be saved with `--output-json`.
 
+Example
+
+```bash
+# EMA50 scalper over a date window with engine options
+python cli.py \
+  --file data/nifty_2025_1min_08Aug_12Aug.csv \
+  --strategy strategies.ema50_scalper.EMA50ScalperStrategy \
+  --start 2025-08-08 --end 2025-08-12 \
+  --initial-cash 100000 --lots 1 --option-delta 0.5 --fee-per-trade 4 \
+  --output-json results.json
+
+# Or RSI strategy with params
+python cli.py \
+  --file data/nifty_2025_1min_08Aug_12Aug.csv \
+  --strategy strategies.rsi_midday_reversion_scalper.RSIMiddayReversionScalper \
+  --param rsi_period=14 --param atr_period=14
+```
+
 ---
 
 ## Adding New Strategies
