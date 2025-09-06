@@ -81,6 +81,23 @@ npm -C frontend run dev
 
 ---
 
+## CLI Usage (Optional)
+
+Run backtests directly from the command line and print full performance metrics.
+
+- Basic: `python cli.py --file data/your.csv`
+- With strategy: `python cli.py --file data/your.csv --strategy strategies.ema50_scalper.EMA50ScalperStrategy`
+- Dates: `--start 2025-08-01 --end 2025-08-15`
+- Engine options: `--initial-cash 100000 --lots 1 --option-delta 0.5 --fee-per-trade 4 --intraday`
+- Strategy params: repeat `--param key=value` or `--params-json '{"ema_period":50}'`
+- Output JSON: `--output-json results.json`
+
+Default strategy: `strategies.rsi_midday_reversion_scalper.RSIMiddayReversionScalper`.
+
+Outputs include Performance Metrics, Advanced Analytics, and Risk Metrics; equity curve and trades can be saved with `--output-json`.
+
+---
+
 ## Adding New Strategies
 
 1) Create a new file in `strategies/` (e.g., `my_strategy.py`).
@@ -124,4 +141,3 @@ CSV should include at minimum:
 ## License
 
 MIT License. See `LICENSE` for details.
-
