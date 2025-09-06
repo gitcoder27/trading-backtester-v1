@@ -10,6 +10,7 @@ import type { JobsListProps } from './types';
 
 const JobsList: React.FC<JobsListProps> = ({
   onJobComplete,
+  onJobClick,
   compact = false,
   maxJobs
 }) => {
@@ -52,13 +53,19 @@ const JobsList: React.FC<JobsListProps> = ({
     return (
       <div className="space-y-3">
         {jobs.slice(0, maxJobs).map((job) => (
-          <JobProgressTracker
+          <div
             key={job.id}
-            job={job}
-            onJobComplete={onJobComplete}
-            compact={true}
-            showActions={false}
-          />
+            role="button"
+            className={onJobClick ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md' : ''}
+            onClick={onJobClick ? () => onJobClick(job) : undefined}
+          >
+            <JobProgressTracker
+              job={job}
+              onJobComplete={onJobComplete}
+              compact={true}
+              showActions={false}
+            />
+          </div>
         ))}
         {jobs.length === 0 && (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -112,6 +119,7 @@ const JobsList: React.FC<JobsListProps> = ({
             onCancel={handleCancelJob}
             onDelete={handleDeleteJob}
             onDownload={handleDownloadResults}
+            onClick={onJobClick}
           />
         ))}
 

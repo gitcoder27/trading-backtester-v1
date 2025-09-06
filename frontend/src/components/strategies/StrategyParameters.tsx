@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiClient } from '../../services/api';
 import { Settings, Info } from 'lucide-react';
 
 interface ParameterSchema {
@@ -66,17 +67,17 @@ const StrategyParameters: React.FC<StrategyParametersProps> = ({
     try {
       setLoading(true);
       setError(null);
-      
-      const response = await fetch(`/api/v1/strategies/${strategyId}/schema`);
-      if (!response.ok) {
-        throw new Error(`Failed to load strategy schema: ${response.statusText}`);
+      if (!strategyId) {
+        setSchema({});
+        setParameters({});
+        return;
       }
-      
-      const data = await response.json();
-      if (data.success) {
+      const data = await apiClient.get<any>(`/strategies/${strategyId}/schema`);
+      if ((data as any).success !== false) {
         // Filter out the generic 'params' field and ensure type safety
         const filteredSchema: ParametersSchema = {};
-        Object.entries(data.parameters_schema).forEach(([key, value]) => {
+        const rawSchema = (data as any).parameters_schema || {};
+        Object.entries(rawSchema).forEach(([key, value]) => {
           if (key !== 'params' && typeof value === 'object' && value !== null) {
             filteredSchema[key] = value as ParameterSchema;
           }

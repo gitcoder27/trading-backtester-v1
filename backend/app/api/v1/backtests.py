@@ -8,6 +8,7 @@ import json
 from sqlalchemy.orm import Session
 
 from backend.app.services.backtest_service import BacktestService
+from backend.app.services.backtest.backtest_service import BacktestServiceError
 from backend.app.database.models import get_session_factory, Backtest, Dataset
 from backend.app.schemas.backtest import (
     BacktestRequest, BacktestResponse, BacktestResult, ErrorResponse,
@@ -36,11 +37,24 @@ async def run_backtest(request: BacktestRequest):
         # Convert Pydantic model to dict for service
         engine_options = request.engine_options.model_dump() if request.engine_options else {}
         
+        # Resolve dataset path if dataset ID provided
+        dataset_path = request.dataset_path
+        if request.dataset and not dataset_path:
+            SessionLocal = get_session_factory()
+            db = SessionLocal()
+            try:
+                ds = db.query(Dataset).filter(Dataset.id == int(request.dataset)).first()
+                if not ds:
+                    raise HTTPException(status_code=404, detail=f"Dataset with ID {request.dataset} not found")
+                dataset_path = ds.file_path
+            finally:
+                db.close()
+
         # Run the backtest
         result_data = backtest_service.run_backtest(
             strategy=request.strategy,
             strategy_params=request.strategy_params,
-            dataset_path=request.dataset_path,
+            dataset_path=dataset_path,
             engine_options=engine_options
         )
         
@@ -58,7 +72,7 @@ async def run_backtest(request: BacktestRequest):
             job_id=result_id
         )
         
-    except ValueError as e:
+    except (ValueError, BacktestServiceError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -115,7 +129,7 @@ async def run_backtest_with_upload(
             job_id=result_id
         )
         
-    except ValueError as e:
+    except (ValueError, BacktestServiceError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Backtest failed: {str(e)}")
@@ -257,3 +271,11 @@ async def list_backtests(
         raise HTTPException(status_code=500, detail=f"Failed to retrieve backtests: {str(e)}")
     finally:
         db.close()
+
+# Alias without trailing slash for clients that call /api/v1/backtests
+@router.get("", response_model=Dict[str, Any])
+async def list_backtests_no_slash(
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(50, ge=1, le=100, description="Number of items per page")
+):
+    return await list_backtests(page=page, size=size)

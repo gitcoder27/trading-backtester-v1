@@ -90,7 +90,8 @@ export class JobService {
       parameters: config.parameters || {}
     };
     
-    return apiClient.post<Job>('/jobs', jobRequest);
+    // Important: backend expects trailing slash for POST /jobs/
+    return apiClient.post<Job>('/jobs/', jobRequest);
   }
 
   static async getJobStatus(id: string): Promise<Job> {

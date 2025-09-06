@@ -207,6 +207,18 @@ export const handlers = [
     });
   }),
 
+  // Dataset download endpoint (returns CSV blob-like response)
+  http.get(`${API_BASE_URL}/datasets/:id/download`, ({ params }) => {
+    const csv = 'timestamp,open,high,low,close,volume\n2024-01-01T09:15:00,100,101,99,100.5,1000\n';
+    return new HttpResponse(csv, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv',
+        'Content-Disposition': `attachment; filename="dataset_${String(params.id)}.csv"`,
+      },
+    });
+  }),
+
   // Analytics endpoints
   http.get(`${API_BASE_URL}/analytics/performance/:id`, () => {
     return HttpResponse.json(mockAnalytics.performance);

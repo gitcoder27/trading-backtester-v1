@@ -73,6 +73,7 @@ class JobRunner:
         strategy: Optional[str] = None,
         strategy_params: Optional[Dict[str, Any]] = None,
         dataset_path: Optional[str] = None,
+        dataset_id: Optional[int] = None,
         csv_bytes: Optional[bytes] = None,
         engine_options: Optional[Dict[str, Any]] = None
     ) -> str:
@@ -92,6 +93,7 @@ class JobRunner:
                 strategy,
                 strategy_params,
                 dataset_path,
+                dataset_id,
                 csv_bytes,
                 engine_options
             )
@@ -289,7 +291,9 @@ class JobRunner:
         self, 
         strategy: str, 
         strategy_params: Dict[str, Any],
-        result: Dict[str, Any]
+        result: Dict[str, Any],
+        dataset_path: Optional[str] = None,
+        dataset_id: Optional[int] = None,
     ) -> Optional[int]:
         """Create a backtest record in the database"""
         logger.info(f"Creating backtest record for strategy: {strategy}")
@@ -297,10 +301,29 @@ class JobRunner:
         
         db = self.SessionLocal()
         try:
+            # Attempt to link to an existing dataset by matching filename
+            if not dataset_id and dataset_path:
+                try:
+                    from pathlib import Path
+                    from backend.app.database.models import Dataset
+                    target_name = Path(dataset_path).name.lower()
+                    # Compare by basename to avoid full path mismatches across OS/WSL
+                    candidates = db.query(Dataset).all()
+                    for ds in candidates:
+                        try:
+                            ds_name = Path(ds.file_path).name.lower()
+                            if ds_name == target_name:
+                                dataset_id = ds.id
+                                break
+                        except Exception:
+                            continue
+                except Exception:
+                    dataset_id = None
+
             backtest = Backtest(
                 strategy_name=strategy,
                 strategy_params=strategy_params,
-                dataset_id=None,  # We could enhance this later to link to datasets
+                dataset_id=dataset_id,
                 status="completed",
                 results=result,
                 created_at=datetime.utcnow(),
@@ -336,6 +359,7 @@ class JobRunner:
         strategy: str,
         strategy_params: Dict[str, Any],
         dataset_path: Optional[str],
+        dataset_id: Optional[int],
         csv_bytes: Optional[bytes],
         engine_options: Dict[str, Any]
     ):
@@ -392,7 +416,9 @@ class JobRunner:
                 backtest_id = self._create_backtest_record(
                     strategy=strategy,
                     strategy_params=strategy_params,
-                    result=result.get('result', {})
+                    result=result,
+                    dataset_path=dataset_path,
+                    dataset_id=dataset_id,
                 )
                 logger.info(f"Created backtest record {backtest_id} for job {job_id}")
             

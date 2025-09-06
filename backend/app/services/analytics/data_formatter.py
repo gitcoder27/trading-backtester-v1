@@ -77,6 +77,41 @@ class DataFormatter:
             records.append(record)
         
         return records
+
+    @staticmethod
+    def sanitize_json(data: Any) -> Any:
+        """Recursively sanitize data for JSON serialization.
+
+        - Converts NaN/Inf/-Inf floats to 0.0
+        - Converts numpy types to native Python types
+        - Leaves structures (dict/list) intact while sanitizing children
+        """
+        import math
+        import numpy as np
+
+        # Primitives
+        if isinstance(data, float):
+            if math.isnan(data) or math.isinf(data):
+                return 0.0
+            return float(data)
+        if isinstance(data, (np.floating,)):
+            val = float(data)
+            if math.isnan(val) or math.isinf(val):
+                return 0.0
+            return val
+        if isinstance(data, (np.integer,)):
+            return int(data)
+        if isinstance(data, (np.bool_,)):
+            return bool(data)
+
+        # Containers
+        if isinstance(data, dict):
+            return {k: DataFormatter.sanitize_json(v) for k, v in data.items()}
+        if isinstance(data, list):
+            return [DataFormatter.sanitize_json(v) for v in data]
+
+        # Leave other types as-is (str, None, etc.)
+        return data
     
     @staticmethod
     def get_column_mapping(columns: List[str]) -> Dict[str, str]:

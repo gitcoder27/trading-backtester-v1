@@ -44,6 +44,21 @@ const Backtests: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [submittingBacktest, setSubmittingBacktest] = useState(false);
   const [notifiedJobs, setNotifiedJobs] = useState<Set<string>>(new Set());
+  
+  const extractJobIdNumber = (jobId?: string): number => {
+    if (!jobId) return -Infinity;
+    // Try direct number
+    const asNum = Number(jobId);
+    if (!Number.isNaN(asNum)) return asNum;
+    // Extract last number sequence from string like "job-123"
+    const match = jobId.match(/(\d+)/g);
+    if (match && match.length > 0) {
+      const last = match[match.length - 1];
+      const n = Number(last);
+      if (!Number.isNaN(n)) return n;
+    }
+    return -Infinity;
+  };
 
   useEffect(() => {
     console.log("[DEBUG] Backtests useEffect triggered");
@@ -76,26 +91,36 @@ const Backtests: React.FC = () => {
 
   const loadBacktests = async () => {
     try {
-      const response = await BacktestService.listBacktests({ page: 1, size: 50 });
-      
-      // Debug logging to see what we're getting from the API
-      console.log('[DEBUG] Backtests API response:', response);
-      
-      // Handle the actual API response format - backend returns {success: true, items: [...]} or similar
-      let backtestItems = [];
-      if ((response as any).results) {
-        backtestItems = (response as any).results;
-      } else if ((response as any).data) {
-        backtestItems = (response as any).data;
-      } else if (response.items) {
-        backtestItems = response.items;
-      } else if ((response as any).backtests) {
-        backtestItems = (response as any).backtests;
-      } else if (Array.isArray(response)) {
-        backtestItems = response;
+      // Fetch all backtests across pages to show a complete list
+      const pageSize = 100; // backend allows up to 100
+      const first = await BacktestService.listBacktests({ page: 1, size: pageSize });
+      let items: any[] = [];
+      let total = 0;
+      if ((first as any).results) {
+        items = (first as any).results;
+        total = (first as any).total || items.length;
+      } else if ((first as any).data) {
+        items = (first as any).data;
+        total = (first as any).total || items.length;
+      } else if ((first as any).items) {
+        items = (first as any).items;
+        total = (first as any).total || items.length;
       }
-      
-      console.log('[DEBUG] Processed backtest items:', backtestItems);
+      const pages = Math.max(1, Math.ceil(total / pageSize));
+      const rest: any[] = [];
+      for (let p = 2; p <= pages; p++) {
+        try {
+          const res = await BacktestService.listBacktests({ page: p, size: pageSize });
+          if ((res as any).results) rest.push(...(res as any).results);
+          else if ((res as any).data) rest.push(...(res as any).data);
+          else if ((res as any).items) rest.push(...(res as any).items);
+        } catch (e) {
+          console.warn(`[WARN] Failed to fetch backtests page ${p}:`, e);
+          break;
+        }
+      }
+      const backtestItems = [...items, ...rest];
+      console.log('[DEBUG] Processed backtest items (aggregated):', backtestItems);
       
       const backtestDisplays: BacktestDisplay[] = backtestItems.map((bt: any) => {
         // Extract metrics from the nested results structure
@@ -109,12 +134,12 @@ const Backtests: React.FC = () => {
         
         return {
           id: bt.id,
-          jobId: bt.job_id, // Include job_id from backend
+          jobId: (bt.job_id ?? bt.backtest_job_id)?.toString(), // Normalize to string
           strategy: cleanStrategyName,
           dataset: bt.dataset_name && bt.dataset_name !== 'Unknown Dataset' 
             ? bt.dataset_name 
             : 'NIFTY Aug 2025 (1min)',
-          status: bt.status || 'pending',
+          status: (bt.status === 'error' ? 'failed' : bt.status) || 'pending',
           totalReturn: metrics.total_return_percent 
             ? `${metrics.total_return_percent.toFixed(2)}%` 
             : metrics.total_return 
@@ -135,8 +160,19 @@ const Backtests: React.FC = () => {
         };
       });
       
-      console.log('[DEBUG] Final backtest displays:', backtestDisplays);
-      setBacktests(backtestDisplays);
+      // Sort by jobId descending (most recent on top); fallback to created_at
+      const sorted = [...backtestDisplays].sort((a, b) => {
+        const aNum = extractJobIdNumber(a.jobId);
+        const bNum = extractJobIdNumber(b.jobId);
+        if (aNum !== bNum) return bNum - aNum;
+        // Fallback to createdAt date desc if no jobId or equal
+        const aDate = new Date(a.createdAt).getTime();
+        const bDate = new Date(b.createdAt).getTime();
+        return bDate - aDate;
+      });
+
+      console.log('[DEBUG] Final backtest displays (sorted):', sorted);
+      setBacktests(sorted);
     } catch (error) {
       console.error('Failed to load backtests:', error);
       showToast.error('Failed to load backtests from server');
@@ -225,6 +261,20 @@ const Backtests: React.FC = () => {
     
     // Don't reload data immediately to prevent infinite loop
     // loadData() will be called by the regular polling mechanism
+  };
+
+  const handleJobClick = async (job: Job) => {
+    try {
+      if (job.status === 'running' || job.status === 'pending') {
+        showToast.info('Job still in progress. Please wait to view details.');
+        return;
+      }
+      // Navigate to detail page using job ID; detail will fallback to job results if needed
+      navigate(`/backtests/${job.id}`);
+    } catch (err) {
+      console.error('Failed to open backtest from job:', err);
+      showToast.error('Failed to load backtest details for this job');
+    }
   };
 
   const filteredBacktests = selectedFilter === 'all' 
@@ -405,6 +455,7 @@ const Backtests: React.FC = () => {
             compact={true} 
             maxJobs={3} 
             onJobComplete={handleJobComplete}
+            onJobClick={handleJobClick}
           />
         </Card>
       )}
@@ -449,6 +500,7 @@ const Backtests: React.FC = () => {
                       </Badge>
                     </div>
                     <div className="flex items-center space-x-6 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      <span>Backtest: {backtest.id}</span>
                       {backtest.jobId && <span>Job: {backtest.jobId}</span>}
                       <span>Dataset: {backtest.dataset}</span>
                       <span>Created: {backtest.createdAt}</span>
@@ -570,7 +622,7 @@ const Backtests: React.FC = () => {
         size="xl"
       >
         <div className="max-h-[70vh] overflow-auto">
-          <JobsList onJobComplete={handleJobComplete} />
+          <JobsList onJobComplete={handleJobComplete} onJobClick={handleJobClick} />
         </div>
       </Modal>
     </div>

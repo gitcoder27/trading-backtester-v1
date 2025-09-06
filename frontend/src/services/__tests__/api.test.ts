@@ -1,16 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ApiClient } from '../services/api';
+import { ApiClient } from '../api';
 
-// Mock fetch globally
+// Mock fetch passed into ApiClient (avoid MSW interception and global side effects)
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
 
 describe('ApiClient', () => {
   let apiClient: ApiClient;
   const mockBaseURL = 'http://localhost:8000/api/v1';
 
   beforeEach(() => {
-    apiClient = new ApiClient(mockBaseURL);
+    apiClient = new ApiClient(mockBaseURL, mockFetch as unknown as typeof fetch);
     mockFetch.mockClear();
   });
 

@@ -16,7 +16,7 @@ const JobActions: React.FC<JobActionsProps> = ({
           variant="secondary"
           size="sm"
           icon={Download}
-          onClick={() => onDownload(job.id)}
+          onClick={(e) => { e.stopPropagation(); onDownload(job.id); }}
         >
           Download
         </Button>
@@ -26,7 +26,7 @@ const JobActions: React.FC<JobActionsProps> = ({
           variant="danger"
           size="sm"
           icon={Square}
-          onClick={() => onCancel(job.id)}
+          onClick={(e) => { e.stopPropagation(); onCancel(job.id); }}
         >
           Cancel
         </Button>
@@ -36,7 +36,7 @@ const JobActions: React.FC<JobActionsProps> = ({
           variant="ghost"
           size="sm"
           icon={Trash2}
-          onClick={() => onDelete(job.id)}
+          onClick={(e) => { e.stopPropagation(); onDelete(job.id); }}
         >
           Delete
         </Button>

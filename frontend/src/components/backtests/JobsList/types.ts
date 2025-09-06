@@ -2,6 +2,7 @@ import type { Job, JobStatus } from '../../../types';
 
 export interface JobsListProps {
   onJobComplete?: (job: Job) => void;
+  onJobClick?: (job: Job) => void;
   compact?: boolean;
   maxJobs?: number;
 }
@@ -11,6 +12,7 @@ export interface JobCardProps {
   onCancel: (jobId: string) => void;
   onDelete: (jobId: string) => void;
   onDownload: (jobId: string) => void;
+  onClick?: (job: Job) => void;
 }
 
 export interface JobFiltersProps {

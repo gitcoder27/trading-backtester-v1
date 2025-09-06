@@ -5,6 +5,7 @@ Job management API endpoints for background backtests
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from typing import Optional, Dict, Any
 import json
+import os
 
 from backend.app.tasks.job_runner import get_job_runner, JobStatus
 from backend.app.schemas.backtest import BacktestRequest, EngineOptions
@@ -35,7 +36,21 @@ async def submit_backtest_job(request: BacktestRequest):
                 dataset = db.query(Dataset).filter(Dataset.id == int(request.dataset)).first()
                 if not dataset:
                     raise HTTPException(status_code=404, detail=f"Dataset with ID {request.dataset} not found")
-                dataset_path = dataset.file_path
+                # Prefer stored file_path if it exists
+                candidate = dataset.file_path
+                if candidate and os.path.exists(candidate):
+                    dataset_path = candidate
+                else:
+                    # Try common fallbacks by original filename
+                    filename = (dataset.filename or '').split('/')[-1].split('\\')[-1]
+                    fallback_candidates = [
+                        os.path.join('data', 'market_data', filename),
+                        os.path.join('data', filename)
+                    ]
+                    dataset_path = next((p for p in fallback_candidates if p and os.path.exists(p)), None)
+                    if not dataset_path:
+                        # Last resort: keep original path; the engine will try cross-OS normalization
+                        dataset_path = candidate or filename
             finally:
                 db.close()
         
@@ -63,6 +78,7 @@ async def submit_backtest_job(request: BacktestRequest):
             strategy=strategy_path,
             strategy_params=request.strategy_params,
             dataset_path=dataset_path,
+            dataset_id=int(request.dataset) if request.dataset else None,
             engine_options=engine_options
         )
         
@@ -248,6 +264,11 @@ async def list_jobs(limit: int = 50):
         "jobs": jobs,
         "total": len(jobs)
     }
+
+# Alias without trailing slash for clients that call /api/v1/jobs
+@router.get("", response_model=Dict[str, Any])
+async def list_jobs_no_slash(limit: int = 50):
+    return await list_jobs(limit=limit)
 
 
 @router.get("/stats", response_model=Dict[str, Any])

@@ -3,7 +3,7 @@ FastAPI backend for trading backtester
 Wraps existing backtester framework with web API
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import atexit
@@ -83,3 +83,8 @@ async def root():
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+
+# Generic OPTIONS handler to satisfy preflight checks in tests without Origin header
+@app.options("/{full_path:path}")
+async def preflight_ok(full_path: str):
+    return Response(status_code=200)

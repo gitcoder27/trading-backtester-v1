@@ -1,252 +1,161 @@
 # Trading Backtester Pro 🚀
 
-**A high-performance, interactive, and modular backtesting framework for algorithmic trading strategies.**
+High-performance, modular backtesting framework with a FastAPI backend and a modern React + TypeScript frontend. The previous Streamlit app is now legacy and archived.
 
-This framework allows you to test and analyze your trading strategies on historical market data with exceptional speed and detail. It features a comprehensive command-line interface (CLI) for automated backtesting and a feature-rich web application (built with Streamlit) for interactive analysis, visualization, and strategy optimization.
+## What’s Inside
 
-## ⚡ **NEW: High-Performance Engine**
+- Core backtester engine (Numba-optimized) with rich metrics and HTML reporting
+- FastAPI backend exposing backtesting, datasets, analytics, and optimization APIs
+- React + Vite frontend for interactive analysis and workflow
+- Strategy library with multiple examples (EMA scalpers, RSI, BBands, etc.)
 
-**Process years of 1-minute data in seconds!** Our optimized engine delivers:
-- **300,000+ rows/second** processing speed
-- **10-100x faster** than traditional backtesting
-- **Real-time performance monitoring**
-- **Intelligent optimization suggestions**
-
----
-
-## Key Features
-
-### Core Backtesting Engine
-- **High-Performance Processing:** Vectorized operations with numba JIT compilation for lightning-fast backtesting
-- **Modular Strategy Interface:** Easily add your own custom trading strategies by inheriting from a base class.
-- **Multiple Strategies:** Comes with several built-in strategies, including EMA scalpers, Bollinger Bands, RSI Cross, First Candle Breakout, and mean-reversion variants.
-- **Performance Metrics:** A wide range of performance metrics are calculated, including Sharpe Ratio, Max Drawdown, Profit Factor, Win Rate, Largest Win/Loss, Average Holding Time, and more. Now includes:
-  - **Trading Sessions (days/years):** Accurately counts trading days and converts to years, excluding holidays/weekends.
-  - **PnL Columns:** Both raw price difference (`normal_pnl`) and options-style (`pnl`) are shown in the Trades tab.
-- **HTML Reporting:** Generate detailed HTML reports of your backtest results, including interactive charts and performance statistics.
-- **Trade Logging:** All trades are logged to a CSV file for further analysis.
-- **Detailed Analytics:** Analyze your trading performance with various charts and tables, including equity curves, drawdown plots, monthly returns heatmaps, and total trading sessions (days/years).
-
-### Performance Features
-- **Intelligent Caching:** Automatic data caching prevents reloading same datasets
-- **Memory Optimization:** Efficient data type management and memory usage monitoring
-- **Dual-Mode Processing:** Fast vectorized mode for simple strategies, traditional mode for complex logic
-- **Real-Time Monitoring:** Live performance metrics and optimization suggestions
-
-### Web App (Streamlit UI)
-- **Interactive Backtesting:** Run backtests on the fly by selecting your data, strategy, and parameters from the web interface.
-- **Performance Dashboard:** Real-time processing speed, memory usage, and execution time monitoring
-- **Trades Tab:** Shows both `normal_pnl` and `pnl` columns for each trade.
-- **Overview Tab:** Displays total trading sessions (days/years) based on actual data, excluding holidays and weekends.
-- **Parameter Sweeping:** Optimize your strategies by running a grid search over a range of parameters to find the best-performing combinations.
-- **Strategy Comparison:** Compare the performance of multiple strategies side-by-side.
-- **Detailed Analytics:** Analyze your trading performance with various charts and tables, including equity curves, drawdown plots, and monthly returns heatmaps.
-- **Trade Filtering:** Filter your trades by direction (long/short), time of day, and day of the week to analyze your strategy's performance under different conditions.
-- **Data Upload:** Upload your own historical data in CSV format directly from the web app.
-- **Exporting:** Export your trade log, performance metrics, and reports directly from the web app.
+Legacy notice: The old Streamlit app is no longer used. It remains available under `archive/streamlit-app/` for reference.
 
 ---
 
-## 🚀 Performance Benchmarks
+## Performance Highlights
 
-| Dataset Size | Processing Time | Speed | Real-World Example |
-|-------------|----------------|-------|-------------------|
-| 25,000 rows | 0.032s | 774,503 rows/sec | ~1 month of 1-min data |
-| 60,000 rows | ~0.2s | 300,000+ rows/sec | **42 days of 1-min data** |
-| 525,600 rows | ~2-3s | 200,000+ rows/sec | **1 year of 1-min data** |
-
-**Your 42-day dataset will now process in under 1 second!** 🎯
-
-## Web App Interface
-
-The web app provides a user-friendly interface for all your backtesting needs.
-
-- **Performance Monitoring:**
-  - Real-time execution time and memory usage tracking
-  - Processing speed indicators (rows/second)
-  - Automatic optimization suggestions for large datasets
-- **Main Interface:**
-  - *[Screenshot of the main interface, showing the sidebar with configuration options and the main content area with tabs.]*
-- **Advanced Charting:**
-  - *[Screenshot of the advanced chart, showing trades plotted on a candlestick chart with indicators.]*
-- **Parameter Sweep:**
-  - *[Screenshot of the parameter sweep results, showing a table of results and a heatmap.]*
-- **Strategy Comparison:**
-  - *[Screenshot of the strategy comparison tab, showing the performance of multiple strategies.]*
+- Processes large intraday datasets quickly using vectorized operations + numba
+- Real-time progress and robust analytics via the backend services
+- HTML reports, trade logs, and detailed performance metrics available from the engine
 
 ---
 
-## Requirements
+## Project Structure
 
-### Python Dependencies
-- Python 3.8+
-- The required Python packages are listed in `requirements.txt`.
-
-### Chart Library Management
-The application uses **TradingView Lightweight Charts** for interactive financial charting. The chart library is managed through an automated npm-based system:
-
-- **Node.js 11.0+** (for chart library management)
-- Chart library automatically managed via npm
-- No manual downloads required - stays updated automatically
-
-**Key Chart Features:**
-- Interactive candlestick charts with trades
-- Real-time price overlays and indicators
-- Performance-optimized rendering
-- Offline-capable (local library files)
-
----
-
-## Installation
-
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    cd trading-backtester-v1
-    ```
-
-2.  **Create a virtual environment (recommended):**
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
-    ```
-
-3.  **Install the dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-4.  **Install chart library dependencies (one-time setup):**
-    ```bash
-    # Install Node.js dependencies for chart library management
-    npm install
-
-    # Download the latest chart library
-    npm run update-charts
-    ```
-
----
-
-## Usage
-
-You can run the backtester using either the web app (recommended) or the command-line interface.
-
-### Web App (Recommended)
-
-The web app provides an interactive and intuitive way to run backtests and analyze your strategies.
-
-1.  **Launch the web app:**
-    ```bash
-    streamlit run app.py
-    ```
-
-2.  **Open your web browser** to the URL provided by Streamlit (usually `http://localhost:8501`).
-
-3.  **Configure your backtest:**
-    - **Data Selection:** Choose a CSV file from the `data/` directory or upload your own.
-    - **Strategy & Params:** Select a strategy and configure its parameters.
-    - **Execution & Options:** Set your execution parameters, such as lots, fees, and trade filters.
-
-4.  **Run the backtest:** Click the "Run Backtest" button to start the backtest. The results will be displayed in the various tabs.
-
-### Chart Library Management
-
-The TradingView chart library is automatically managed and kept up-to-date:
-
-```bash
-# Update chart library to latest version
-npm run update-charts
-
-# Check for updates without downloading
-npm run check-updates
-
-# Build specific version (if needed)
-npm run build
-
-# Clean chart library files
-npm run clean
+```
+backtester/   # Core engine, metrics, reporting, plotting
+strategies/   # User strategies (snake_case.py with CamelCaseStrategy)
+backend/      # FastAPI API (entry: backend/app/main.py)
+frontend/     # React + TypeScript app (Vite)
+tests/        # Pytest suite for core backtester
+data/         # Sample CSVs (avoid large/private data)
+archive/      # Legacy Streamlit app and docs
 ```
 
-**Chart Library Features:**
-- **TV Chart Beta**: Interactive TradingView-style charts with trades and indicators
-- **Automatic Updates**: Library stays current with latest features and bug fixes
-- **Offline Support**: Charts work without internet connection
-- **Performance Optimized**: Local files load faster than CDN
+---
 
-**Current Version**: The system automatically manages the latest version (currently v5.0.8).
+## Quickstart (WSL2 Ubuntu)
 
-### Command-Line Interface (CLI)
-
-The CLI is useful for automated backtesting and scripting.
+Recommended to run inside a virtual environment within WSL2.
 
 ```bash
-python main.py [OPTIONS]
+# From project root in Ubuntu WSL2
+python3 -m venv venv
+source venv/bin/activate
+
+# Install Python deps (core + API)
+pip install -r requirements.txt
+pip install -r backend/requirements.txt
+
+# Frontend deps
+npm -C frontend install
 ```
 
-By default, `main.py` runs in intraday mode and exits any open positions at
-**15:15**. Use `--no-intraday` to disable this cutoff and allow trades to carry
-past the session close.
+---
 
-**Command-Line Arguments:**
+## Run (Development)
 
-
-| Argument | Description | Example |
-| --- | --- | --- |
-| `-f`, `--file` | Path to CSV data file. | `-f data/my_data.csv` |
-| `-s`, `--start` | Start date (YYYY-MM-DD). | `-s 2024-01-01` |
-| `-e`, `--end` | End date (YYYY-MM-DD). | `-e 2024-01-31` |
-| `-r`, `--report` | Generate an HTML report. | `-r` |
-| `-t`, `--timeframe` | Timeframe for resampling (e.g., `1T`, `5T`, `15T`). Default is `1T`. | `-t 5T` |
-| `--debug` | Enable debug logging for strategy internals. | `--debug` |
-| `--option-delta` | Option delta for trade calculations. | `--option-delta 0.6` |
-| `--lots` | Number of lots to trade. | `--lots 3` |
-| `--option-price-per-unit` | Multiplier for the option price per unit. | `--option-price-per-unit 1.2` |
-| `--non-interactive` | Run without interactive prompts. | `--non-interactive` |
-| `--no-intraday` | Disable intraday mode and allow trades past 15:15. | `--no-intraday` |
-**Example:**
+### Backend (FastAPI)
 
 ```bash
-python main.py -f data/nifty_2024_1min_22Dec_14Jan.csv -s 2024-01-01 -e 2024-01-10 -r
+uvicorn backend.app.main:app --reload
+# Open http://localhost:8000 (Docs: http://localhost:8000/docs)
 ```
 
-The CLI runs the `RSIMiddayReversionScalper` strategy by default. To try a different strategy, edit `main.py` and select the desired class.
+### Frontend (React + Vite)
+
+```bash
+npm -C frontend run dev
+# Open the printed localhost URL (typically http://localhost:5173)
+```
+
+---
+
+## Testing
+
+- Core tests: `pytest tests -q`
+- Core coverage: `pytest --cov=backtester -q`
+- Backend tests: `pytest -c backend/pytest.ini -q` (or `cd backend && pytest -q`)
+- Frontend: `npm -C frontend run test:coverage`
+
+---
+
+## CLI Usage (Optional)
+
+Run backtests directly from the command line and print full performance metrics.
+
+- Basic: `python cli.py --file data/your.csv`
+- With strategy: `python cli.py --file data/your.csv --strategy strategies.ema50_scalper.EMA50ScalperStrategy`
+- Dates: `--start 2025-08-01 --end 2025-08-15`
+- Engine options: `--initial-cash 100000 --lots 1 --option-delta 0.5 --fee-per-trade 4 --intraday`
+- Strategy params: repeat `--param key=value` or `--params-json '{"ema_period":50}'`
+- Output JSON: `--output-json results.json`
+
+Default strategy: `strategies.rsi_midday_reversion_scalper.RSIMiddayReversionScalper`.
+
+Outputs include Performance Metrics, Advanced Analytics, and Risk Metrics; equity curve and trades can be saved with `--output-json`.
+
+Example
+
+```bash
+# EMA50 scalper over a date window with engine options
+python cli.py \
+  --file data/nifty_2025_1min_08Aug_12Aug.csv \
+  --strategy strategies.ema50_scalper.EMA50ScalperStrategy \
+  --start 2025-08-08 --end 2025-08-12 \
+  --initial-cash 100000 --lots 1 --option-delta 0.5 --fee-per-trade 4 \
+  --output-json results.json
+
+# Or RSI strategy with params
+python cli.py \
+  --file data/nifty_2025_1min_08Aug_12Aug.csv \
+  --strategy strategies.rsi_midday_reversion_scalper.RSIMiddayReversionScalper \
+  --param rsi_period=14 --param atr_period=14
+```
 
 ---
 
 ## Adding New Strategies
 
-1.  Create a new Python file in the `strategies/` directory (e.g., `my_strategy.py`).
-2.  In your new file, create a class that inherits from `StrategyBase` (from `backtester.strategy_base`).
-3.  Implement the `generate_signals` method in your class. This method should return a DataFrame with a `signal` column (`1` for long, `-1` for short, `0` for no signal).
-4.  The app automatically discovers strategies placed in the `strategies/` directory—no manual registration required.
+1) Create a new file in `strategies/` (e.g., `my_strategy.py`).
+2) Create a class that inherits from `StrategyBase` (`backtester.strategy_base`).
+3) Implement `generate_signals(self, data: pd.DataFrame) -> pd.DataFrame` returning a `signal` column (`1` long, `-1` short, `0` none).
+4) Keep strategies small, pure, deterministic; prefer logging over print.
 
 ---
 
-## Output
+## Engine Outputs
 
-- **Trade Logs:** A CSV file containing a detailed log of all trades is saved in the `results/` directory.
-- **HTML Reports:** If you use the `-r` flag in the CLI, a detailed HTML report will be saved in the `results/` directory.
+- Trade logs: CSV export for all trades
+- HTML reports: rich performance summary with charts and tables
 
 ---
 
 ## Data Format
 
-Your CSV data files should have the following columns:
-- `timestamp` (in a format that can be parsed by pandas)
-- `open`
-- `high`
-- `low`
-- `close`
+CSV should include at minimum:
+- `timestamp` (parseable by pandas)
+- `open`, `high`, `low`, `close`
 
 ---
 
 ## Troubleshooting
 
-- **No module named 'streamlit'**: Make sure you have installed the dependencies from `requirements.txt`.
-- **File not found**: Ensure your data files are in the `data/` directory and that you are running the commands from the root of the project directory.
+- Environment: Ensure you install Python packages inside a WSL2 venv (don’t use global installs).
+- Backend: If CORS errors occur, verify the frontend URL matches the allowed origins in `backend/app/main.py`.
+- Tests: Backend tests require FastAPI deps from `backend/requirements.txt`.
+- Streamlit: The legacy Streamlit UI is archived and not used in this setup.
+
+---
+
+## Additional Docs
+
+- Backend details: `backend/README.md`
+- Frontend details: `frontend/README_COMPREHENSIVE.md`
 
 ---
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for details.
+MIT License. See `LICENSE` for details.

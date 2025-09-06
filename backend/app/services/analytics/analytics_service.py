@@ -60,7 +60,8 @@ class AnalyticsService:
             # Parse results
             results = backtest.results
             equity_curve = pd.DataFrame(results.get('equity_curve', []))
-            trades = pd.DataFrame(results.get('trades', []))
+            trades_list = results.get('trades') or results.get('trade_log') or []
+            trades = pd.DataFrame(trades_list)
             metrics = results.get('metrics', {})
             
             # Compute analytics using specialized components
@@ -68,7 +69,7 @@ class AnalyticsService:
             risk_metrics = self.risk_calc.compute_risk_metrics(equity_curve)
             trade_analysis = self.trade_analyzer.analyze_trades_comprehensive(trades)
             
-            return {
+            response = {
                 'success': True,
                 'backtest_id': backtest_id,
                 'performance': {
@@ -78,6 +79,8 @@ class AnalyticsService:
                     'trade_analysis': trade_analysis
                 }
             }
+            # Sanitize for JSON (avoid NaN/Inf causing 500s)
+            return self.formatter.sanitize_json(response)
         finally:
             db.close()
     
@@ -108,7 +111,8 @@ class AnalyticsService:
             # Parse results
             results = backtest.results
             equity_curve = pd.DataFrame(results.get('equity_curve', []))
-            trades = pd.DataFrame(results.get('trades', []))
+            trades_list = results.get('trades') or results.get('trade_log') or []
+            trades = pd.DataFrame(trades_list)
             
             # Generate charts using chart generator
             charts = {}
@@ -203,7 +207,7 @@ class AnalyticsService:
             
             # Parse trades data
             results = backtest.results
-            trades_raw = results.get('trades', [])
+            trades_raw = results.get('trades') or results.get('trade_log') or []
             
             if not trades_raw:
                 return {
@@ -338,7 +342,7 @@ class AnalyticsService:
             
             # Parse trades data
             results = backtest.results
-            trades_raw = results.get('trades', [])
+            trades_raw = results.get('trades') or results.get('trade_log') or []
             
             if not trades_raw:
                 return {
