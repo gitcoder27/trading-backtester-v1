@@ -1,4 +1,4 @@
-# Environment & Setup Notes
+in th# Environment & Setup Notes
 
 - **Project Location:** This project directory is located inside a WSL2 Ubuntu environment on Windows (e.g., `/home/<user>/Projects/trading-backtester-v1` in Ubuntu via WSL2).
 - **Dependency Installation:** All Python dependencies must be installed inside a virtual environment (venv) within WSL2. Do not install Python packages globally or outside the venv.
@@ -16,6 +16,9 @@ pip install -r backend/requirements.txt
 This ensures all dependencies are isolated and avoids system Python issues in WSL2.
 
 # Repository Guidelines
+
+## Git Operations Policy
+- **Do not perform any git operations (commit, push, pull, branch, merge, etc.) unless explicitly instructed by the user.**
 
 ## Project Structure & Module Organization
 - `backtester/`: Core engine (`engine.py`), metrics, reporting, plotting, base class `strategy_base.py`.

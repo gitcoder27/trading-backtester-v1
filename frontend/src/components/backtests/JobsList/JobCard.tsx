@@ -9,7 +9,8 @@ const JobCard: React.FC<JobCardProps> = ({
   job,
   onCancel,
   onDelete,
-  onDownload
+  onDownload,
+  onClick
 }) => {
   const getStatusIcon = (status: JobStatus) => {
     switch (status) {
@@ -51,7 +52,10 @@ const JobCard: React.FC<JobCardProps> = ({
   const StatusIcon = getStatusIcon(job.status);
 
   return (
-    <Card className="p-6">
+    <Card
+      className={`p-6 ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+      onClick={onClick ? () => onClick(job) : undefined}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <StatusIcon className={`w-6 h-6 ${getStatusColor(job.status)}`} />

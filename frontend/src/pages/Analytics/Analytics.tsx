@@ -11,7 +11,8 @@ import {
   DrawdownChart,
   ReturnsChart,
   TradeAnalysisChart,
-  PerformanceMetrics
+  PerformanceMetrics,
+  PriceChartWithTrades,
 } from '../../components/charts';
 
 const Analytics: React.FC = () => {
@@ -56,7 +57,8 @@ const Analytics: React.FC = () => {
             value={backtestId}
             onChange={(e) => {
               const params = new URLSearchParams(searchParams);
-              params.set('backtestId', e.target.value);
+              // Keep parameter name consistent with reader above
+              params.set('backtest_id', e.target.value);
               window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
             }}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -142,7 +144,7 @@ const Analytics: React.FC = () => {
 
       {activeTab === 'charts' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 xl-grid-cols-2 xl:grid-cols-2 gap-6">
             <Card className="p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                 Portfolio Equity Curve
@@ -179,6 +181,16 @@ const Analytics: React.FC = () => {
               </div>
             </Card>
           </div>
+
+          {/* Full-width TradingView candlestick chart with trades + indicators */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              Price + Trades (TradingView Lightweight Chart)
+            </h3>
+            <div className="h-[600px]">
+              <PriceChartWithTrades backtestId={backtestId} height={560} />
+            </div>
+          </Card>
         </div>
       )}
 

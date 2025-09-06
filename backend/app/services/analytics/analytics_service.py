@@ -60,7 +60,8 @@ class AnalyticsService:
             # Parse results
             results = backtest.results
             equity_curve = pd.DataFrame(results.get('equity_curve', []))
-            trades = pd.DataFrame(results.get('trades', []))
+            trades_list = results.get('trades') or results.get('trade_log') or []
+            trades = pd.DataFrame(trades_list)
             metrics = results.get('metrics', {})
             
             # Compute analytics using specialized components
@@ -110,7 +111,8 @@ class AnalyticsService:
             # Parse results
             results = backtest.results
             equity_curve = pd.DataFrame(results.get('equity_curve', []))
-            trades = pd.DataFrame(results.get('trades', []))
+            trades_list = results.get('trades') or results.get('trade_log') or []
+            trades = pd.DataFrame(trades_list)
             
             # Generate charts using chart generator
             charts = {}
@@ -205,7 +207,7 @@ class AnalyticsService:
             
             # Parse trades data
             results = backtest.results
-            trades_raw = results.get('trades', [])
+            trades_raw = results.get('trades') or results.get('trade_log') or []
             
             if not trades_raw:
                 return {
@@ -340,7 +342,7 @@ class AnalyticsService:
             
             # Parse trades data
             results = backtest.results
-            trades_raw = results.get('trades', [])
+            trades_raw = results.get('trades') or results.get('trade_log') or []
             
             if not trades_raw:
                 return {

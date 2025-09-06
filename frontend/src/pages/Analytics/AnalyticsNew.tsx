@@ -10,7 +10,8 @@ import {
   DrawdownChart,
   ReturnsChart,
   TradeAnalysisChart,
-  PerformanceMetrics
+  PerformanceMetrics,
+  PriceChartWithTrades,
 } from '../../components/charts';
 
 const Analytics: React.FC = () => {
@@ -178,6 +179,16 @@ const Analytics: React.FC = () => {
               </div>
             </Card>
           </div>
+
+          {/* Full-width TV Chart: Price + Trades + Indicators */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              Price + Trades (TradingView Lightweight Chart)
+            </h3>
+            <div className="h-[600px]">
+              <PriceChartWithTrades backtestId={backtestId} height={560} />
+            </div>
+          </Card>
         </div>
       )}
 

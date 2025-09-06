@@ -5,6 +5,7 @@ interface CardProps {
   className?: string;
   padding?: 'none' | 'sm' | 'md' | 'lg';
   shadow?: 'none' | 'sm' | 'md' | 'lg';
+  onClick?: React.MouseEventHandler<HTMLDivElement>;
 }
 
 const Card: React.FC<CardProps> = ({
@@ -12,6 +13,7 @@ const Card: React.FC<CardProps> = ({
   className = '',
   padding = 'md',
   shadow = 'md',
+  onClick,
 }) => {
   const paddingClasses = {
     none: '',
@@ -30,6 +32,7 @@ const Card: React.FC<CardProps> = ({
   return (
     <div
       className={`bg-white dark:bg-gray-900/95 rounded-xl border border-gray-200 dark:border-gray-600 shadow-md dark:shadow-xl ${paddingClasses[padding]} ${shadowClasses[shadow]} ${className}`}
+      onClick={onClick}
     >
       {children}
     </div>

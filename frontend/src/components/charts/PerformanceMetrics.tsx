@@ -82,7 +82,11 @@ const PerformanceMetrics: React.FC<PerformanceMetricsProps> = ({ backtestId, cla
     );
   }
 
-  const metrics = performanceData?.data;
+  // Backend response shape: { success, backtest_id, performance: { basic_metrics, advanced_analytics, risk_metrics, ... } }
+  const base = (performanceData as any)?.performance?.basic_metrics || {};
+  const adv = (performanceData as any)?.performance?.advanced_analytics || {};
+  const risk = (performanceData as any)?.performance?.risk_metrics || {};
+  const metrics = { ...base, ...adv, ...risk };
   if (!metrics) {
     return (
       <Card className={`p-6 ${className}`}>
@@ -93,8 +97,8 @@ const PerformanceMetrics: React.FC<PerformanceMetricsProps> = ({ backtestId, cla
     );
   }
 
-  const formatPercent = (value: number) => `${(value * 100).toFixed(2)}%`;
-  const formatNumber = (value: number) => value.toFixed(2);
+  const formatPercent = (value: number) => `${(value).toFixed(2)}%`;
+  const formatNumber = (value: number) => (Number.isFinite(value) ? value.toFixed(2) : '0.00');
 
   return (
     <Card className={`p-6 ${className}`}>
@@ -111,7 +115,7 @@ const PerformanceMetrics: React.FC<PerformanceMetricsProps> = ({ backtestId, cla
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <MetricCard
           label="Total Return"
-          value={formatPercent(metrics.total_return || 0)}
+          value={formatPercent((metrics.total_return_pct ?? (metrics.total_return ?? 0) * 100) as number)}
           icon={TrendingUp}
           color={metrics.total_return > 0 ? "text-success-600 dark:text-success-400" : "text-danger-600 dark:text-danger-400"}
           bgColor={metrics.total_return > 0 ? "bg-success-100 dark:bg-success-900/50" : "bg-danger-100 dark:bg-danger-900/50"}
@@ -129,7 +133,7 @@ const PerformanceMetrics: React.FC<PerformanceMetricsProps> = ({ backtestId, cla
 
         <MetricCard
           label="Max Drawdown"
-          value={formatPercent(Math.abs(metrics.max_drawdown || 0))}
+          value={formatPercent(Math.abs((metrics.max_drawdown_pct ?? (metrics.max_drawdown ?? 0) * 100) as number))}
           icon={TrendingDown}
           color="text-danger-600 dark:text-danger-400"
           bgColor="bg-danger-100 dark:bg-danger-900/50"
@@ -138,7 +142,7 @@ const PerformanceMetrics: React.FC<PerformanceMetricsProps> = ({ backtestId, cla
 
         <MetricCard
           label="Win Rate"
-          value={formatPercent(metrics.win_rate || 0)}
+          value={formatPercent((metrics.win_rate ?? 0) as number)}
           icon={Target}
           color={metrics.win_rate > 0.5 ? "text-success-600 dark:text-success-400" : "text-warning-600 dark:text-warning-400"}
           bgColor={metrics.win_rate > 0.5 ? "bg-success-100 dark:bg-success-900/50" : "bg-warning-100 dark:bg-warning-900/50"}
@@ -177,19 +181,19 @@ const PerformanceMetrics: React.FC<PerformanceMetricsProps> = ({ backtestId, cla
           <div>
             <span className="text-gray-600 dark:text-gray-400">Volatility:</span>
             <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
-              {formatPercent(metrics.volatility || 0)}
+              {formatPercent(((metrics.volatility_annualized ?? metrics.volatility) ?? 0) as number)}
             </span>
           </div>
           <div>
             <span className="text-gray-600 dark:text-gray-400">Calmar Ratio:</span>
             <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
-              {formatNumber(metrics.calmar_ratio || 0)}
+              {formatNumber((metrics.calmar_ratio ?? 0) as number)}
             </span>
           </div>
           <div>
             <span className="text-gray-600 dark:text-gray-400">Sortino Ratio:</span>
             <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
-              {formatNumber(metrics.sortino_ratio || 0)}
+              {formatNumber((metrics.sortino_ratio ?? 0) as number)}
             </span>
           </div>
         </div>

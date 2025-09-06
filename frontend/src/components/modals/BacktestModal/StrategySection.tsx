@@ -59,7 +59,7 @@ const StrategySection: React.FC<StrategySectionProps> = ({
           <option value="">Select a dataset...</option>
           {datasets.map(dataset => (
             <option key={dataset.id} value={dataset.id}>
-              {dataset.name} ({dataset.rows_count.toLocaleString()} rows)
+              {dataset.name} ({Number((dataset as any).rows_count ?? (dataset as any).rows ?? 0).toLocaleString()} rows)
             </option>
           ))}
         </select>
@@ -67,7 +67,11 @@ const StrategySection: React.FC<StrategySectionProps> = ({
           <div className="text-sm text-gray-600 dark:text-gray-400">
             {(() => {
               const dataset = datasets.find(d => d.id.toString() === config.dataset_id);
-              return dataset ? `${dataset.date_range.start} to ${dataset.date_range.end}` : '';
+              if (!dataset) return '';
+              const dr = (dataset as any).date_range;
+              const start = dr?.start || (dataset as any).start_date || '';
+              const end = dr?.end || (dataset as any).end_date || '';
+              return start && end ? `${start} to ${end}` : '';
             })()}
           </div>
         )}

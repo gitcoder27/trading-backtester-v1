@@ -8,6 +8,8 @@ import numpy as np
 import logging
 from typing import Dict, Any, Optional, Union
 from io import StringIO
+import os
+from backend.app.utils.path_utils import normalize_path, windows_to_wsl, resolve_dataset_path
 
 from backtester.engine import BacktestEngine
 from backtester.data_loader import load_csv
@@ -132,8 +134,10 @@ class ExecutionEngine:
                 logger.debug("Using provided DataFrame")
                 
             elif isinstance(data, str):
-                # Assume it's a file path
-                validated_data = load_csv(data)
+                # Assume it's a file path; normalize cross-OS separators and attempt fallbacks
+                path = resolve_dataset_path(data) or data
+                
+                validated_data = load_csv(path)
                 logger.debug(f"Loaded data from file: {data}")
                 
             elif isinstance(data, bytes):
@@ -160,6 +164,8 @@ class ExecutionEngine:
             
         except Exception as e:
             raise ExecutionEngineError(f"Data loading failed: {str(e)}") from e
+
+    # path helpers now provided by backend.app.utils.path_utils
     
     def _validate_data_structure(self, data: pd.DataFrame):
         """Validate that data has required structure"""

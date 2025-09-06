@@ -12,7 +12,7 @@ import {
   TradeAnalysisChart,
   TradingViewChart
 } from '../../components/charts';
-import { BacktestService } from '../../services/backtest';
+import { BacktestService, JobService } from '../../services/backtest';
 
 const BacktestDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,14 +33,24 @@ const BacktestDetail: React.FC = () => {
     enabled: !!id && !!backtest,
   });
 
+  // Fallback to job results if no backtest record exists
+  const { data: jobResults, isLoading: jobLoading } = useQuery({
+    queryKey: ['job-results', id],
+    queryFn: () => JobService.getJobResults(id!),
+    enabled: !!id && !backtest,
+    retry: 1,
+  });
+
   // Always call useMemo hook before any conditional returns
   const cleanStrategyName = React.useMemo(() => {
-    if (!backtest?.strategy_name) return 'Backtest Details';
-    const name = backtest.strategy_name;
-    return name.includes('.') ? name.split('.').pop() || name : name;
-  }, [backtest?.strategy_name]);
+    if (backtest?.strategy_name) {
+      const name = backtest.strategy_name;
+      return name.includes('.') ? name.split('.').pop() || name : name;
+    }
+    return `Backtest Job #${id}`;
+  }, [backtest?.strategy_name, id]);
 
-  if (isLoading) {
+  if (isLoading || (jobLoading && !backtest)) {
     return (
       <div className="space-y-6">
         <div className="animate-pulse">
@@ -56,7 +66,7 @@ const BacktestDetail: React.FC = () => {
     );
   }
 
-  if (error || !backtest) {
+  if (error && !backtest && (!jobResults || !jobResults.success)) {
     return (
       <div className="text-center py-12">
         <div className="text-red-500 text-lg font-medium mb-2">
@@ -90,6 +100,13 @@ const BacktestDetail: React.FC = () => {
     }
   };
 
+  // Determine if we are rendering from job results
+  const isJobMode = !backtest && jobResults?.success && jobResults?.results;
+  const resultsFromJob = (jobResults?.results) || {};
+  const metrics: any = backtest?.results?.metrics || (backtest as any)?.metrics || resultsFromJob?.metrics;
+  const equityCurve: any[] | undefined = backtest?.results?.equity_curve || resultsFromJob?.equity_curve;
+  const trades: any[] | undefined = backtest?.results?.trades || backtest?.results?.trade_log || resultsFromJob?.trades || resultsFromJob?.trade_log;
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -108,27 +125,29 @@ const BacktestDetail: React.FC = () => {
             <div className="flex items-center space-x-6 mt-1">
               <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
                 <Calendar className="h-4 w-4 mr-1" />
-                {new Date(backtest.created_at).toLocaleDateString()}
+                {backtest?.created_at ? new Date(backtest.created_at).toLocaleDateString() : new Date().toLocaleDateString()}
               </div>
-              {backtest.duration && (
+              {backtest?.duration && (
                 <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
                   <Clock className="h-4 w-4 mr-1" />
-                  {backtest.duration}
+                  {backtest?.duration}
                 </div>
               )}
-              <Badge variant={getStatusColor(backtest.status)} size="sm">
-                {backtest.status || 'Unknown'}
+              <Badge variant={getStatusColor(backtest?.status || jobResults?.status)} size="sm">
+                {(backtest?.status || jobResults?.status || 'Unknown')}
               </Badge>
             </div>
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Link to={`/analytics?backtest_id=${id}`}>
-            <Button variant="primary" size="sm">
-              <TrendingUp className="h-4 w-4 mr-2" />
-              Advanced Analytics
-            </Button>
-          </Link>
+          {!isJobMode && (
+            <Link to={`/analytics?backtest_id=${id}`}>
+              <Button variant="primary" size="sm">
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Advanced Analytics
+              </Button>
+            </Link>
+          )}
           <Button variant="outline" size="sm">
             <Share2 className="h-4 w-4 mr-2" />
             Share
@@ -137,16 +156,19 @@ const BacktestDetail: React.FC = () => {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Link to={`/analytics?backtestId=${id}`}>
-            <Button variant="primary" size="sm">
-              <TrendingUp className="h-4 w-4 mr-2" />
-              View Analytics
-            </Button>
-          </Link>
+          {!isJobMode && (
+            <Link to={`/analytics?backtestId=${id}`}>
+              <Button variant="primary" size="sm">
+                <TrendingUp className="h-4 w-4 mr-2" />
+                View Analytics
+              </Button>
+            </Link>
+          )}
         </div>
       </div>
 
       {/* Backtest Configuration Summary */}
+      {backtest && (
       <Card className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           Configuration
@@ -185,9 +207,10 @@ const BacktestDetail: React.FC = () => {
           </div>
         )}
       </Card>
+      )}
 
       {/* Performance Metrics */}
-      {backtest.results?.metrics && (
+      {metrics && (
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             Performance Metrics
@@ -195,11 +218,11 @@ const BacktestDetail: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
             <div className="text-center p-4 bg-gray-100 dark:bg-gray-900/80 rounded-xl border border-gray-200 dark:border-gray-700">
               <div className={`text-2xl font-bold mb-1 ${
-                backtest.results.metrics.total_return >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                (metrics.total_return || metrics.total_return_percent || 0) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
               }`}>
-                {backtest.results.metrics.total_return_percent 
-                  ? `${backtest.results.metrics.total_return_percent.toFixed(2)}%`
-                  : `${(backtest.results.metrics.total_return * 100).toFixed(2)}%`
+                {metrics.total_return_percent 
+                  ? `${metrics.total_return_percent.toFixed(2)}%`
+                  : `${((metrics.total_return || 0) * 100).toFixed(2)}%`
                 }
               </div>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Return</div>
@@ -207,16 +230,16 @@ const BacktestDetail: React.FC = () => {
             
             <div className="text-center p-4 bg-gray-100 dark:bg-gray-900/80 rounded-xl border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold mb-1 text-gray-900 dark:text-gray-100">
-                {backtest.results.metrics.sharpe_ratio.toFixed(3)}
+                {(metrics.sharpe_ratio || 0).toFixed(3)}
               </div>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-300">Sharpe Ratio</div>
             </div>
             
             <div className="text-center p-4 bg-gray-100 dark:bg-gray-900/80 rounded-xl border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold mb-1 text-red-600 dark:text-red-400">
-                {backtest.results.metrics.max_drawdown_percent 
-                  ? `${backtest.results.metrics.max_drawdown_percent.toFixed(2)}%`
-                  : `${(backtest.results.metrics.max_drawdown * 100).toFixed(2)}%`
+                {metrics.max_drawdown_percent 
+                  ? `${metrics.max_drawdown_percent.toFixed(2)}%`
+                  : `${((metrics.max_drawdown || 0) * 100).toFixed(2)}%`
                 }
               </div>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-300">Max Drawdown</div>
@@ -224,21 +247,21 @@ const BacktestDetail: React.FC = () => {
             
             <div className="text-center p-4 bg-gray-100 dark:bg-gray-900/80 rounded-xl border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold mb-1 text-gray-900 dark:text-gray-100">
-                {backtest.results.metrics.total_trades}
+                {metrics.total_trades || 0}
               </div>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Trades</div>
             </div>
             
             <div className="text-center p-4 bg-gray-100 dark:bg-gray-900/80 rounded-xl border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold mb-1 text-blue-600 dark:text-blue-400">
-                {(backtest.results.metrics.win_rate * 100).toFixed(1)}%
+                {((metrics.win_rate || 0) * 100).toFixed(1)}%
               </div>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-300">Win Rate</div>
             </div>
             
             <div className="text-center p-4 bg-gray-100 dark:bg-gray-900/80 rounded-xl border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold mb-1 text-gray-900 dark:text-gray-100">
-                {backtest.results.metrics.profit_factor?.toFixed(2) || 'N/A'}
+                {metrics.profit_factor?.toFixed(2) || 'N/A'}
               </div>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-300">Profit Factor</div>
             </div>
@@ -246,7 +269,8 @@ const BacktestDetail: React.FC = () => {
         </Card>
       )}
 
-      {/* TradingView Chart Section */}
+      {/* TradingView Chart Section (only for persisted backtests) */}
+      {backtest && (
       <Card className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">
           Price Chart with Trades
@@ -280,6 +304,7 @@ const BacktestDetail: React.FC = () => {
           )}
         </div>
       </Card>
+      )}
 
       {/* Charts Section */}
       <div className="space-y-10">
@@ -291,8 +316,8 @@ const BacktestDetail: React.FC = () => {
               Portfolio Equity Curve
             </h3>
             <div className="h-80 w-full overflow-hidden rounded-lg">
-              {backtest.results?.equity_curve ? (
-                <EquityChart data={backtest.results.equity_curve} />
+              {equityCurve ? (
+                <EquityChart data={equityCurve} />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="text-gray-500 dark:text-gray-400 mb-2">No data available</div>
@@ -308,8 +333,8 @@ const BacktestDetail: React.FC = () => {
               Drawdown Analysis
             </h3>
             <div className="h-80 w-full overflow-hidden rounded-lg">
-              {backtest.results?.equity_curve ? (
-                <DrawdownChart data={backtest.results.equity_curve} />
+              {equityCurve ? (
+                <DrawdownChart data={equityCurve} />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="text-gray-500 dark:text-gray-400 mb-2">No data available</div>
@@ -328,8 +353,8 @@ const BacktestDetail: React.FC = () => {
               Returns Distribution
             </h3>
             <div className="h-80 w-full overflow-hidden rounded-lg">
-              {backtest.results?.equity_curve ? (
-                <ReturnsChart data={backtest.results.equity_curve} />
+              {equityCurve ? (
+                <ReturnsChart data={equityCurve} />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="text-gray-500 dark:text-gray-400 mb-2">No data available</div>
@@ -345,8 +370,8 @@ const BacktestDetail: React.FC = () => {
               Trade Analysis
             </h3>
             <div className="h-80 w-full overflow-hidden rounded-lg">
-              {backtest.results?.trades ? (
-                <TradeAnalysisChart data={backtest.results.trades} />
+              {trades ? (
+                <TradeAnalysisChart data={trades} />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <div className="text-gray-500 dark:text-gray-400 mb-2">No data available</div>

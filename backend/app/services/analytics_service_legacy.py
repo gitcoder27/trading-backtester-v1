@@ -35,7 +35,7 @@ class AnalyticsService:
             # Parse results
             results = backtest.results
             equity_curve = pd.DataFrame(results.get('equity_curve', []))
-            trades = pd.DataFrame(results.get('trades', []))
+            trades = pd.DataFrame(results.get('trades') or results.get('trade_log') or [])
             metrics = results.get('metrics', {})
             
             # Compute analytics
@@ -320,7 +320,7 @@ class AnalyticsService:
             # Parse results
             results = backtest.results
             equity_curve = pd.DataFrame(results.get('equity_curve', []))
-            trades = pd.DataFrame(results.get('trades', []))
+            trades = pd.DataFrame(results.get('trades') or results.get('trade_log') or [])
             
             charts = {}
             
@@ -791,7 +791,7 @@ class AnalyticsService:
             
             # Parse trades data
             results = backtest.results
-            trades_raw = results.get('trades', [])
+            trades_raw = results.get('trades') or results.get('trade_log') or []
             
             if not trades_raw:
                 return {
@@ -1120,7 +1120,7 @@ class AnalyticsService:
     
     def _get_trade_markers(self, results: Dict[str, Any], price_df: pd.DataFrame) -> List[Dict[str, Any]]:
         """Generate trade markers for chart overlay with proper TradingView formatting"""
-        trades = results.get('trades', [])
+        trades = results.get('trades') or results.get('trade_log') or []
         if not trades:
             return []
         
