@@ -15,6 +15,11 @@ pip install -r backend/requirements.txt
 
 This ensures all dependencies are isolated and avoids system Python issues in WSL2.
 
+
+# Agent Operation Policy
+
+- **Do not run backend or frontend servers unless explicitly instructed by the user.** Always assume the user is already running the necessary servers for development or testing. As a pair programmer, the agent should rely on the user to test and validate any changes made. Never attempt to start, restart, or stop backend (FastAPI) or frontend (React/Vite) servers unless the user specifically requests it.
+
 # Repository Guidelines
 
 ## Git Operations Policy

@@ -12,13 +12,14 @@ import {
   ReturnsChart,
   TradeAnalysisChart,
   PerformanceMetrics,
-  PriceChartWithTrades,
+  PriceChartPanel,
 } from '../../components/charts';
 
 const Analytics: React.FC = () => {
   const [searchParams] = useSearchParams();
   const backtestId = searchParams.get('backtest_id') || '1'; // Use correct parameter name
   const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'trades'>('overview');
+  const DEFAULT_TZ = 'Asia/Kolkata';
 
   // Fetch backtest list for selection
   const { data: backtests } = useQuery({
@@ -41,6 +42,9 @@ const Analytics: React.FC = () => {
     { id: 'charts', label: 'Charts', icon: BarChart3 },
     { id: 'trades', label: 'Trade Analysis', icon: Table }
   ];
+
+  // Fetch earliest available candle to default the view to first day
+  // Common panel now manages date range and chart
 
   return (
     <div className="space-y-6">
@@ -183,14 +187,13 @@ const Analytics: React.FC = () => {
           </div>
 
           {/* Full-width TradingView candlestick chart with trades + indicators */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-              Price + Trades (TradingView Lightweight Chart)
-            </h3>
-            <div className="h-[600px]">
-              <PriceChartWithTrades backtestId={backtestId} height={560} />
-            </div>
-          </Card>
+          <PriceChartPanel
+            backtestId={backtestId}
+            title="Price + Trades (TradingView Lightweight Chart)"
+            height={560}
+            defaultMaxCandles={5000}
+            defaultTz={DEFAULT_TZ}
+          />
         </div>
       )}
 

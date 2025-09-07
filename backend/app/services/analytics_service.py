@@ -8,6 +8,7 @@ from .analytics.analytics_service import AnalyticsService as ModularAnalyticsSer
 
 # For complex methods not yet migrated, import from legacy
 from .analytics_service_legacy import AnalyticsService as LegacyAnalyticsService
+from typing import Optional
 
 
 class AnalyticsService:
@@ -46,10 +47,13 @@ class AnalyticsService:
         )
     
     def get_chart_data(self, backtest_id: int, include_trades: bool = True, 
-                      include_indicators: bool = True, max_candles=None):
+                      include_indicators: bool = True, max_candles: Optional[int] = None,
+                      start: Optional[str] = None, end: Optional[str] = None,
+                      tz: Optional[str] = None):
         """Get chart data - uses legacy service (complex method)"""
         return self.legacy_service.get_chart_data(
-            backtest_id, include_trades, include_indicators, max_candles
+            backtest_id, include_trades, include_indicators, max_candles,
+            start=start, end=end, tz=tz
         )
     
     # Additional methods for enhanced functionality using modular components

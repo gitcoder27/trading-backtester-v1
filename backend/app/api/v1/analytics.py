@@ -245,7 +245,10 @@ async def get_chart_data(
     backtest_id: int,
     include_trades: bool = Query(True, description="Include trade markers"),
     include_indicators: bool = Query(True, description="Include strategy indicators"),
-    max_candles: Optional[int] = Query(None, description="Maximum number of candles to return")
+    max_candles: Optional[int] = Query(None, description="Maximum number of candles to return"),
+    start: Optional[str] = Query(None, description="Start datetime or date (YYYY-MM-DD)"),
+    end: Optional[str] = Query(None, description="End datetime or date (YYYY-MM-DD)"),
+    tz: Optional[str] = Query(None, description="Timezone of dataset (e.g., 'Asia/Kolkata') for date parsing and display consistency")
 ) -> Dict[str, Any]:
     """
     Get candlestick chart data with trade overlays for TradingView Lightweight Charts
@@ -261,7 +264,10 @@ async def get_chart_data(
         backtest_id=backtest_id,
         include_trades=include_trades,
         include_indicators=include_indicators,
-        max_candles=max_candles
+        max_candles=max_candles,
+        start=start,
+        end=end,
+        tz=tz,
     )
     
     if not result['success']:

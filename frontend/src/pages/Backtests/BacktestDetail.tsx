@@ -10,7 +10,7 @@ import {
   DrawdownChart,
   ReturnsChart,
   TradeAnalysisChart,
-  TradingViewChart
+  PriceChartPanel,
 } from '../../components/charts';
 import { BacktestService, JobService } from '../../services/backtest';
 
@@ -23,15 +23,9 @@ const BacktestDetail: React.FC = () => {
     enabled: !!id,
   });
 
-  const { data: chartData, isLoading: chartLoading } = useQuery({
-    queryKey: ['chart-data', id],
-    queryFn: () => BacktestService.getChartData(id!, {
-      includeTrades: true,
-      includeIndicators: true,
-      maxCandles: 2000 // Limit for performance
-    }),
-    enabled: !!id && !!backtest,
-  });
+  const DEFAULT_TZ = 'Asia/Kolkata';
+
+  // Chart data is handled by the shared PriceChartWithTrades component
 
   // Fallback to job results if no backtest record exists
   const { data: jobResults, isLoading: jobLoading } = useQuery({
@@ -271,39 +265,13 @@ const BacktestDetail: React.FC = () => {
 
       {/* TradingView Chart Section (only for persisted backtests) */}
       {backtest && (
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-6">
-          Price Chart with Trades
-        </h3>
-        <div className="h-[600px] w-full">
-          {chartLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                <p className="text-gray-400">Loading chart data...</p>
-              </div>
-            </div>
-          ) : chartData?.success && chartData.candlestick_data ? (
-            <TradingViewChart
-              candleData={chartData.candlestick_data}
-              tradeMarkers={chartData.trade_markers || []}
-              indicators={chartData.indicators || []}
-              title={`${cleanStrategyName} - ${chartData.dataset_name || backtest.dataset_name || 'Unknown Dataset'}`}
-              height={600}
-              theme="dark"
-              showControls={true}
-              autoFit={true}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <div className="text-gray-500 dark:text-gray-400 mb-2">Chart data not available</div>
-              <div className="text-sm text-gray-400 dark:text-gray-500">
-                {chartData?.error || 'Unable to load price chart data'}
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
+        <PriceChartPanel
+          backtestId={id!}
+          height={560}
+          title={`${cleanStrategyName} - ${backtest.dataset_name || 'Dataset'}`}
+          defaultMaxCandles={2000}
+          defaultTz={DEFAULT_TZ}
+        />
       )}
 
       {/* Charts Section */}

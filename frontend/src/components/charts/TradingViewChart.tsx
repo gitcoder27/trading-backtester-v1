@@ -52,6 +52,7 @@ interface TradingViewChartProps {
   showControls?: boolean;
   autoFit?: boolean;
   dataBadge?: string; // small identifier like 'Real' or 'Sim'
+  timeZone?: string; // e.g., 'Asia/Kolkata' for axis/crosshair formatting
 }
 
 const TradingViewChart: React.FC<TradingViewChartProps> = ({
@@ -64,7 +65,8 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   loading = false,
   showControls = true,
   autoFit = true,
-  dataBadge
+  dataBadge,
+  timeZone
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -75,6 +77,21 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   const [visibleIndicators, setVisibleIndicators] = useState<Set<string>>(new Set());
 
   // Chart theme configuration
+  // Time formatter respecting an explicit time zone
+  const formatTimeInZone = (t: any) => {
+    try {
+      const date = typeof t === 'number' ? new Date(t * 1000) :
+        (t?.year && t?.month && t?.day ? new Date(Date.UTC(t.year, t.month - 1, t.day)) : new Date());
+      return new Intl.DateTimeFormat('en-IN', {
+        timeZone: timeZone || 'UTC',
+        year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
+      }).format(date);
+    } catch {
+      const date = typeof t === 'number' ? new Date(t * 1000) : new Date();
+      return date.toISOString();
+    }
+  };
+
   const getChartOptions = () => ({
     layout: {
       background: { 
@@ -84,6 +101,12 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       textColor: theme === 'dark' ? '#d1d5db' : '#374151',
       fontSize: 12,
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    },
+    localization: {
+      locale: 'en-IN',
+      timeFormatter: (time: any) => formatTimeInZone(time),
+      priceFormatter: (p: number) => (Math.abs(p) < 1 ? p.toFixed(4) : p.toFixed(2)),
+      dateFormat: 'dd MMM yyyy'
     },
     grid: {
       vertLines: { 
@@ -131,6 +154,19 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       shiftVisibleRangeOnNewBar: true,
       timeVisible: true,
       secondsVisible: false,
+      tickMarkFormatter: (time: any) => {
+        // Axis labels: show only HH:mm for intraday, or date for daily
+        try {
+          const d = new Date((time as number) * 1000);
+          const opts: Intl.DateTimeFormatOptions = {
+            timeZone: timeZone || 'UTC',
+            hour: '2-digit', minute: '2-digit'
+          };
+          return new Intl.DateTimeFormat('en-IN', opts).format(d);
+        } catch {
+          return String(time);
+        }
+      },
     },
     handleScroll: {
       mouseWheel: true,

@@ -6,3 +6,4 @@ export { default as TradeAnalysisChart } from './TradeAnalysisChart';
 export { default as PerformanceMetrics } from './PerformanceMetrics';
 export { default as TradingViewChart } from './TradingViewChart';
 export { default as PriceChartWithTrades } from './PriceChartWithTrades';
+export { default as PriceChartPanel } from './PriceChartPanel';

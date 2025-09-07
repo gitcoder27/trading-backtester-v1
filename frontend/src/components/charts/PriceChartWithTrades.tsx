@@ -7,12 +7,23 @@ interface PriceChartWithTradesProps {
   backtestId: string;
   height?: number;
   title?: string;
+  start?: string; // ISO datetime or YYYY-MM-DD
+  end?: string;   // ISO datetime or YYYY-MM-DD
+  maxCandles?: number;
+  tz?: string;
 }
 
-const PriceChartWithTrades: React.FC<PriceChartWithTradesProps> = ({ backtestId, height = 600, title = 'Price + Trades' }) => {
+const PriceChartWithTrades: React.FC<PriceChartWithTradesProps> = ({ backtestId, height = 600, title = 'Price + Trades', start, end, maxCandles, tz }) => {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['tv-chart', backtestId],
-    queryFn: async () => BacktestService.getChartData(backtestId, { includeTrades: true, includeIndicators: true, maxCandles: 3000 }),
+    queryKey: ['tv-chart', backtestId, start || null, end || null, maxCandles || null, tz || null],
+    queryFn: async () => BacktestService.getChartData(backtestId, { 
+      includeTrades: true, 
+      includeIndicators: true, 
+      maxCandles: maxCandles ?? 3000,
+      start,
+      end,
+      tz,
+    }),
     enabled: !!backtestId,
     staleTime: 5 * 60 * 1000,
   });
@@ -34,6 +45,7 @@ const PriceChartWithTrades: React.FC<PriceChartWithTradesProps> = ({ backtestId,
       indicators={indicators}
       height={height}
       title={title}
+      timeZone={tz}
       loading={isLoading}
       showControls
       autoFit

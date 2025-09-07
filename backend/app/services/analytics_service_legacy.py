@@ -905,7 +905,10 @@ class AnalyticsService:
         backtest_id: int, 
         include_trades: bool = True, 
         include_indicators: bool = True,
-        max_candles: Optional[int] = None
+        max_candles: Optional[int] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        tz: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get TradingView Lightweight Charts formatted data with actual dataset data
@@ -1001,11 +1004,71 @@ class AnalyticsService:
                 if df.empty:
                     return {'success': False, 'error': 'No valid data after timestamp processing'}
                     
-                print(f"📅 Data range: {df['timestamp'].min()} to {df['timestamp'].max()}")
+                # Normalize timezone: interpret dataset timestamps in provided tz (e.g., Asia/Kolkata), convert to UTC
+                try:
+                    if hasattr(df['timestamp'].dt, 'tz') and df['timestamp'].dt.tz is not None:
+                        # Already tz-aware; convert to UTC
+                        df['timestamp_utc'] = df['timestamp'].dt.tz_convert('UTC')
+                    else:
+                        # Naive timestamps; localize to provided tz if any, else assume UTC
+                        if tz:
+                            df['timestamp_utc'] = df['timestamp'].dt.tz_localize(tz, nonexistent='shift_forward', ambiguous='infer').dt.tz_convert('UTC')
+                        else:
+                            df['timestamp_utc'] = df['timestamp'].dt.tz_localize('UTC')
+                except Exception as te:
+                    # Fallback: treat as UTC
+                    try:
+                        df['timestamp_utc'] = df['timestamp'].dt.tz_localize('UTC')
+                    except Exception:
+                        df['timestamp_utc'] = df['timestamp']
+                
+                print(f"📅 Data range (local naive): {df['timestamp'].min()} to {df['timestamp'].max()}")
+                print(f"🌐 Data range (UTC): {df['timestamp_utc'].min()} to {df['timestamp_utc'].max()}")
                 
             except Exception as e:
                 return {'success': False, 'error': f'Error processing timestamps: {str(e)}'}
             
+            # Optional date range filtering
+            filtered = False
+            start_ts = None
+            end_ts = None
+            try:
+                if start or end:
+                    # Determine bounds
+                    if start:
+                        s = pd.to_datetime(start)
+                        # If date-only provided, expand to start of day in provided tz
+                        if isinstance(start, str) and len(start) == 10:
+                            s = s.replace(hour=0, minute=0, second=0, microsecond=0)
+                        # Localize bounds to provided tz for correctness, then convert to UTC
+                        if s.tzinfo is None:
+                            s = s.tz_localize(tz or 'UTC')
+                        start_ts = s.tz_convert('UTC')
+                    if end:
+                        e = pd.to_datetime(end)
+                        # If date-only provided, expand to end of day in provided tz
+                        if isinstance(end, str) and len(end) == 10:
+                            # end of day inclusive
+                            e = e.replace(hour=23, minute=59, second=59, microsecond=999000)
+                        if e.tzinfo is None:
+                            e = e.tz_localize(tz or 'UTC')
+                        end_ts = e.tz_convert('UTC')
+
+                    # Fill missing bound with dataset min/max
+                    if start_ts is None:
+                        start_ts = df['timestamp_utc'].min()
+                    if end_ts is None:
+                        end_ts = df['timestamp_utc'].max()
+
+                    # Apply filter
+                    before = len(df)
+                    df = df[(df['timestamp_utc'] >= start_ts) & (df['timestamp_utc'] <= end_ts)].copy().reset_index(drop=True)
+                    after = len(df)
+                    filtered = True
+                    print(f"🔎 Filtered by date range: {before} -> {after} candles")
+            except Exception as fe:
+                print(f"⚠️ Failed to apply date filter: {fe}")
+
             # Sample data if too many candles (for performance)
             total_candles = len(df)
             sampled = False
@@ -1019,8 +1082,12 @@ class AnalyticsService:
             candlestick_data = []
             for _, row in df.iterrows():
                 try:
+                    # Use UTC timestamp for chart
+                    ts = row['timestamp_utc'] if 'timestamp_utc' in df.columns else row['timestamp']
+                    # Pandas Timestamp.timestamp() returns POSIX seconds in UTC when tz-aware
+                    tsec = int(pd.Timestamp(ts).timestamp())
                     candlestick_data.append({
-                        'time': int(row['timestamp'].timestamp()),
+                        'time': tsec,
                         'open': float(row['open']),
                         'high': float(row['high']),
                         'low': float(row['low']),
@@ -1041,6 +1108,7 @@ class AnalyticsService:
                 'total_candles': total_candles,
                 'returned_candles': len(candlestick_data),
                 'sampled': sampled,
+                'filtered': filtered,
                 'date_range': {
                     'start': candlestick_data[0]['time'] if candlestick_data else None,
                     'end': candlestick_data[-1]['time'] if candlestick_data else None,
@@ -1049,7 +1117,26 @@ class AnalyticsService:
             
             # Add trade markers if requested
             if include_trades:
-                trade_markers = self._get_trade_markers(results, df)
+                trade_markers = self._get_trade_markers(results, df, tz=tz)
+                # Filter markers to selected date range if applied
+                if (start_ts is not None) or (end_ts is not None):
+                    try:
+                        # Determine epoch bounds consistent with earlier conversions
+                        s_epoch = int(pd.Timestamp(start_ts).timestamp()) if start_ts is not None else None
+                        e_epoch = int(pd.Timestamp(end_ts).timestamp()) if end_ts is not None else None
+                        filtered_markers = []
+                        for m in trade_markers:
+                            t = m.get('time')
+                            if t is None:
+                                continue
+                            if s_epoch is not None and t < s_epoch:
+                                continue
+                            if e_epoch is not None and t > e_epoch:
+                                continue
+                            filtered_markers.append(m)
+                        trade_markers = filtered_markers
+                    except Exception as me:
+                        print(f"⚠️ Failed to filter trade markers: {me}")
                 response_data['trade_markers'] = trade_markers
             
             # Add indicator data if requested
@@ -1124,7 +1211,7 @@ class AnalyticsService:
         
         return simulated_data
     
-    def _get_trade_markers(self, results: Dict[str, Any], price_df: pd.DataFrame) -> List[Dict[str, Any]]:
+    def _get_trade_markers(self, results: Dict[str, Any], price_df: pd.DataFrame, tz: Optional[str] = None) -> List[Dict[str, Any]]:
         """Generate trade markers for chart overlay with proper TradingView formatting"""
         trades = results.get('trades') or results.get('trade_log') or []
         if not trades:
@@ -1138,7 +1225,12 @@ class AnalyticsService:
                 # Entry marker
                 entry_time_raw = trade.get('entry_time')
                 if entry_time_raw:
-                    entry_time = pd.to_datetime(entry_time_raw)
+                    entry_time = pd.to_datetime(entry_time_raw, errors='coerce')
+                    if entry_time is None or pd.isna(entry_time):
+                        continue
+                    if entry_time.tzinfo is None:
+                        entry_time = entry_time.tz_localize(tz or 'UTC')
+                    entry_time = entry_time.tz_convert('UTC')
                     dir_val = trade.get('direction', trade.get('side', 'unknown'))
                     direction = str(dir_val).lower() if dir_val is not None else 'unknown'
                     
@@ -1155,7 +1247,12 @@ class AnalyticsService:
                 # Exit marker (if trade is closed)
                 exit_time_raw = trade.get('exit_time')
                 if exit_time_raw and pd.notna(exit_time_raw):
-                    exit_time = pd.to_datetime(exit_time_raw)
+                    exit_time = pd.to_datetime(exit_time_raw, errors='coerce')
+                    if exit_time is None or pd.isna(exit_time):
+                        continue
+                    if exit_time.tzinfo is None:
+                        exit_time = exit_time.tz_localize(tz or 'UTC')
+                    exit_time = exit_time.tz_convert('UTC')
                     pnl_raw = trade.get('pnl', trade.get('profit_loss', 0))
                     try:
                         pnl = float(pnl_raw)
@@ -1290,9 +1387,11 @@ class AnalyticsService:
                 line_data = []
                 for i, value in enumerate(indicator_values):
                     if i < len(price_df) and pd.notna(value):
-                        timestamp = price_df.iloc[i]['timestamp']
+                        # Use UTC timestamp if available
+                        row = price_df.iloc[i]
+                        timestamp = row['timestamp_utc'] if 'timestamp_utc' in price_df.columns else row['timestamp']
                         line_data.append({
-                            'time': int(timestamp.timestamp()),
+                            'time': int(pd.Timestamp(timestamp).timestamp()),
                             'value': float(value)
                         })
                 

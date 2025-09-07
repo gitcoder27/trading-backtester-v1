@@ -56,6 +56,9 @@ export class BacktestService {
       includeTrades?: boolean;
       includeIndicators?: boolean;
       maxCandles?: number;
+      tz?: string;
+      start?: string; // ISO datetime or YYYY-MM-DD
+      end?: string;   // ISO datetime or YYYY-MM-DD
     }
   ): Promise<any> {
     const params = new URLSearchParams();
@@ -67,6 +70,15 @@ export class BacktestService {
     }
     if (options?.maxCandles) {
       params.append('max_candles', options.maxCandles.toString());
+    }
+    if (options?.start) {
+      params.append('start', options.start);
+    }
+    if (options?.end) {
+      params.append('end', options.end);
+    }
+    if (options?.tz) {
+      params.append('tz', options.tz);
     }
     
     const queryString = params.toString();

@@ -237,7 +237,10 @@ class AnalyticsService:
         backtest_id: int, 
         include_trades: bool = True, 
         include_indicators: bool = True,
-        max_candles: Optional[int] = None
+        max_candles: Optional[int] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        tz: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get TradingView Lightweight Charts formatted data with actual dataset data.
@@ -253,7 +256,13 @@ class AnalyticsService:
         legacy_service = LegacyAnalyticsService()
         
         return legacy_service.get_chart_data(
-            backtest_id, include_trades, include_indicators, max_candles
+            backtest_id,
+            include_trades,
+            include_indicators,
+            max_candles,
+            start=start,
+            end=end,
+            tz=tz,
         )
     
     def get_rolling_metrics(self, backtest_id: int, window: int = 50) -> Dict[str, Any]:
