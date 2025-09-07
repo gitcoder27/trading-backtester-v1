@@ -50,9 +50,21 @@ async def run_backtest(request: BacktestRequest):
             finally:
                 db.close()
 
+        # Resolve numeric strategy IDs to module.class path for synchronous runs as well
+        strategy_path = request.strategy
+        if request.strategy.isdigit():
+            from backend.app.services.strategy_service import StrategyRegistry
+            strategy_registry = StrategyRegistry()
+            strategy_id = int(request.strategy)
+            try:
+                strategy_info = strategy_registry.get_strategy_metadata(strategy_id)
+            except Exception:
+                raise HTTPException(status_code=404, detail=f"Strategy with ID {strategy_id} not found")
+            strategy_path = f"{strategy_info['module_path']}.{strategy_info['class_name']}"
+
         # Run the backtest
         result_data = backtest_service.run_backtest(
-            strategy=request.strategy,
+            strategy=strategy_path,
             strategy_params=request.strategy_params,
             dataset_path=dataset_path,
             engine_options=engine_options
@@ -167,6 +179,33 @@ async def get_backtest_detail(backtest_id: int):
             duration_seconds = (backtest.completed_at - backtest.created_at).total_seconds()
             duration = f"{int(duration_seconds // 60)}m"
         
+        # Normalize results: handle JSON stored as string and enrich metrics
+        results_obj: Any = backtest.results or {}
+        try:
+            if isinstance(results_obj, str):
+                results_obj = json.loads(results_obj)
+        except Exception:
+            results_obj = {}
+
+        # Extract metrics with sensible fallbacks
+        metrics_out = {}
+        if isinstance(results_obj, dict):
+            metrics = results_obj.get('metrics', {}) or {}
+            if isinstance(metrics, dict):
+                # Provide common aliases expected by frontend
+                if 'total_return_percent' not in metrics and 'total_return_pct' in metrics:
+                    metrics['total_return_percent'] = metrics.get('total_return_pct')
+                if 'max_drawdown_percent' not in metrics and 'max_drawdown_pct' in metrics:
+                    metrics['max_drawdown_percent'] = metrics.get('max_drawdown_pct')
+                # Ensure total_trades reflects trades length if missing/zero
+                try:
+                    trades_list = results_obj.get('trade_log') or results_obj.get('trades') or []
+                    if (not metrics.get('total_trades')) and isinstance(trades_list, list):
+                        metrics['total_trades'] = len(trades_list)
+                except Exception:
+                    pass
+                metrics_out = metrics
+
         # Structure the response to match frontend expectations
         response = {
             "id": backtest.id,
@@ -180,15 +219,15 @@ async def get_backtest_detail(backtest_id: int):
             "duration": duration,
             "parameters": backtest.strategy_params,
             "initial_capital": 100000,  # Default value, should be stored in results
-            "results": backtest.results or {}
+            "results": results_obj
         }
         
         # Add metrics from results if available
-        if backtest.results and isinstance(backtest.results, dict):
-            if 'metrics' in backtest.results:
-                response['metrics'] = backtest.results['metrics']
-            if 'engine_config' in backtest.results:
-                engine_config = backtest.results['engine_config']
+        if isinstance(results_obj, dict):
+            if metrics_out:
+                response['metrics'] = metrics_out
+            if 'engine_config' in results_obj:
+                engine_config = results_obj['engine_config']
                 response['initial_capital'] = engine_config.get('initial_cash', 100000)
         
         return response
@@ -244,10 +283,33 @@ async def list_backtests(
         # Format response
         backtest_list = []
         for bt in backtests:
-            # Extract metrics from results if available
-            metrics = {}
-            if bt.results and isinstance(bt.results, dict):
-                metrics = bt.results.get('metrics', {})
+            # Extract metrics from results if available, robust to JSON strings
+            metrics_out = {}
+            results_obj: Any = bt.results
+            try:
+                if isinstance(results_obj, str):
+                    results_obj = json.loads(results_obj)
+            except Exception:
+                results_obj = {}
+
+            if isinstance(results_obj, dict):
+                metrics = results_obj.get('metrics', {}) or {}
+                if isinstance(metrics, dict):
+                    # Provide common aliases expected by frontend
+                    if 'total_return_percent' not in metrics and 'total_return_pct' in metrics:
+                        metrics['total_return_percent'] = metrics.get('total_return_pct')
+                    if 'max_drawdown_percent' not in metrics and 'max_drawdown_pct' in metrics:
+                        metrics['max_drawdown_percent'] = metrics.get('max_drawdown_pct')
+
+                    # Ensure total_trades reflects trades length if missing/zero
+                    try:
+                        trades_list = results_obj.get('trade_log') or results_obj.get('trades') or []
+                        if (not metrics.get('total_trades')) and isinstance(trades_list, list):
+                            metrics['total_trades'] = len(trades_list)
+                    except Exception:
+                        pass
+
+                    metrics_out = metrics
             
             backtest_list.append({
                 "id": bt.id,
@@ -257,7 +319,7 @@ async def list_backtests(
                 "status": bt.status,
                 "created_at": bt.created_at.isoformat() if bt.created_at else None,
                 "completed_at": bt.completed_at.isoformat() if bt.completed_at else None,
-                "metrics": metrics
+                "metrics": metrics_out
             })
         
         return {

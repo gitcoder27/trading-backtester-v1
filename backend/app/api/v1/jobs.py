@@ -57,21 +57,18 @@ async def submit_backtest_job(request: BacktestRequest):
         if not dataset_path:
             raise HTTPException(status_code=400, detail="Either dataset or dataset_path must be provided")
         
-        # Resolve strategy ID to strategy path if needed (strategy is just a number)
+        # Resolve numeric strategy ID to module.class path by DB ID (not list index)
         strategy_path = request.strategy
         if request.strategy.isdigit():
-            # Import strategy registry to resolve strategy ID
             from backend.app.services.strategy_service import StrategyRegistry
             strategy_registry = StrategyRegistry()
-            strategies = strategy_registry.list_strategies()
-            
             strategy_id = int(request.strategy)
-            if 1 <= strategy_id <= len(strategies):
-                strategy_info = strategies[strategy_id - 1]  # 1-indexed to 0-indexed
-                # Combine module_path and class_name for BacktestService
-                strategy_path = f"{strategy_info['module_path']}.{strategy_info['class_name']}"
-            else:
+            try:
+                strategy_info = strategy_registry.get_strategy_metadata(strategy_id)
+            except Exception:
                 raise HTTPException(status_code=404, detail=f"Strategy with ID {strategy_id} not found")
+            # Combine module_path and class_name for BacktestService
+            strategy_path = f"{strategy_info['module_path']}.{strategy_info['class_name']}"
         
         # Submit job
         job_id = job_runner.submit_job(

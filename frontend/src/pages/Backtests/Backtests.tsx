@@ -162,7 +162,8 @@ const Backtests: React.FC = () => {
             ? `${(metrics.max_drawdown * 100).toFixed(2)}%` 
             : 'N/A',
           totalTrades: metrics.total_trades || 0,
-          winRate: metrics.win_rate ? `${(metrics.win_rate * 100).toFixed(1)}%` : 'N/A',
+          // Backend returns win_rate as percentage (0–100). Do not multiply again.
+          winRate: typeof metrics.win_rate === 'number' ? `${metrics.win_rate.toFixed(1)}%` : 'N/A',
           createdAt: new Date(bt.created_at).toLocaleDateString(),
           createdAtTs: new Date(bt.created_at).getTime(),
           duration: bt.completed_at 

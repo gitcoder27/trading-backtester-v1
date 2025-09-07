@@ -252,9 +252,9 @@ const BacktestDetail: React.FC = () => {
               <div className="text-sm font-medium text-gray-600 dark:text-gray-300">Total Trades</div>
             </div>
             
-            <div className="text-center p-4 bg-gray-100 dark:bg-gray-900/80 rounded-xl border border-gray-200 dark:border-gray-700">
+              <div className="text-center p-4 bg-gray-100 dark:bg-gray-900/80 rounded-xl border border-gray-200 dark:border-gray-700">
               <div className="text-2xl font-bold mb-1 text-blue-600 dark:text-blue-400">
-                {((metrics.win_rate || 0) * 100).toFixed(1)}%
+                {(metrics.win_rate || 0).toFixed(1)}%
               </div>
               <div className="text-sm font-medium text-gray-600 dark:text-gray-300">Win Rate</div>
             </div>
