@@ -1054,7 +1054,13 @@ class AnalyticsService:
             
             # Add indicator data if requested
             if include_indicators:
-                indicators = self._get_indicator_data(results, df)
+                # Try to include indicators from results; if missing, compute sensible fallbacks
+                strategy_params = None
+                try:
+                    strategy_params = getattr(backtest, 'strategy_params', None)
+                except Exception:
+                    strategy_params = None
+                indicators = self._get_indicator_data(results, df, strategy_params)
                 response_data['indicators'] = indicators
             
             print(f"✅ Chart data ready: {len(candlestick_data)} candles, {len(response_data.get('trade_markers', []))} trades")
@@ -1133,7 +1139,8 @@ class AnalyticsService:
                 entry_time_raw = trade.get('entry_time')
                 if entry_time_raw:
                     entry_time = pd.to_datetime(entry_time_raw)
-                    direction = trade.get('direction', trade.get('side', 'unknown')).lower()
+                    dir_val = trade.get('direction', trade.get('side', 'unknown'))
+                    direction = str(dir_val).lower() if dir_val is not None else 'unknown'
                     
                     entry_marker = {
                         'time': int(entry_time.timestamp()),
@@ -1149,7 +1156,11 @@ class AnalyticsService:
                 exit_time_raw = trade.get('exit_time')
                 if exit_time_raw and pd.notna(exit_time_raw):
                     exit_time = pd.to_datetime(exit_time_raw)
-                    pnl = trade.get('pnl', trade.get('profit_loss', 0))
+                    pnl_raw = trade.get('pnl', trade.get('profit_loss', 0))
+                    try:
+                        pnl = float(pnl_raw)
+                    except Exception:
+                        pnl = 0.0
                     
                     exit_marker = {
                         'time': int(exit_time.timestamp()),
@@ -1167,11 +1178,90 @@ class AnalyticsService:
         
         return markers
     
-    def _get_indicator_data(self, results: Dict[str, Any], price_df: pd.DataFrame) -> List[Dict[str, Any]]:
-        """Generate indicator lines for chart overlay with TradingView compatible format"""
-        indicators_data = results.get('indicators', {})
+    def _get_indicator_data(self, results: Dict[str, Any], price_df: pd.DataFrame, strategy_params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Generate indicator lines for chart overlay with TradingView compatible format.
+
+        If indicators are not present in results, attempt to compute reasonable
+        overlays from available strategy parameters and price data (close prices).
+        """
+        indicators_data = results.get('indicators', {}) or {}
+
+        # If strategy didn't emit indicator arrays, synthesize basic ones from params
         if not indicators_data:
-            return []
+            try:
+                close = price_df['close'].astype(float)
+                # Helpers
+                def to_int(val, default=None):
+                    try:
+                        return int(val)
+                    except Exception:
+                        return default
+
+                params = strategy_params or {}
+                # Common EMA/SMA params
+                ema_fast = params.get('ema_fast') or params.get('ema_short') or params.get('fast_ema') or params.get('ema_period')
+                ema_slow = params.get('ema_slow') or params.get('ema_long') or params.get('slow_ema')
+                sma_period = params.get('sma_period') or params.get('moving_average_period')
+                rsi_period = params.get('rsi_period') or params.get('rsi')
+                bb_period = params.get('bb_period') or params.get('bollinger_period')
+                bb_std = params.get('bb_std') or params.get('bollinger_std') or 2
+                macd_fast = params.get('macd_fast')
+                macd_slow = params.get('macd_slow')
+                macd_signal = params.get('macd_signal')
+
+                # Compute EMAs if requested
+                if ema_fast:
+                    n = to_int(ema_fast, 12)
+                    indicators_data['ema_fast'] = list(close.ewm(span=n, adjust=False).mean())
+                if ema_slow:
+                    n = to_int(ema_slow, 26)
+                    indicators_data['ema_slow'] = list(close.ewm(span=n, adjust=False).mean())
+
+                # Compute SMA if requested
+                if sma_period:
+                    n = to_int(sma_period, 20)
+                    indicators_data['sma'] = list(close.rolling(window=n, min_periods=1).mean())
+
+                # Compute Bollinger Bands if requested
+                if bb_period:
+                    n = to_int(bb_period, 20)
+                    k = float(bb_std) if bb_std is not None else 2.0
+                    ma = close.rolling(window=n, min_periods=1).mean()
+                    sd = close.rolling(window=n, min_periods=1).std(ddof=0)
+                    indicators_data['bb_upper'] = list(ma + k * sd)
+                    indicators_data['bb_middle'] = list(ma)
+                    indicators_data['bb_lower'] = list(ma - k * sd)
+
+                # Compute RSI if requested
+                if rsi_period:
+                    n = to_int(rsi_period, 14)
+                    delta = close.diff()
+                    gain = delta.where(delta > 0, 0.0)
+                    loss = -delta.where(delta < 0, 0.0)
+                    avg_gain = gain.rolling(window=n, min_periods=n).mean()
+                    avg_loss = loss.rolling(window=n, min_periods=n).mean()
+                    rs = avg_gain / (avg_loss.replace(0, 1e-12))
+                    rsi = 100 - (100 / (1 + rs))
+                    indicators_data['rsi'] = list(rsi)
+
+                # Compute MACD if requested
+                if macd_fast and macd_slow:
+                    f = to_int(macd_fast, 12)
+                    s = to_int(macd_slow, 26)
+                    macd_line = close.ewm(span=f, adjust=False).mean() - close.ewm(span=s, adjust=False).mean()
+                    if macd_signal:
+                        sig = to_int(macd_signal, 9)
+                        signal_line = macd_line.ewm(span=sig, adjust=False).mean()
+                        indicators_data['macd_signal'] = list(signal_line)
+                    indicators_data['macd'] = list(macd_line)
+
+                # If nothing inferred, add a sensible default to aid visualization
+                if not indicators_data:
+                    indicators_data['sma_20'] = list(close.rolling(window=20, min_periods=1).mean())
+                    indicators_data['sma_50'] = list(close.rolling(window=50, min_periods=1).mean())
+            except Exception:
+                # Silently fall back to no indicators if computation fails
+                indicators_data = {}
         
         indicators = []
         

@@ -3,7 +3,8 @@ import {
   createChart, 
   CandlestickSeries,
   LineSeries,
-  ColorType
+  ColorType,
+  createSeriesMarkers,
 } from 'lightweight-charts';
 import type { 
   IChartApi, 
@@ -69,6 +70,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
+  const markersPluginRef = useRef<any>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [visibleIndicators, setVisibleIndicators] = useState<Set<string>>(new Set());
 
@@ -171,6 +173,14 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     const candleSeries = chart.addSeries(CandlestickSeries, getCandlestickOptions());
     candleSeriesRef.current = candleSeries;
 
+    // Prepare markers plugin attached to the candlestick series
+    try {
+      markersPluginRef.current = createSeriesMarkers(candleSeries);
+    } catch (err) {
+      // Plugin not available; markers will be skipped gracefully
+      markersPluginRef.current = null;
+    }
+
     // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current && chart) {
@@ -192,6 +202,10 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         chartRef.current = null;
       }
       candleSeriesRef.current = null;
+      if (markersPluginRef.current && typeof markersPluginRef.current.detach === 'function') {
+        try { markersPluginRef.current.detach(); } catch {}
+      }
+      markersPluginRef.current = null;
       indicatorSeriesRef.current.clear();
     };
   }, [height, theme, loading, isFullscreen]);
@@ -221,7 +235,8 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     }
   }, [candleData, autoFit]);
 
-  // Update trade markers
+  // Update trade markers via series markers plugin
+  // Include candleData so markers apply after series creation/data load as well
   useEffect(() => {
     if (!candleSeriesRef.current || !tradeMarkers.length) return;
 
@@ -235,14 +250,14 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
         size: marker.size || 1,
       }));
 
-      // Note: setMarkers might not be available in all versions, skip if not available
-      if ('setMarkers' in candleSeriesRef.current) {
-        (candleSeriesRef.current as any).setMarkers(formattedMarkers);
+      // Prefer plugin API for modern lightweight-charts
+      if (markersPluginRef.current && typeof markersPluginRef.current.setMarkers === 'function') {
+        markersPluginRef.current.setMarkers(formattedMarkers);
       }
     } catch (error) {
       console.error('Error setting trade markers:', error);
     }
-  }, [tradeMarkers]);
+  }, [tradeMarkers, candleData]);
 
   // Update indicators
   useEffect(() => {

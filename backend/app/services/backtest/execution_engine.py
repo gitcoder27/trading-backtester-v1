@@ -378,16 +378,24 @@ class ExecutionEngine:
                 record = {}
                 
                 for col, value in row.items():
-                    if pd.isna(value):
-                        record[col] = None
-                    elif isinstance(value, (pd.Timestamp, np.datetime64)):
-                        record[col] = pd.Timestamp(value).isoformat()
-                    elif isinstance(value, (np.int64, np.int32)):
-                        record[col] = int(value)
-                    elif isinstance(value, (np.float64, np.float32)):
-                        record[col] = float(value)
-                    else:
-                        record[col] = str(value)
+                    try:
+                        if pd.isna(value):
+                            record[col] = None
+                        elif isinstance(value, (pd.Timestamp, np.datetime64)):
+                            record[col] = pd.Timestamp(value).isoformat()
+                        # Preserve numeric types (Python and NumPy) as numbers
+                        elif isinstance(value, (int, np.integer)):
+                            record[col] = int(value)
+                        elif isinstance(value, (float, np.floating)):
+                            record[col] = float(value)
+                        else:
+                            record[col] = str(value)
+                    except Exception:
+                        # Best-effort fallback
+                        try:
+                            record[col] = str(value)
+                        except Exception:
+                            record[col] = None
                 
                 processed.append(record)
             
