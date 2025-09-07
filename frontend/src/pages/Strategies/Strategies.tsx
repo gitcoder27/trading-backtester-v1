@@ -358,7 +358,7 @@ const Strategies: React.FC = () => {
                     {/* Actions */}
                     <div className="flex space-x-2 pt-2">
                       <Button
-                        variant="outline"
+                        variant="nav"
                         size="sm"
                         icon={Edit3}
                         onClick={(e) => {
@@ -370,6 +370,7 @@ const Strategies: React.FC = () => {
                         Edit
                       </Button>
                       <Button
+                        variant="action"
                         size="sm"
                         icon={Play}
                         onClick={(e) => {

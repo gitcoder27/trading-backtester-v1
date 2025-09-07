@@ -70,7 +70,7 @@ const BacktestDetail: React.FC = () => {
           {error?.message || 'Backtest not found'}
         </p>
         <Link to="/backtests">
-          <Button variant="outline">
+          <Button variant="nav">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Backtests
           </Button>
@@ -133,26 +133,26 @@ const BacktestDetail: React.FC = () => {
             </div>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-3">
           {!isJobMode && (
             <Link to={`/analytics?backtest_id=${id}`}>
-              <Button variant="primary" size="sm">
+              <Button variant="action" size="sm">
                 <TrendingUp className="h-4 w-4 mr-2" />
                 Advanced Analytics
               </Button>
             </Link>
           )}
-          <Button variant="outline" size="sm">
+          <Button variant="nav" size="sm">
             <Share2 className="h-4 w-4 mr-2" />
             Share
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="nav" size="sm">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
           {!isJobMode && (
             <Link to={`/analytics?backtestId=${id}`}>
-              <Button variant="primary" size="sm">
+              <Button variant="action" size="sm">
                 <TrendingUp className="h-4 w-4 mr-2" />
                 View Analytics
               </Button>

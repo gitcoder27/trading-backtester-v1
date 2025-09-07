@@ -90,10 +90,10 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
           </label>
           {singleDay && (
             <>
-              <Button variant="outline" size="sm" onClick={() => stepDay(-1)}>
+              <Button variant="nav" size="sm" onClick={() => stepDay(-1)}>
                 Prev Day
               </Button>
-              <Button variant="outline" size="sm" onClick={() => stepDay(1)}>
+              <Button variant="nav" size="sm" onClick={() => stepDay(1)}>
                 Next Day
               </Button>
             </>
@@ -121,7 +121,7 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
           />
         </div>
         <div className="flex-1" />
-        <Button variant="primary" size="sm" onClick={handleApply} disabled={!canApply}>
+        <Button variant="action" size="sm" onClick={handleApply} disabled={!canApply}>
           Apply
         </Button>
       </div>

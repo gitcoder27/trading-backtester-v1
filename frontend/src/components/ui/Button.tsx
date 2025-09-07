@@ -2,12 +2,13 @@ import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success' | 'nav' | 'action';
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   icon?: LucideIcon;
   iconPosition?: 'left' | 'right';
   loading?: boolean;
   fullWidth?: boolean;
+  iconOnly?: boolean;
   children?: React.ReactNode;
 }
 
@@ -18,6 +19,7 @@ const Button: React.FC<ButtonProps> = ({
   iconPosition = 'left',
   loading = false,
   fullWidth = false,
+  iconOnly = false,
   children,
   className = '',
   disabled,
@@ -27,6 +29,7 @@ const Button: React.FC<ButtonProps> = ({
   const variantClasses = `btn-${variant}`;
   const sizeClasses = `btn-${size}`;
   const widthClasses = fullWidth ? 'w-full' : '';
+  const iconOnlyClasses = iconOnly ? 'btn-icon-only' : '';
 
   const iconSize = {
     xs: 'h-3 w-3',
@@ -41,7 +44,7 @@ const Button: React.FC<ButtonProps> = ({
   );
 
   const ButtonIcon = Icon && !loading ? (
-    <Icon className={`${iconSize} ${iconPosition === 'left' && children ? 'mr-2' : iconPosition === 'right' && children ? 'ml-2' : ''}`} />
+    <Icon className={`${iconSize} ${iconPosition === 'left' && children && !iconOnly ? 'mr-2' : iconPosition === 'right' && children && !iconOnly ? 'ml-2' : ''}`} />
   ) : null;
 
   // Separate event handlers so we can enhance keyboard accessibility
@@ -57,7 +60,7 @@ const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
-      className={`${baseClasses} ${variantClasses} ${sizeClasses} ${widthClasses} ${className}`}
+      className={`${baseClasses} ${variantClasses} ${sizeClasses} ${widthClasses} ${iconOnlyClasses} ${className}`}
       disabled={disabled || loading}
       onKeyDown={handleKeyDown}
       onClick={onClick}
@@ -65,7 +68,7 @@ const Button: React.FC<ButtonProps> = ({
     >
       {loading && iconPosition === 'left' && <LoadingSpinner />}
       {!loading && iconPosition === 'left' && ButtonIcon}
-      {children}
+      {!iconOnly && children}
       {loading && iconPosition === 'right' && <LoadingSpinner />}
       {!loading && iconPosition === 'right' && ButtonIcon}
     </button>

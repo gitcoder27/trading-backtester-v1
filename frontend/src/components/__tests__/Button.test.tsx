@@ -21,6 +21,12 @@ describe('Button Component', () => {
 
     rerender(<Button variant="outline">Outline</Button>);
     expect(screen.getByRole('button')).toHaveClass('btn-outline');
+    
+    rerender(<Button variant="nav">Navigation</Button>);
+    expect(screen.getByRole('button')).toHaveClass('btn-nav');
+    
+    rerender(<Button variant="action">Action</Button>);
+    expect(screen.getByRole('button')).toHaveClass('btn-action');
   });
 
   it('should render different button sizes', () => {
@@ -64,6 +70,15 @@ describe('Button Component', () => {
     );
     
     const button = screen.getByRole('button');
+    const svg = button.querySelector('svg');
+    expect(svg).toBeInTheDocument();
+  });
+
+  it('should render icon-only button', () => {
+    render(<Button icon={Plus} iconOnly />);
+    
+    const button = screen.getByRole('button');
+    expect(button).toHaveClass('btn-icon-only');
     const svg = button.querySelector('svg');
     expect(svg).toBeInTheDocument();
   });

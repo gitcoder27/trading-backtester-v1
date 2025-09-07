@@ -113,7 +113,7 @@ const StrategyDetailView: React.FC<StrategyDetailViewProps> = ({
         <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Strategy Not Found</h3>
         <p className="text-gray-600 dark:text-gray-400 mb-4">The requested strategy could not be loaded.</p>
-        <Button onClick={onBack} icon={ArrowLeft}>Back to Strategies</Button>
+        <Button onClick={onBack} variant="nav" icon={ArrowLeft}>Back to Strategies</Button>
       </div>
     );
   }
@@ -124,7 +124,7 @@ const StrategyDetailView: React.FC<StrategyDetailViewProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <Button
-            variant="outline"
+            variant="nav"
             size="sm"
             icon={ArrowLeft}
             onClick={onBack}
@@ -139,14 +139,15 @@ const StrategyDetailView: React.FC<StrategyDetailViewProps> = ({
         
         <div className="flex items-center space-x-3">
           <Button
-            variant="outline"
+            variant="nav"
             icon={strategy.is_active ? ToggleRight : ToggleLeft}
             onClick={handleToggleActive}
-            className={strategy.is_active ? 'text-success-600' : 'text-gray-500'}
+            className={strategy.is_active ? 'text-success-400' : 'text-gray-400'}
           >
             {strategy.is_active ? 'Active' : 'Inactive'}
           </Button>
           <Button
+            variant="action"
             icon={Play}
             onClick={() => setShowBacktestModal(true)}
             disabled={!strategy.is_active}
