@@ -29,6 +29,7 @@ from backend.app.services.analytics.performance_calculator import PerformanceCal
 from backend.app.services.analytics.risk_calculator import RiskCalculator
 
 from backtester.data_loader import load_csv
+from backtester.metrics import daily_profit_target_stats
 
 
 DEFAULT_STRATEGY = (
@@ -226,10 +227,18 @@ def main(argv: List[str] | None = None) -> int:
     print(format_section("Backtest Summary"))
     print(f"Strategy: {args.strategy}")
     print(f"Data points: {len(df)} | From: {df['timestamp'].min()} | To: {df['timestamp'].max()}")
+    # Start/Final equity summary for parity with legacy CLI
+    equity_df = pd.DataFrame(result.get("equity_curve", []))
+    try:
+        start_amount = float(equity_df['equity'].iloc[0]) if not equity_df.empty else float(metrics.get('final_equity') or 0)
+        final_amount = float(metrics.get('final_equity') or (equity_df['equity'].iloc[-1] if not equity_df.empty else 0))
+        print(f"Start Amount: {start_amount:.2f}")
+        print(f"Final Amount: {final_amount:.2f}")
+    except Exception:
+        pass
     print_metrics(metrics, title="Performance Metrics")
 
     # Add optional advanced analytics (volatility/sortino/var etc.)
-    equity_df = pd.DataFrame(result.get("equity_curve", []))
     trades_df = pd.DataFrame(result.get("trade_log") or result.get("trades") or [])
     perf_calc = PerformanceCalculator()
     risk_calc = RiskCalculator()
@@ -245,6 +254,25 @@ def main(argv: List[str] | None = None) -> int:
         print_metrics(adv, title="Advanced Analytics")
     if risk:
         print_metrics(risk, title="Risk Metrics")
+
+    # Daily profit target statistics (parity with legacy output)
+    try:
+        engine_cfg = result.get('engine_config') or result.get('execution_info', {}).get('engine_config') or {}
+        daily_target = engine_cfg.get('daily_target', 30.0)
+        daily_stats = daily_profit_target_stats(trades_df, daily_target)
+        print(format_section("Daily Target Stats"))
+        print(f"Days Traded: {daily_stats.get('days_traded', 0)}")
+        print(f"Days Target Hit: {daily_stats.get('days_target_hit', 0)}")
+        thr = daily_stats.get('target_hit_rate')
+        print(f"Daily Target Hit Rate: {thr*100:.2f}%" if isinstance(thr, (int, float)) and thr == thr else "Daily Target Hit Rate: N/A")
+        mdp = daily_stats.get('max_daily_pnl')
+        wdp = daily_stats.get('min_daily_pnl')
+        adp = daily_stats.get('avg_daily_pnl')
+        print(f"Best Day PnL: {mdp:.2f}" if isinstance(mdp, (int, float)) and mdp == mdp else "Best Day PnL: N/A")
+        print(f"Worst Day PnL: {wdp:.2f}" if isinstance(wdp, (int, float)) and wdp == wdp else "Worst Day PnL: N/A")
+        print(f"Average Day PnL: {adp:.2f}" if isinstance(adp, (int, float)) and adp == adp else "Average Day PnL: N/A")
+    except Exception:
+        pass
 
     # Optionally write JSON output
     if args.output_json:
