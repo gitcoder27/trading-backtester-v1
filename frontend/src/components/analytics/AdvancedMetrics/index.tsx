@@ -2,7 +2,7 @@ import React from 'react';
 import Card from '../../ui/Card';
 import { usePerformanceData } from './usePerformanceData';
 import MetricsSection from './MetricsSection';
-import { getCoreMetrics, getAdvancedMetrics, getTradeMetrics, getRiskMetrics } from './metricsConfig';
+import { getCoreMetrics, getAdvancedMetrics, getTradeMetrics, getRiskMetrics, getDailyTargetMetrics } from './metricsConfig';
 import type { AdvancedMetricsProps } from './types';
 
 const AdvancedMetrics: React.FC<AdvancedMetricsProps> = ({ backtestId, className = '' }) => {
@@ -79,6 +79,16 @@ const AdvancedMetrics: React.FC<AdvancedMetricsProps> = ({ backtestId, className
         badgeVariant="success"
         metrics={getTradeMetrics(performance)}
       />
+
+      {/* Daily Target Stats */}
+      {performance.daily_target_stats && (
+        <MetricsSection
+          title="Daily Target Stats"
+          badgeText="Daily"
+          badgeVariant="info"
+          metrics={getDailyTargetMetrics(performance)}
+        />
+      )}
 
       {/* Risk Metrics */}
       <MetricsSection

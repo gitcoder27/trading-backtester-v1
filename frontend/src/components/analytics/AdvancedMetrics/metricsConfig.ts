@@ -160,47 +160,158 @@ export const getTradeMetrics = (performance: PerformanceData['performance']): Me
     subtitle: "Longest losing streak",
     icon: TrendingDown,
     format: "number"
-  }
-];
-
-export const getRiskMetrics = (performance: PerformanceData['performance']): MetricCardProps[] => [
+  },
+  // Directional breakdown (counts)
   {
-    title: "VaR (95%)",
-    value: Math.abs(performance.risk_metrics.var_95 || 0),
-    subtitle: "Value at Risk",
-    icon: Shield,
-    color: "text-warning-600 dark:text-warning-400",
-    bgColor: "bg-warning-100 dark:bg-warning-900/50",
-    format: "percentage"
+    title: "Long Trades",
+    value: performance.trade_analysis.total_long_trades || 0,
+    subtitle: "Total long entries",
+    icon: TrendingUp,
+    format: "number"
   },
   {
-    title: "VaR (99%)",
-    value: Math.abs(performance.risk_metrics.var_99 || 0),
-    subtitle: "Value at Risk (extreme)",
-    icon: AlertTriangle,
-    color: "text-danger-600 dark:text-danger-400",
-    bgColor: "bg-danger-100 dark:bg-danger-900/50",
-    format: "percentage"
+    title: "Short Trades",
+    value: performance.trade_analysis.total_short_trades || 0,
+    subtitle: "Total short entries",
+    icon: TrendingDown,
+    format: "number"
   },
   {
-    title: "CVaR (95%)",
-    value: Math.abs(performance.risk_metrics.cvar_95 || 0),
-    subtitle: "Conditional Value at Risk",
-    icon: Shield,
-    format: "percentage"
+    title: "Winning Longs",
+    value: performance.trade_analysis.winning_long_trades || 0,
+    subtitle: "Profitable longs",
+    icon: TrendingUp,
+    format: "number"
   },
   {
-    title: "CVaR (99%)",
-    value: Math.abs(performance.risk_metrics.cvar_99 || 0),
-    subtitle: "Expected shortfall",
-    icon: AlertTriangle,
-    format: "percentage"
-  },
-  {
-    title: "Max Consecutive Loss Days",
-    value: performance.risk_metrics.max_consecutive_losses || 0,
-    subtitle: "Longest drawdown period",
-    icon: Clock,
+    title: "Winning Shorts",
+    value: performance.trade_analysis.winning_short_trades || 0,
+    subtitle: "Profitable shorts",
+    icon: TrendingDown,
     format: "number"
   }
 ];
+
+export const getRiskMetrics = (performance: PerformanceData['performance']): MetricCardProps[] => {
+  const items: MetricCardProps[] = [
+    {
+      title: "VaR (95%)",
+      value: Math.abs(performance.risk_metrics.var_95 || 0),
+      subtitle: "Value at Risk",
+      icon: Shield,
+      color: "text-warning-600 dark:text-warning-400",
+      bgColor: "bg-warning-100 dark:bg-warning-900/50",
+      format: "percentage"
+    },
+    {
+      title: "VaR (99%)",
+      value: Math.abs(performance.risk_metrics.var_99 || 0),
+      subtitle: "Value at Risk (extreme)",
+      icon: AlertTriangle,
+      color: "text-danger-600 dark:text-danger-400",
+      bgColor: "bg-danger-100 dark:bg-danger-900/50",
+      format: "percentage"
+    },
+    {
+      title: "CVaR (95%)",
+      value: Math.abs(performance.risk_metrics.cvar_95 || 0),
+      subtitle: "Conditional Value at Risk",
+      icon: Shield,
+      format: "percentage"
+    },
+    {
+      title: "CVaR (99%)",
+      value: Math.abs(performance.risk_metrics.cvar_99 || 0),
+      subtitle: "Expected shortfall",
+      icon: AlertTriangle,
+      format: "percentage"
+    },
+    {
+      title: "Max Consecutive Loss Days",
+      value: performance.risk_metrics.max_consecutive_losses || 0,
+      subtitle: "Longest drawdown period",
+      icon: Clock,
+      format: "number"
+    }
+  ];
+  // Add drawdown analysis details if present
+  if (performance.drawdown_analysis) {
+    items.push(
+      {
+        title: "Avg Drawdown",
+        value: Math.abs(performance.drawdown_analysis.avg_drawdown || 0),
+        subtitle: "Mean underwater magnitude",
+        icon: TrendingDown,
+        format: "percentage"
+      },
+      {
+        title: "DD Frequency",
+        value: (performance.drawdown_analysis.drawdown_frequency || 0) * 100,
+        subtitle: "Share of points in drawdown",
+        icon: Activity,
+        format: "percentage"
+      },
+      {
+        title: "Max DD Duration",
+        value: performance.drawdown_analysis.max_drawdown_duration || 0,
+        subtitle: "Longest downturn (days)",
+        icon: Clock,
+        format: "number"
+      }
+    );
+  }
+  return items;
+};
+
+export const getDailyTargetMetrics = (performance: PerformanceData['performance']): MetricCardProps[] => {
+  const ds = performance.daily_target_stats;
+  if (!ds) return [];
+  return [
+    {
+      title: "Days Traded",
+      value: ds.days_traded || 0,
+      subtitle: "Total trading days",
+      icon: Clock,
+      format: "number"
+    },
+    {
+      title: "Target Hit Days",
+      value: ds.days_target_hit || 0,
+      subtitle: "Days hit daily target",
+      icon: Target,
+      format: "number"
+    },
+    {
+      title: "Hit Rate",
+      value: (ds.target_hit_rate || 0) * 100,
+      subtitle: "Daily target hit %",
+      icon: Activity,
+      format: "percentage"
+    },
+    {
+      title: "Best Day PnL",
+      value: ds.max_daily_pnl || 0,
+      subtitle: "Max daily profit",
+      icon: TrendingUp,
+      color: "text-success-600 dark:text-success-400",
+      bgColor: "bg-success-100 dark:bg-success-900/50",
+      format: "currency"
+    },
+    {
+      title: "Worst Day PnL",
+      value: Math.abs(ds.min_daily_pnl || 0),
+      subtitle: "Max daily loss",
+      icon: TrendingDown,
+      color: "text-danger-600 dark:text-danger-400",
+      bgColor: "bg-danger-100 dark:bg-danger-900/50",
+      format: "currency"
+    },
+    {
+      title: "Avg Day PnL",
+      value: ds.avg_daily_pnl || 0,
+      subtitle: "Mean daily PnL",
+      icon: Activity,
+      format: "currency"
+    }
+  ];
+};

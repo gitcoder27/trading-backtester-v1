@@ -31,6 +31,11 @@ export interface PerformanceData {
       largest_loss: number;
       consecutive_wins: number;
       consecutive_losses: number;
+      avg_holding_time?: number;
+      total_long_trades?: number;
+      total_short_trades?: number;
+      winning_long_trades?: number;
+      winning_short_trades?: number;
     };
     risk_metrics: {
       var_95: number;
@@ -38,6 +43,22 @@ export interface PerformanceData {
       cvar_95: number;
       cvar_99: number;
       max_consecutive_losses: number;
+      trading_sessions_days?: number;
+      trading_sessions_years?: number;
+    };
+    daily_target_stats?: {
+      days_traded: number;
+      days_target_hit: number;
+      target_hit_rate: number; // 0-1
+      max_daily_pnl: number;
+      min_daily_pnl: number;
+      avg_daily_pnl: number;
+    };
+    drawdown_analysis?: {
+      max_drawdown: number;
+      max_drawdown_duration: number;
+      avg_drawdown: number;
+      drawdown_frequency: number; // 0-1 over points
     };
     time_analysis: {
       performance_by_hour?: Record<string, number>;

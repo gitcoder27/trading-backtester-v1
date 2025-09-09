@@ -8,6 +8,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 from backend.app.database.models import get_session_factory, Backtest, Dataset
+from backtester.metrics import daily_profit_target_stats
 from .performance_calculator import PerformanceCalculator
 from .chart_generator import ChartGenerator
 from .trade_analyzer import TradeAnalyzer
@@ -63,6 +64,17 @@ class AnalyticsService:
             trades_list = results.get('trades') or results.get('trade_log') or []
             trades = pd.DataFrame(trades_list)
             metrics = results.get('metrics', {})
+            engine_config = results.get('engine_config', {})
+            
+            # Daily target stats (use configured daily_target if available)
+            try:
+                daily_target = float(engine_config.get('daily_target', 30.0))
+            except Exception:
+                daily_target = 30.0
+            daily_stats = daily_profit_target_stats(trades, daily_target)
+            
+            # Additional drawdown analysis details
+            drawdown_analysis = self.risk_calc.compute_drawdown_analysis(equity_curve)
             
             # Compute analytics using specialized components
             advanced_analytics = self.performance_calc.compute_basic_analytics(equity_curve, trades)
@@ -76,7 +88,9 @@ class AnalyticsService:
                     'basic_metrics': metrics,
                     'advanced_analytics': advanced_analytics,
                     'risk_metrics': risk_metrics,
-                    'trade_analysis': trade_analysis
+                    'trade_analysis': trade_analysis,
+                    'daily_target_stats': daily_stats,
+                    'drawdown_analysis': drawdown_analysis,
                 }
             }
             # Sanitize for JSON (avoid NaN/Inf causing 500s)
