@@ -97,7 +97,7 @@ const PerformanceMetrics: React.FC<PerformanceMetricsProps> = ({ backtestId, cla
     );
   }
 
-  const formatPercent = (value: number) => `${(value).toFixed(2)}%`;
+  const formatPercent = (value: number) => `${value.toFixed(2)}%`;
   const formatNumber = (value: number) => (Number.isFinite(value) ? value.toFixed(2) : '0.00');
 
   return (
@@ -144,8 +144,8 @@ const PerformanceMetrics: React.FC<PerformanceMetricsProps> = ({ backtestId, cla
           label="Win Rate"
           value={formatPercent((metrics.win_rate ?? 0) as number)}
           icon={Target}
-          color={metrics.win_rate > 0.5 ? "text-success-600 dark:text-success-400" : "text-warning-600 dark:text-warning-400"}
-          bgColor={metrics.win_rate > 0.5 ? "bg-success-100 dark:bg-success-900/50" : "bg-warning-100 dark:bg-warning-900/50"}
+          color={metrics.win_rate > 50 ? "text-success-600 dark:text-success-400" : "text-warning-600 dark:text-warning-400"}
+          bgColor={metrics.win_rate > 50 ? "bg-success-100 dark:bg-success-900/50" : "bg-warning-100 dark:bg-warning-900/50"}
           description="Percentage of profitable trades"
         />
 
@@ -181,7 +181,7 @@ const PerformanceMetrics: React.FC<PerformanceMetricsProps> = ({ backtestId, cla
           <div>
             <span className="text-gray-600 dark:text-gray-400">Volatility:</span>
             <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
-              {formatPercent(((metrics.volatility_annualized ?? metrics.volatility) ?? 0) as number)}
+              {formatPercent((((metrics.volatility_annualized ?? metrics.volatility) ?? 0) as number) * 100)}
             </span>
           </div>
           <div>

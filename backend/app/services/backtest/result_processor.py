@@ -240,66 +240,56 @@ class ResultProcessor:
             }
     
     def _calculate_trade_metrics(self, trades: pd.DataFrame) -> Dict[str, Any]:
-        """Calculate trade-based metrics"""
+        """Calculate trade-based metrics using the canonical metrics helpers"""
         try:
             # Basic trade counts
             total_trades_count = len(trades)
-            
-            # PnL-based metrics (if PnL column exists)
-            pnl_metrics = {}
+
+            # Ensure numeric PnL for all downstream calculations
             if 'pnl' in trades.columns:
-                pnl_data = pd.to_numeric(trades['pnl'], errors='coerce').dropna()
-                
-                if len(pnl_data) > 0:
-                    # Win rate
-                    win_rate_val = win_rate(pnl_data) * 100
-                    
-                    # Profit factor
-                    profit_factor_val = profit_factor(pnl_data)
-                    
-                    # Largest trades
-                    largest_win = largest_winning_trade(pnl_data)
-                    largest_loss = largest_losing_trade(pnl_data)
-                    
-                    # Consecutive trades
-                    max_wins = max_consecutive_wins(pnl_data)
-                    max_losses = max_consecutive_losses(pnl_data)
-                    
-                    pnl_metrics = {
-                        'win_rate': win_rate_val,
-                        'profit_factor': profit_factor_val,
-                        'largest_winning_trade': largest_win,
-                        'largest_losing_trade': largest_loss,
-                        'max_consecutive_wins': max_wins,
-                        'max_consecutive_losses': max_losses,
-                    }
-            
+                trades = trades.copy()
+                trades['pnl'] = pd.to_numeric(trades['pnl'], errors='coerce')
+                trades = trades.dropna(subset=['pnl'])
+
+            pnl_metrics = {}
+            if 'pnl' in trades.columns and len(trades) > 0:
+                # Call helpers with full trade DataFrame (they expect 'pnl' column)
+                wr = win_rate(trades)
+                pf = profit_factor(trades)
+                lw = largest_winning_trade(trades)
+                ll = largest_losing_trade(trades)
+                mcw = max_consecutive_wins(trades)
+                mcl = max_consecutive_losses(trades)
+
+                # Convert to frontend-expected scales where needed
+                pnl_metrics = {
+                    'win_rate': float(wr * 100) if pd.notna(wr) else 0.0,
+                    'profit_factor': float(pf) if pd.notna(pf) else 0.0,
+                    'largest_winning_trade': float(lw) if pd.notna(lw) else 0.0,
+                    'largest_losing_trade': float(ll) if pd.notna(ll) else 0.0,
+                    'max_consecutive_wins': int(mcw) if mcw is not None else 0,
+                    'max_consecutive_losses': int(mcl) if mcl is not None else 0,
+                }
+
             # Holding time metrics
             holding_time_metrics = {}
             if 'entry_time' in trades.columns and 'exit_time' in trades.columns:
                 try:
-                    entry_times = pd.to_datetime(trades['entry_time'], errors='coerce')
-                    exit_times = pd.to_datetime(trades['exit_time'], errors='coerce')
-                    valid_mask = entry_times.notna() & exit_times.notna()
-                    
-                    if valid_mask.any():
-                        avg_holding = average_holding_time(
-                            entry_times[valid_mask], 
-                            exit_times[valid_mask]
-                        )
-                        holding_time_metrics['average_holding_time'] = avg_holding
+                    # Pass a valid subset DataFrame to the helper
+                    df_ht = trades[['entry_time', 'exit_time']].copy()
+                    avg_holding = average_holding_time(df_ht)
+                    if pd.notna(avg_holding):
+                        holding_time_metrics['average_holding_time'] = float(avg_holding)
                 except Exception:
                     pass
-            
+
             # Combine all trade metrics
-            trade_metrics = {
+            return {
                 'total_trades': total_trades_count,
                 **pnl_metrics,
-                **holding_time_metrics
+                **holding_time_metrics,
             }
-            
-            return trade_metrics
-            
+
         except Exception as e:
             logger.error(f"Trade metrics calculation failed: {e}")
             return {'total_trades': 0}
