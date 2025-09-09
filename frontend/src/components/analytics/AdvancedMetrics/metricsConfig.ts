@@ -110,10 +110,13 @@ export const getAdvancedMetrics = (performance: PerformanceData['performance']):
   }
 ];
 
-export const getTradeMetrics = (performance: PerformanceData['performance']): MetricCardProps[] => [
+export const getTradeMetrics = (performance: PerformanceData['performance']): MetricCardProps[] => {
+  const ta = performance.trade_analysis || ({} as any);
+  const adv = performance.advanced_analytics || ({} as any);
+  return [
   {
     title: "Average Win",
-    value: performance.trade_analysis.avg_win || 0,
+    value: (ta.avg_win ?? adv.avg_win) || 0,
     subtitle: "Mean winning trade P&L",
     icon: TrendingUp,
     color: "text-success-600 dark:text-success-400",
@@ -122,7 +125,7 @@ export const getTradeMetrics = (performance: PerformanceData['performance']): Me
   },
   {
     title: "Average Loss",
-    value: Math.abs(performance.trade_analysis.avg_loss || 0),
+    value: Math.abs((ta.avg_loss ?? adv.avg_loss) || 0),
     subtitle: "Mean losing trade P&L",
     icon: TrendingDown,
     color: "text-danger-600 dark:text-danger-400",
@@ -131,7 +134,7 @@ export const getTradeMetrics = (performance: PerformanceData['performance']): Me
   },
   {
     title: "Largest Win",
-    value: performance.trade_analysis.largest_win || 0,
+    value: (ta.largest_win ?? adv.largest_win) || 0,
     subtitle: "Best single trade",
     icon: Target,
     color: "text-success-600 dark:text-success-400",
@@ -140,7 +143,7 @@ export const getTradeMetrics = (performance: PerformanceData['performance']): Me
   },
   {
     title: "Largest Loss",
-    value: Math.abs(performance.trade_analysis.largest_loss || 0),
+    value: Math.abs((ta.largest_loss ?? adv.largest_loss) || 0),
     subtitle: "Worst single trade",
     icon: AlertTriangle,
     color: "text-danger-600 dark:text-danger-400",
@@ -149,14 +152,14 @@ export const getTradeMetrics = (performance: PerformanceData['performance']): Me
   },
   {
     title: "Max Consecutive Wins",
-    value: performance.trade_analysis.consecutive_wins || 0,
+    value: (ta.consecutive_wins ?? adv.consecutive_wins) || 0,
     subtitle: "Longest winning streak",
     icon: TrendingUp,
     format: "number"
   },
   {
     title: "Max Consecutive Losses",
-    value: performance.trade_analysis.consecutive_losses || 0,
+    value: (ta.consecutive_losses ?? adv.consecutive_losses) || 0,
     subtitle: "Longest losing streak",
     icon: TrendingDown,
     format: "number"
@@ -164,33 +167,34 @@ export const getTradeMetrics = (performance: PerformanceData['performance']): Me
   // Directional breakdown (counts)
   {
     title: "Long Trades",
-    value: performance.trade_analysis.total_long_trades || 0,
+    value: (ta.total_long_trades ?? adv.total_long_trades) || 0,
     subtitle: "Total long entries",
     icon: TrendingUp,
     format: "number"
   },
   {
     title: "Short Trades",
-    value: performance.trade_analysis.total_short_trades || 0,
+    value: (ta.total_short_trades ?? adv.total_short_trades) || 0,
     subtitle: "Total short entries",
     icon: TrendingDown,
     format: "number"
   },
   {
     title: "Winning Longs",
-    value: performance.trade_analysis.winning_long_trades || 0,
+    value: (ta.winning_long_trades ?? adv.winning_long_trades) || 0,
     subtitle: "Profitable longs",
     icon: TrendingUp,
     format: "number"
   },
   {
     title: "Winning Shorts",
-    value: performance.trade_analysis.winning_short_trades || 0,
+    value: (ta.winning_short_trades ?? adv.winning_short_trades) || 0,
     subtitle: "Profitable shorts",
     icon: TrendingDown,
     format: "number"
   }
 ];
+};
 
 export const getRiskMetrics = (performance: PerformanceData['performance']): MetricCardProps[] => {
   const items: MetricCardProps[] = [
