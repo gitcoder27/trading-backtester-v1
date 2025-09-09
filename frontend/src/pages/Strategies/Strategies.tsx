@@ -9,7 +9,9 @@ import { showToast } from '../../components/ui/Toast';
 import StrategyDiscovery from '../../components/strategies/StrategyDiscovery';
 import StrategyDetailView from '../../components/strategies/StrategyDetailView';
 import { StrategyService } from '../../services/strategyService';
-import type { Strategy } from '../../types';
+import EnhancedBacktestModal from '../../components/modals/BacktestModal';
+import { JobService } from '../../services/backtest';
+import type { Strategy, BacktestConfig } from '../../types';
 
 type ViewMode = 'list' | 'detail';
 type FilterType = 'all' | 'active' | 'inactive';
@@ -31,6 +33,11 @@ const Strategies: React.FC = () => {
     total_backtests: 0,
     avg_performance: 0
   });
+  // Backtest modal state (open from Strategies without navigating)
+  const [showBacktestModal, setShowBacktestModal] = useState(false);
+  const [preselectedStrategyId, setPreselectedStrategyId] = useState<string | number | undefined>(undefined);
+  const [preselectedParameters, setPreselectedParameters] = useState<Record<string, any> | undefined>(undefined);
+  const [submittingBacktest, setSubmittingBacktest] = useState(false);
 
   useEffect(() => {
     loadStrategies();
@@ -112,25 +119,52 @@ const Strategies: React.FC = () => {
   };
 
   const handleRunBacktest = (strategyId: string, parameters?: Record<string, any>) => {
-    console.log('Running backtest with parameters:', parameters);
-    showToast.success(`Navigating to backtest configuration for strategy ${strategyId}`);
-    // Navigate to backtests page and pass the strategy ID
-    navigate('/backtests', { 
-      state: { 
-        openConfigModal: true, 
-        preselectedStrategyId: strategyId,
-        parameters 
-      } 
-    });
+    // Open configure modal locally without navigating away
+    setPreselectedStrategyId(strategyId);
+    setPreselectedParameters(parameters);
+    setShowBacktestModal(true);
+  };
+
+  const handleSubmitBacktest = async (config: BacktestConfig) => {
+    try {
+      setSubmittingBacktest(true);
+      await JobService.submitBackgroundJob(config);
+      showToast.success('Backtest job submitted successfully!');
+      setShowBacktestModal(false);
+      // Navigate to Backtests to monitor progress after starting
+      navigate('/backtests');
+    } catch (error) {
+      console.error('Failed to submit backtest:', error);
+      showToast.error('Failed to submit backtest job');
+    } finally {
+      setSubmittingBacktest(false);
+      // Clear preselected values after closing
+      setPreselectedStrategyId(undefined);
+      setPreselectedParameters(undefined);
+    }
   };
 
   if (viewMode === 'detail' && selectedStrategyId) {
     return (
-      <StrategyDetailView
-        strategyId={selectedStrategyId}
-        onBack={handleBackToList}
-        onRunBacktest={handleRunBacktest}
-      />
+      <>
+        <StrategyDetailView
+          strategyId={selectedStrategyId}
+          onBack={handleBackToList}
+          onRunBacktest={handleRunBacktest}
+        />
+        <EnhancedBacktestModal
+          isOpen={showBacktestModal}
+          onClose={() => {
+            setShowBacktestModal(false);
+            setPreselectedStrategyId(undefined);
+            setPreselectedParameters(undefined);
+          }}
+          onSubmit={handleSubmitBacktest}
+          isSubmitting={submittingBacktest}
+          preselectedStrategyId={preselectedStrategyId}
+          preselectedParameters={preselectedParameters}
+        />
+      </>
     );
   }
 
@@ -413,6 +447,19 @@ const Strategies: React.FC = () => {
           </div>
         </div>
       </Modal>
+      {/* Configure Backtest Modal (local) */}
+      <EnhancedBacktestModal
+        isOpen={showBacktestModal}
+        onClose={() => {
+          setShowBacktestModal(false);
+          setPreselectedStrategyId(undefined);
+          setPreselectedParameters(undefined);
+        }}
+        onSubmit={handleSubmitBacktest}
+        isSubmitting={submittingBacktest}
+        preselectedStrategyId={preselectedStrategyId}
+        preselectedParameters={preselectedParameters}
+      />
     </div>
   );
 };

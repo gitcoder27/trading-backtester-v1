@@ -1,11 +1,12 @@
 ﻿import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart3, Activity, Table } from 'lucide-react';
+import { BarChart3, Activity, Table, Calendar, TrendingUp } from 'lucide-react';
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import AdvancedMetrics from '../../components/analytics/AdvancedMetrics';
+import { BacktestService } from '../../services/backtest';
 import {
   EquityChart,
   DrawdownChart,
@@ -17,25 +18,40 @@ import {
 
 const Analytics: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const backtestId = searchParams.get('backtest_id') || '1'; // Use correct parameter name
+  // Support both backtest_id and backtestId params to be resilient
+  const backtestId = searchParams.get('backtest_id') || searchParams.get('backtestId') || '';
   const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'trades'>('overview');
   const DEFAULT_TZ = 'Asia/Kolkata';
 
-  // Fetch backtest list for selection
-  const { data: backtests } = useQuery({
-    queryKey: ['backtests'],
-    queryFn: async () => {
-      // This would normally come from a backtests service
-      // For now, return mock data
-      return {
-        data: [
-          { id: '1', strategy_name: 'EMA Crossover', created_at: '2024-01-15', status: 'completed' },
-          { id: '2', strategy_name: 'RSI Mean Reversion', created_at: '2024-01-14', status: 'completed' },
-          { id: '3', strategy_name: 'Bollinger Bands', created_at: '2024-01-13', status: 'completed' }
-        ]
-      };
-    }
+  // Fetch selected backtest details for identification in header
+  const { data: backtest } = useQuery({
+    queryKey: ['analytics-backtest', backtestId],
+    queryFn: () => BacktestService.getBacktest(backtestId),
+    enabled: !!backtestId,
+    retry: 1,
   });
+
+  const cleanStrategyName = React.useMemo(() => {
+    if (backtest?.strategy_name) {
+      const name = backtest.strategy_name as string;
+      return name.includes('.') ? name.split('.').pop() || name : name;
+    }
+    return backtestId ? `Backtest #${backtestId}` : 'No Backtest Selected';
+  }, [backtest?.strategy_name, backtestId]);
+
+  const getStatusVariant = (status?: string): 'success' | 'info' | 'danger' | 'secondary' => {
+    if (!status) return 'secondary';
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return 'success';
+      case 'running':
+        return 'info';
+      case 'failed':
+        return 'danger';
+      default:
+        return 'secondary';
+    }
+  };
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Activity },
@@ -57,26 +73,41 @@ const Analytics: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center space-x-4">
-          <select 
-            value={backtestId}
-            onChange={(e) => {
-              const params = new URLSearchParams(searchParams);
-              // Keep parameter name consistent with reader above
-              params.set('backtest_id', e.target.value);
-              window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
-            }}
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          >
-            {backtests?.data?.map((backtest: any) => (
-              <option key={backtest.id} value={backtest.id}>
-                {backtest.strategy_name} - {new Date(backtest.created_at).toLocaleDateString()}
-              </option>
-            ))}
-          </select>
-          <Badge variant="primary" size="sm">
-            <Activity className="h-3 w-3 mr-1" />
-            Live Data
-          </Badge>
+          {backtestId ? (
+            <div className="flex items-center space-x-4 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2">
+              <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+                <TrendingUp className="h-4 w-4 mr-1" />
+                <span className="font-medium">{cleanStrategyName}</span>
+                <span className="mx-2 text-gray-400">•</span>
+                <span className="text-gray-500 dark:text-gray-400">#{backtestId}</span>
+              </div>
+              {backtest?.created_at && (
+                <div className="hidden md:flex items-center text-sm text-gray-600 dark:text-gray-400">
+                  <Calendar className="h-4 w-4 mr-1" />
+                  {new Date(backtest.created_at).toLocaleDateString()}
+                </div>
+              )}
+              {backtest?.dataset_name && (
+                <div className="hidden lg:flex items-center text-sm text-gray-600 dark:text-gray-400">
+                  <span className="mx-2 text-gray-400">•</span>
+                  <span className="font-normal">Dataset:</span>
+                  <span className="ml-1 text-gray-700 dark:text-gray-300">{backtest.dataset_name}</span>
+                </div>
+              )}
+              {backtest?.status && (
+                <Badge variant={getStatusVariant(backtest.status)} size="sm">
+                  {backtest.status}
+                </Badge>
+              )}
+              <Link to={`/backtests/${backtestId}`}>
+                <Button variant="nav" size="sm">
+                  View Backtest
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <Badge variant="warning" size="sm">No backtest selected</Badge>
+          )}
         </div>
       </div>
 
@@ -107,7 +138,15 @@ const Analytics: React.FC = () => {
       {activeTab === 'overview' && (
         <div className="space-y-6">
           {/* Advanced Performance Metrics */}
-          <AdvancedMetrics backtestId={backtestId} />
+          {backtestId ? (
+            <AdvancedMetrics backtestId={backtestId} />
+          ) : (
+            <Card className="p-6">
+              <div className="text-gray-600 dark:text-gray-400">
+                Select a backtest from the Backtests page to view analytics.
+              </div>
+            </Card>
+          )}
 
           {/* Quick Charts Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -123,7 +162,7 @@ const Analytics: React.FC = () => {
                 </Button>
               </div>
               <div className="h-64">
-                <EquityChart backtestId={backtestId} />
+                {backtestId && <EquityChart backtestId={backtestId} />}
               </div>
             </Card>
 
@@ -139,7 +178,7 @@ const Analytics: React.FC = () => {
                 </Button>
               </div>
               <div className="h-64">
-                <DrawdownChart backtestId={backtestId} />
+                {backtestId && <DrawdownChart backtestId={backtestId} />}
               </div>
             </Card>
           </div>
@@ -154,7 +193,7 @@ const Analytics: React.FC = () => {
                 Portfolio Equity Curve
               </h3>
               <div className="h-80">
-                <EquityChart backtestId={backtestId} />
+                {backtestId && <EquityChart backtestId={backtestId} />}
               </div>
             </Card>
 
@@ -163,7 +202,7 @@ const Analytics: React.FC = () => {
                 Drawdown Analysis
               </h3>
               <div className="h-80">
-                <DrawdownChart backtestId={backtestId} />
+                {backtestId && <DrawdownChart backtestId={backtestId} />}
               </div>
             </Card>
 
@@ -172,7 +211,7 @@ const Analytics: React.FC = () => {
                 Returns Distribution
               </h3>
               <div className="h-80">
-                <ReturnsChart backtestId={backtestId} />
+                {backtestId && <ReturnsChart backtestId={backtestId} />}
               </div>
             </Card>
 
@@ -181,19 +220,21 @@ const Analytics: React.FC = () => {
                 Trade Analysis
               </h3>
               <div className="h-80">
-                <TradeAnalysisChart backtestId={backtestId} />
+                {backtestId && <TradeAnalysisChart backtestId={backtestId} />}
               </div>
             </Card>
           </div>
 
           {/* Full-width TradingView candlestick chart with trades + indicators */}
-          <PriceChartPanel
-            backtestId={backtestId}
-            title="Price + Trades (TradingView Lightweight Chart)"
-            height={560}
-            defaultMaxCandles={5000}
-            defaultTz={DEFAULT_TZ}
-          />
+          {backtestId && (
+            <PriceChartPanel
+              backtestId={backtestId}
+              title={`Price + Trades — ${cleanStrategyName}`}
+              height={560}
+              defaultMaxCandles={5000}
+              defaultTz={DEFAULT_TZ}
+            />
+          )}
         </div>
       )}
 
@@ -209,7 +250,7 @@ const Analytics: React.FC = () => {
               </Badge>
             </div>
             <div className="h-96">
-              <TradeAnalysisChart backtestId={backtestId} />
+              {backtestId && <TradeAnalysisChart backtestId={backtestId} />}
             </div>
           </Card>
 

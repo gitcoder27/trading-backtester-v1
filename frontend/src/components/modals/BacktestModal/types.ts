@@ -43,6 +43,10 @@ export interface EnhancedBacktestModalProps {
   onClose: () => void;
   onSubmit: (config: BaseBacktestConfig) => void;
   isSubmitting?: boolean;
+  // When opening from a specific strategy, preselect it
+  preselectedStrategyId?: string | number;
+  // Optional preloaded parameters to seed the config form
+  preselectedParameters?: Record<string, any>;
 }
 
 export type TabType = 'strategy' | 'execution' | 'filters';

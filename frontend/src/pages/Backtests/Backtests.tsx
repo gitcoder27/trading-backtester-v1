@@ -32,6 +32,8 @@ const Backtests: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [showNewBacktestModal, setShowNewBacktestModal] = useState(false);
+  const [preselectedStrategyId, setPreselectedStrategyId] = useState<string | number | undefined>(undefined);
+  const [preselectedParameters, setPreselectedParameters] = useState<Record<string, any> | undefined>(undefined);
   const [showJobsModal, setShowJobsModal] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'completed' | 'running' | 'failed'>('all');
   const [backtests, setBacktests] = useState<BacktestDisplay[]>([]);
@@ -68,6 +70,9 @@ const Backtests: React.FC = () => {
     
     // Check if we came from strategy page with modal request
     if (location.state?.openConfigModal) {
+      const st: any = location.state;
+      setPreselectedStrategyId(st?.preselectedStrategyId);
+      setPreselectedParameters(st?.parameters);
       setShowNewBacktestModal(true);
       // Clear the navigation state to prevent reopening modal on refresh
       window.history.replaceState({}, '', location.pathname);
@@ -634,9 +639,16 @@ const Backtests: React.FC = () => {
       {/* Enhanced Backtest Modal */}
       <EnhancedBacktestModal
         isOpen={showNewBacktestModal}
-        onClose={() => setShowNewBacktestModal(false)}
+        onClose={() => { 
+          setShowNewBacktestModal(false);
+          // Clear preselected values after use
+          setPreselectedStrategyId(undefined);
+          setPreselectedParameters(undefined);
+        }}
         onSubmit={handleNewBacktest}
         isSubmitting={submittingBacktest}
+        preselectedStrategyId={preselectedStrategyId}
+        preselectedParameters={preselectedParameters}
       />
 
       {/* Background Jobs Modal */}

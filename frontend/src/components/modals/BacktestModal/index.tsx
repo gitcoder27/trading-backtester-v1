@@ -12,7 +12,9 @@ const EnhancedBacktestModal: React.FC<EnhancedBacktestModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
-  isSubmitting = false
+  isSubmitting = false,
+  preselectedStrategyId,
+  preselectedParameters
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('strategy');
   
@@ -24,7 +26,7 @@ const EnhancedBacktestModal: React.FC<EnhancedBacktestModalProps> = ({
     handleParametersChange,
     validateAndConvertConfig,
     resetForm
-  } = useBacktestForm(isOpen);
+  } = useBacktestForm(isOpen, preselectedStrategyId, preselectedParameters);
 
   const handleSubmit = () => {
     const baseConfig = validateAndConvertConfig();

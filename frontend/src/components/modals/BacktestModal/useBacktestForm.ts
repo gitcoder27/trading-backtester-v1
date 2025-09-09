@@ -28,17 +28,29 @@ const DEFAULT_CONFIG: EnhancedBacktestConfig = {
   weekdays: [0, 1, 2, 3, 4] // Mon-Fri
 };
 
-export const useBacktestForm = (isOpen: boolean) => {
+export const useBacktestForm = (
+  isOpen: boolean,
+  preselectedStrategyId?: string | number,
+  preselectedParameters?: Record<string, any>
+) => {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [config, setConfig] = useState<EnhancedBacktestConfig>(DEFAULT_CONFIG);
 
   useEffect(() => {
     if (isOpen) {
+      // Seed preselected values if provided
+      if (preselectedStrategyId) {
+        setConfig(prev => ({
+          ...prev,
+          strategy_id: preselectedStrategyId.toString(),
+          strategy_params: preselectedParameters || prev.strategy_params
+        }));
+      }
       loadStrategies();
       loadDatasets();
     }
-  }, [isOpen]);
+  }, [isOpen, preselectedStrategyId, preselectedParameters]);
 
   const loadStrategies = async () => {
     try {
@@ -47,7 +59,7 @@ export const useBacktestForm = (isOpen: boolean) => {
         setStrategies((data as any).strategies || []);
         // Auto-select first strategy if none selected
         const list = ((data as any).strategies || []) as Strategy[];
-        if (list.length > 0 && !config.strategy_id) {
+        if (list.length > 0 && !(config.strategy_id || preselectedStrategyId)) {
           setConfig(prev => ({ ...prev, strategy_id: (list[0].id as any).toString() }));
         }
       }
