@@ -13,26 +13,27 @@ url = 'https://ticks.dhan.co/getData'
 headers = {
     'Auth': 'myAuthCode',  # TODO: Replace with your actual Auth code
     'Authorization': 'myAuthorizeCode',  # TODO: Replace with your actual Authorization code
-    'Bid': 'DHN7897',
-    'Cid': '9999999999',
+    # 'Bid': 'DHN7897',
+    # 'Cid': '9999999999',
     'Content-Type': 'application/json'
 }
 
 # Start and end dates (modify as needed)
 # format will be yyyy, mm, dd
-start_date = datetime(2025, 8, 8, tzinfo=pytz.timezone('Asia/Kolkata'))
-# end_date = datetime(2025, 8, 8, tzinfo=pytz.timezone('Asia/Kolkata'))
-end_date = datetime.now(pytz.timezone('Asia/Kolkata')) # fetch todays date
+start_date = datetime(2021, 1, 1, tzinfo=pytz.timezone('Asia/Kolkata'))
+end_date = datetime(2021, 12, 31, tzinfo=pytz.timezone('Asia/Kolkata'))
+# end_date = datetime.now(pytz.timezone('Asia/Kolkata')) # fetch todays date
 
 # File location to save the CSV (local 'data' folder)
-file_name = f"nifty_2025_1min_{start_date.strftime('%d%b')}_{end_date.strftime('%d%b')}.csv"
+file_name = f"nifty_2021_1min_{start_date.strftime('%d%b')}_{end_date.strftime('%d%b')}.csv"
 file_path = os.path.join(os.path.dirname(__file__), file_name)
 
 # Initialize empty list to store all data
 all_data = []
 
 # Fetch data for 5 days at a time
-fetch_days = 5
+# fetch_days = 5
+fetch_days = 365 # max allowed by API
 sleep_seconds = 2  # Use a shorter sleep for local, increase if rate-limited
 
 while start_date < end_date:

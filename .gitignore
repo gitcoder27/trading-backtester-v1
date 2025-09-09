@@ -46,6 +46,9 @@ data/market_data/
 
 # Local SQLite databases (dev-only)
 backend/database/*.db
+# SQLite sidecar files
+backend/database/*.db-*
+backend/database/*.sqlite*
 
 # IDE/editor/auxiliary
 .vscode/
