@@ -110,9 +110,10 @@ export const useBacktestForm = (
       strategy_id: config.strategy_id,
       dataset_id: config.dataset_id,
       initial_capital: config.initial_capital,
-      position_size: config.lots * 75, // Convert lots to position size
+      // Interpret position_size in BaseBacktestConfig as 'lots' to match backend
+      position_size: config.lots,
       commission: config.fee_per_trade,
-      slippage: 0.0,
+      slippage: config.slippage,
       parameters: {
         ...config.strategy_params,
         // Add enhanced parameters to the parameters object for backend processing

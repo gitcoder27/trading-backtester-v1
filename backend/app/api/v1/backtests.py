@@ -36,6 +36,12 @@ async def run_backtest(request: BacktestRequest):
     try:
         # Convert Pydantic model to dict for service
         engine_options = request.engine_options.model_dump() if request.engine_options else {}
+        # Bridge naming differences: map daily_profit_target -> daily_target for engine
+        try:
+            if 'daily_profit_target' in engine_options and 'daily_target' not in engine_options:
+                engine_options['daily_target'] = engine_options.get('daily_profit_target')
+        except Exception:
+            pass
         
         # Resolve dataset path if dataset ID provided
         dataset_path = request.dataset_path
@@ -113,6 +119,9 @@ async def run_backtest_with_upload(
         
         try:
             engine_options_dict = json.loads(engine_options)
+            # Bridge naming differences for upload as well
+            if 'daily_profit_target' in engine_options_dict and 'daily_target' not in engine_options_dict:
+                engine_options_dict['daily_target'] = engine_options_dict.get('daily_profit_target')
         except json.JSONDecodeError as e:
             raise HTTPException(status_code=400, detail=f"Invalid JSON in engine_options: {e}")
         
@@ -148,7 +157,10 @@ async def run_backtest_with_upload(
 
 
 @router.get("/{backtest_id}", response_model=Dict[str, Any])
-async def get_backtest_detail(backtest_id: int):
+async def get_backtest_detail(
+    backtest_id: int,
+    minimal: bool = Query(False, description="Return minimal payload (omit heavy 'results')")
+):
     """
     Get backtest details by ID from database
     """
@@ -219,7 +231,7 @@ async def get_backtest_detail(backtest_id: int):
             "duration": duration,
             "parameters": backtest.strategy_params,
             "initial_capital": 100000,  # Default value, should be stored in results
-            "results": results_obj
+            # 'results' can be very large; include only when minimal is False
         }
         
         # Add metrics from results if available
@@ -229,6 +241,11 @@ async def get_backtest_detail(backtest_id: int):
             if 'engine_config' in results_obj:
                 engine_config = results_obj['engine_config']
                 response['initial_capital'] = engine_config.get('initial_cash', 100000)
+                response['engine_config'] = engine_config
+
+        # Include heavy results only when minimal is False
+        if not minimal:
+            response['results'] = results_obj
         
         return response
         
@@ -264,7 +281,8 @@ async def get_backtest_results(result_id: str):
 @router.get("/", response_model=Dict[str, Any])
 async def list_backtests(
     page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(50, ge=1, le=100, description="Number of items per page")
+    size: int = Query(50, ge=1, le=100, description="Number of items per page"),
+    compact: bool = Query(False, description="If true, return minimal rows and skip heavy JSON parsing")
 ):
     """
     List all stored backtest results from the database
@@ -278,7 +296,48 @@ async def list_backtests(
         
         # Query backtests from database
         total_count = db.query(Backtest).count()
-        backtests = db.query(Backtest).offset(offset).limit(size).all()
+
+        if compact:
+            # Project only needed columns to avoid fetching large JSON blobs from DB
+            rows = (
+                db.query(
+                    Backtest.id,
+                    Backtest.strategy_name,
+                    Backtest.dataset_id,
+                    Backtest.status,
+                    Backtest.created_at,
+                    Backtest.completed_at,
+                )
+                .order_by(Backtest.created_at.desc())
+                .offset(offset)
+                .limit(size)
+                .all()
+            )
+            backtest_list = []
+            for r in rows:
+                backtest_list.append({
+                    "id": r[0],
+                    "strategy_name": r[1],
+                    "dataset_id": r[2],
+                    "status": r[3],
+                    "created_at": r[4].isoformat() if r[4] else None,
+                    "completed_at": r[5].isoformat() if r[5] else None,
+                })
+
+            return {
+                "total": total_count,
+                "page": page,
+                "size": size,
+                "results": backtest_list
+            }
+
+        backtests = (
+            db.query(Backtest)
+            .order_by(Backtest.created_at.desc())
+            .offset(offset)
+            .limit(size)
+            .all()
+        )
         
         # Format response
         backtest_list = []
@@ -338,6 +397,7 @@ async def list_backtests(
 @router.get("", response_model=Dict[str, Any])
 async def list_backtests_no_slash(
     page: int = Query(1, ge=1, description="Page number"),
-    size: int = Query(50, ge=1, le=100, description="Number of items per page")
+    size: int = Query(50, ge=1, le=100, description="Number of items per page"),
+    compact: bool = Query(False, description="If true, return minimal rows and skip heavy JSON parsing")
 ):
-    return await list_backtests(page=page, size=size)
+    return await list_backtests(page=page, size=size, compact=compact)

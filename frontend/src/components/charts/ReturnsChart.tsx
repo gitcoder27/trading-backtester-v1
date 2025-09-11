@@ -14,7 +14,9 @@ const ReturnsChart: React.FC<ReturnsChartProps> = ({ data, backtestId, className
     queryKey: ['returns-chart', backtestId],
     queryFn: async () => AnalyticsService.getReturnsChart(backtestId as string),
     enabled: !!backtestId && !data,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    keepPreviousData: true,
+    refetchOnWindowFocus: false,
   });
 
   const { traces, layout } = React.useMemo(() => {

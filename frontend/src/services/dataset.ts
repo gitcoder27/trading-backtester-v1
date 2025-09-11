@@ -46,4 +46,11 @@ export class DatasetService {
     }
     return response.blob();
   }
+
+  /**
+   * Get datasets summary (counts, rows, quality, groupings)
+   */
+  static async getSummary(): Promise<any> {
+    return apiClient.get<any>('/datasets/stats/summary');
+  }
 }

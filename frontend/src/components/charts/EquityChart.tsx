@@ -15,7 +15,9 @@ const EquityChart: React.FC<EquityChartProps> = ({ data, backtestId, className =
     queryKey: ['equity-chart', backtestId],
     queryFn: async () => AnalyticsService.getEquityChart(backtestId as string),
     enabled: !!backtestId && !data,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    keepPreviousData: true,
+    refetchOnWindowFocus: false,
   });
 
   // Build traces/layout from either provided data or API figure

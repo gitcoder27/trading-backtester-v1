@@ -16,6 +16,10 @@ export const usePerformanceData = (backtestId: string) => {
     queryKey: ['performance', backtestId],
     queryFn: () => fetchPerformanceData(backtestId),
     enabled: !!backtestId,
+    staleTime: 10 * 60 * 1000,
+    keepPreviousData: true,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   return {

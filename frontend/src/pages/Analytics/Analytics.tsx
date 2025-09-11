@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+﻿import React, { Suspense, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Activity, Table, Calendar, TrendingUp } from 'lucide-react';
@@ -7,28 +7,23 @@ import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import AdvancedMetrics from '../../components/analytics/AdvancedMetrics';
 import { BacktestService } from '../../services/backtest';
-import {
-  EquityChart,
-  DrawdownChart,
-  ReturnsChart,
-  TradeAnalysisChart,
-  PerformanceMetrics,
-  PriceChartPanel,
-} from '../../components/charts';
+import { EquityChart, DrawdownChart, PriceChartPanel } from '../../components/charts';
 
 const Analytics: React.FC = () => {
   const [searchParams] = useSearchParams();
   // Support both backtest_id and backtestId params to be resilient
   const backtestId = searchParams.get('backtest_id') || searchParams.get('backtestId') || '';
-  const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'trades'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'price' | 'analytics'>('overview');
   const DEFAULT_TZ = 'Asia/Kolkata';
 
   // Fetch selected backtest details for identification in header
   const { data: backtest } = useQuery({
     queryKey: ['analytics-backtest', backtestId],
-    queryFn: () => BacktestService.getBacktest(backtestId),
+    queryFn: () => BacktestService.getBacktest(backtestId, { minimal: true }),
     enabled: !!backtestId,
     retry: 1,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const cleanStrategyName = React.useMemo(() => {
@@ -55,9 +50,13 @@ const Analytics: React.FC = () => {
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Activity },
-    { id: 'charts', label: 'Charts', icon: BarChart3 },
-    { id: 'trades', label: 'Trade Analysis', icon: Table }
+    { id: 'price', label: 'Price + Trades', icon: BarChart3 },
+    { id: 'analytics', label: 'Analytics', icon: Table }
   ];
+
+  // Lazy-only charts for Analytics tab
+  const LazyReturnsChart = React.lazy(() => import('../../components/charts/ReturnsChart'));
+  const LazyTradeAnalysisChart = React.lazy(() => import('../../components/charts/TradeAnalysisChart'));
 
   // Fetch earliest available candle to default the view to first day
   // Common panel now manages date range and chart
@@ -153,12 +152,8 @@ const Analytics: React.FC = () => {
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Equity Curve</h3>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setActiveTab('charts')}
-                >
-                  View Details
+                <Button variant="outline" size="sm" onClick={() => setActiveTab('price')}>
+                  View Price + Trades
                 </Button>
               </div>
               <div className="h-64">
@@ -169,12 +164,8 @@ const Analytics: React.FC = () => {
             <Card className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Drawdown</h3>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setActiveTab('charts')}
-                >
-                  View Details
+                <Button variant="outline" size="sm" onClick={() => setActiveTab('price')}>
+                  View Price + Trades
                 </Button>
               </div>
               <div className="h-64">
@@ -185,74 +176,70 @@ const Analytics: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'charts' && (
+      {activeTab === 'price' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 xl-grid-cols-2 xl:grid-cols-2 gap-6">
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                Portfolio Equity Curve
-              </h3>
-              <div className="h-80">
-                {backtestId && <EquityChart backtestId={backtestId} />}
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                Drawdown Analysis
-              </h3>
-              <div className="h-80">
-                {backtestId && <DrawdownChart backtestId={backtestId} />}
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                Returns Distribution
-              </h3>
-              <div className="h-80">
-                {backtestId && <ReturnsChart backtestId={backtestId} />}
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                Trade Analysis
-              </h3>
-              <div className="h-80">
-                {backtestId && <TradeAnalysisChart backtestId={backtestId} />}
-              </div>
-            </Card>
-          </div>
-
-          {/* Full-width TradingView candlestick chart with trades + indicators */}
           {backtestId && (
             <PriceChartPanel
               backtestId={backtestId}
               title={`Price + Trades — ${cleanStrategyName}`}
               height={560}
-              defaultMaxCandles={5000}
+              defaultMaxCandles={3000}
               defaultTz={DEFAULT_TZ}
             />
           )}
         </div>
       )}
 
-      {activeTab === 'trades' && (
+      {activeTab === 'analytics' && (
         <div className="space-y-6">
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                Trade Performance Analysis
-              </h3>
-              <Badge variant="info" size="sm">
-                Interactive Chart
-              </Badge>
-            </div>
-            <div className="h-96">
-              {backtestId && <TradeAnalysisChart backtestId={backtestId} />}
-            </div>
-          </Card>
+          <div className="grid grid-cols-1 xl-grid-cols-2 xl:grid-cols-2 gap-6">
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Portfolio Equity Curve</h3>
+              <div className="h-80">
+                {backtestId && (
+                  <Suspense fallback={<div className="h-80 flex items-center justify-center text-gray-500">Loading…</div>}>
+                    <EquityChart backtestId={backtestId} />
+                  </Suspense>
+                )}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Drawdown Analysis</h3>
+              <div className="h-80">
+                {backtestId && (
+                  <Suspense fallback={<div className="h-80 flex items-center justify-center text-gray-500">Loading…</div>}>
+                    <DrawdownChart backtestId={backtestId} />
+                  </Suspense>
+                )}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Returns Distribution</h3>
+              <div className="h-80">
+                {backtestId && (
+                  <Suspense fallback={<div className="h-80 flex items-center justify-center text-gray-500">Loading…</div>}>
+                    <LazyReturnsChart backtestId={backtestId} />
+                  </Suspense>
+                )}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Trade Analysis</h3>
+                <Badge variant="info" size="sm">Interactive</Badge>
+              </div>
+              <div className="h-80">
+                {backtestId && (
+                  <Suspense fallback={<div className="h-80 flex items-center justify-center text-gray-500">Loading…</div>}>
+                    <LazyTradeAnalysisChart backtestId={backtestId} />
+                  </Suspense>
+                )}
+              </div>
+            </Card>
+          </div>
 
           {/* Trade Log Table */}
           <Card className="p-6">

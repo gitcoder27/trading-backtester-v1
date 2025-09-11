@@ -15,7 +15,9 @@ const TradeAnalysisChart: React.FC<TradeAnalysisChartProps> = ({ data, backtestI
     queryKey: ['trades-chart', backtestId],
     queryFn: async () => AnalyticsService.getTradesChart(backtestId as string),
     enabled: !!backtestId && !data,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    keepPreviousData: true,
+    refetchOnWindowFocus: false,
   });
 
   // Build traces/layout either from provided trades or backend Plotly figure

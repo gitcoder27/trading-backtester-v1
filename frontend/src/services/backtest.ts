@@ -9,19 +9,27 @@ import type {
 
 export class BacktestService {
   static async runBacktest(config: BacktestConfig): Promise<BacktestResult> {
-    // Map frontend config to backend expected format
+    // Map to BacktestRequest schema: strategy, strategy_params, dataset, engine_options
+    const engineOptions: any = {
+      initial_cash: config.initial_capital,
+      lots: config.position_size,
+      fee_per_trade: config.commission,
+      slippage: config.slippage,
+      // Map enhanced params if present
+      intraday: (config.parameters as any)?.intraday_mode ?? true,
+      daily_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
+      daily_profit_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
+      option_delta: (config.parameters as any)?.option_delta ?? 0.5,
+      option_price_per_unit: (config.parameters as any)?.option_price_per_unit ?? 1.0,
+    };
+
     const backtestRequest = {
       strategy: config.strategy_id.toString(),
       dataset: config.dataset_id.toString(),
-      initial_cash: config.initial_capital,        // Map initial_capital -> initial_cash
-      lots: config.position_size,                  // Map position_size -> lots
-      commission: config.commission,
-      slippage: config.slippage,
-      start_date: config.start_date,
-      end_date: config.end_date,
-      parameters: config.parameters || {}
+      strategy_params: config.parameters || {},
+      engine_options: engineOptions,
     };
-    
+
     return apiClient.post<BacktestResult>('/backtests', backtestRequest);
   }
 
@@ -29,9 +37,11 @@ export class BacktestService {
     return apiClient.get<BacktestResult>(`/backtests/${id}/results`);
   }
 
-  static async getBacktest(id: string): Promise<any> {
-    // Get backtest details from the new endpoint
-    return apiClient.get<any>(`/backtests/${id}`);
+  static async getBacktest(id: string, options?: { minimal?: boolean }): Promise<any> {
+    // Get backtest details; pass minimal=true to omit heavy results payload
+    const params: Record<string, any> = {};
+    if (options?.minimal) params.minimal = 'true';
+    return apiClient.get<any>(`/backtests/${id}`, params);
   }
 
   static async listBacktests(params?: PaginationParams): Promise<PaginatedResponse<any>> {
@@ -41,8 +51,23 @@ export class BacktestService {
   static async uploadAndRunBacktest(file: File, config: Partial<BacktestConfig>): Promise<BacktestResult> {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('config', JSON.stringify(config));
     
+    const engineOptions: any = {
+      initial_cash: config.initial_capital,
+      lots: config.position_size,
+      fee_per_trade: config.commission,
+      slippage: config.slippage,
+      intraday: (config.parameters as any)?.intraday_mode ?? true,
+      daily_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
+      daily_profit_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
+      option_delta: (config.parameters as any)?.option_delta ?? 0.5,
+      option_price_per_unit: (config.parameters as any)?.option_price_per_unit ?? 1.0,
+    };
+
+    formData.append('strategy', String(config.strategy_id ?? ''));
+    formData.append('strategy_params', JSON.stringify(config.parameters || {}));
+    formData.append('engine_options', JSON.stringify(engineOptions));
+
     return apiClient.upload<BacktestResult>('/backtests/upload', formData);
   }
 
@@ -89,20 +114,26 @@ export class BacktestService {
 
 export class JobService {
   static async submitBackgroundJob(config: BacktestConfig): Promise<Job> {
-    // Map frontend config to backend expected format
+    // Map to BacktestRequest schema for jobs endpoint
+    const engineOptions: any = {
+      initial_cash: config.initial_capital,
+      lots: config.position_size,
+      fee_per_trade: config.commission,
+      slippage: config.slippage,
+      intraday: (config.parameters as any)?.intraday_mode ?? true,
+      daily_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
+      daily_profit_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
+      option_delta: (config.parameters as any)?.option_delta ?? 0.5,
+      option_price_per_unit: (config.parameters as any)?.option_price_per_unit ?? 1.0,
+    };
+
     const jobRequest = {
       strategy: config.strategy_id.toString(),
       dataset: config.dataset_id.toString(),
-      initial_cash: config.initial_capital,        // Map initial_capital -> initial_cash
-      lots: config.position_size,                  // Map position_size -> lots  
-      commission: config.commission,
-      slippage: config.slippage,
-      start_date: config.start_date,
-      end_date: config.end_date,
-      parameters: config.parameters || {}
+      strategy_params: config.parameters || {},
+      engine_options: engineOptions,
     };
-    
-    // Important: backend expects trailing slash for POST /jobs/
+
     return apiClient.post<Job>('/jobs/', jobRequest);
   }
 

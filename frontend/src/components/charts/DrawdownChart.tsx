@@ -14,7 +14,9 @@ const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, backtestId, classNa
     queryKey: ['drawdown-chart', backtestId],
     queryFn: async () => AnalyticsService.getDrawdownChart(backtestId as string),
     enabled: !!backtestId && !data,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 60 * 1000,
+    keepPreviousData: true,
+    refetchOnWindowFocus: false,
   });
 
   const { traces, layout } = React.useMemo(() => {
