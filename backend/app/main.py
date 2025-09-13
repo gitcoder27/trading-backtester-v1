@@ -5,6 +5,7 @@ Wraps existing backtester framework with web API
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 import uvicorn
 import atexit
 
@@ -49,6 +50,9 @@ app.include_router(datasets_router)
 app.include_router(strategies_router)
 app.include_router(analytics_router)
 app.include_router(optimization_router)
+
+# Enable GZip compression for large analytics responses
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # Register cleanup on exit
 atexit.register(shutdown_job_runner)

@@ -3,14 +3,39 @@ Analytics API endpoints
 Provides comprehensive analytics and visualization for backtest results
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
+import hashlib
+from datetime import datetime
 
 from backend.app.services.analytics_service import AnalyticsService
+from backend.app.database.models import get_session_factory, Backtest
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 analytics_service = AnalyticsService()
+SessionLocal = get_session_factory()
+
+
+def _etag_for_backtest(backtest_id: int, extra: str = "") -> Dict[str, str]:
+    """Compute ETag and Last-Modified headers for a backtest payload.
+
+    extra: string derived from query params to vary the cache key.
+    """
+    db = SessionLocal()
+    try:
+        bt = db.query(Backtest).filter(Backtest.id == backtest_id).first()
+        last_mod_dt: Optional[datetime] = bt.completed_at if bt and bt.completed_at else (bt.created_at if bt else None)
+        last_mod = last_mod_dt.isoformat() + 'Z' if last_mod_dt else '0'
+        raw = f"{backtest_id}:{last_mod}:{extra}"
+        etag = hashlib.md5(raw.encode('utf-8')).hexdigest()
+        return {
+            'ETag': etag,
+            'Last-Modified': last_mod,
+            'Cache-Control': 'public, max-age=60'
+        }
+    finally:
+        db.close()
 
 
 class CompareStrategiesRequest(BaseModel):
@@ -18,7 +43,18 @@ class CompareStrategiesRequest(BaseModel):
 
 
 @router.get("/performance/{backtest_id}")
-async def get_performance_summary(backtest_id: int) -> Dict[str, Any]:
+async def get_performance_summary(
+    request: Request,
+    response: Response,
+    backtest_id: int,
+    sections: Optional[List[str]] = Query(
+        None,
+        description=(
+            "Optional sections to compute/return: "
+            "basic_metrics, advanced_analytics, risk_metrics, trade_analysis, daily_target_stats, drawdown_analysis"
+        ),
+    ),
+) -> Dict[str, Any]:
     """
     Get comprehensive performance analytics for a backtest
     
@@ -29,7 +65,12 @@ async def get_performance_summary(backtest_id: int) -> Dict[str, Any]:
     - Risk metrics (VaR, CVaR, max consecutive losses, etc.)
     - Time analysis (performance by hour, weekday, month)
     """
-    result = analytics_service.get_performance_summary(backtest_id)
+    result = analytics_service.get_performance_summary(backtest_id, sections)
+    # Attach caching headers (no conditional 304 to keep clients simple)
+    extra = ",".join(sorted(sections)) if sections else "all"
+    headers = _etag_for_backtest(backtest_id, extra=extra)
+    for k, v in headers.items():
+        response.headers[k] = v
     
     if not result['success']:
         raise HTTPException(status_code=404, detail=result['error'])
@@ -39,8 +80,11 @@ async def get_performance_summary(backtest_id: int) -> Dict[str, Any]:
 
 @router.get("/charts/{backtest_id}")
 async def get_charts(
+    request: Request,
+    response: Response,
     backtest_id: int,
-    chart_types: Optional[List[str]] = Query(None, description="Chart types to generate: equity, drawdown, returns, trades, monthly_returns")
+    chart_types: Optional[List[str]] = Query(None, description="Chart types to generate: equity, drawdown, returns, trades, monthly_returns"),
+    max_points: Optional[int] = Query(None, ge=100, le=200000, description="Maximum points per series (downsampling)"),
 ) -> Dict[str, Any]:
     """
     Generate charts for a backtest
@@ -54,7 +98,11 @@ async def get_charts(
     
     Returns Plotly JSON that can be rendered directly in frontend
     """
-    result = analytics_service.get_charts(backtest_id, chart_types)
+    result = analytics_service.get_charts(backtest_id, chart_types, max_points=max_points)
+    extra = f"{','.join(sorted(chart_types)) if chart_types else 'all'}:{max_points or 'none'}"
+    headers = _etag_for_backtest(backtest_id, extra=extra)
+    for k, v in headers.items():
+        response.headers[k] = v
     
     if not result['success']:
         raise HTTPException(status_code=404, detail=result['error'])
@@ -87,9 +135,12 @@ async def compare_strategies(request: CompareStrategiesRequest) -> Dict[str, Any
 
 
 @router.get("/charts/{backtest_id}/equity")
-async def get_equity_chart(backtest_id: int) -> Dict[str, Any]:
+async def get_equity_chart(request: Request, response: Response, backtest_id: int, max_points: Optional[int] = Query(None, ge=100, le=200000)) -> Dict[str, Any]:
     """Get equity curve chart for a specific backtest"""
-    result = analytics_service.get_charts(backtest_id, ['equity'])
+    result = analytics_service.get_charts(backtest_id, ['equity'], max_points=max_points)
+    headers = _etag_for_backtest(backtest_id, extra=f"equity:{max_points or 'none'}")
+    for k, v in headers.items():
+        response.headers[k] = v
     
     if not result['success']:
         raise HTTPException(status_code=404, detail=result['error'])
@@ -102,9 +153,12 @@ async def get_equity_chart(backtest_id: int) -> Dict[str, Any]:
 
 
 @router.get("/charts/{backtest_id}/drawdown")
-async def get_drawdown_chart(backtest_id: int) -> Dict[str, Any]:
+async def get_drawdown_chart(request: Request, response: Response, backtest_id: int, max_points: Optional[int] = Query(None, ge=100, le=200000)) -> Dict[str, Any]:
     """Get drawdown chart for a specific backtest"""
-    result = analytics_service.get_charts(backtest_id, ['drawdown'])
+    result = analytics_service.get_charts(backtest_id, ['drawdown'], max_points=max_points)
+    headers = _etag_for_backtest(backtest_id, extra=f"drawdown:{max_points or 'none'}")
+    for k, v in headers.items():
+        response.headers[k] = v
     
     if not result['success']:
         raise HTTPException(status_code=404, detail=result['error'])
@@ -117,9 +171,12 @@ async def get_drawdown_chart(backtest_id: int) -> Dict[str, Any]:
 
 
 @router.get("/charts/{backtest_id}/returns")
-async def get_returns_chart(backtest_id: int) -> Dict[str, Any]:
+async def get_returns_chart(request: Request, response: Response, backtest_id: int) -> Dict[str, Any]:
     """Get returns distribution chart for a specific backtest"""
     result = analytics_service.get_charts(backtest_id, ['returns'])
+    headers = _etag_for_backtest(backtest_id, extra="returns")
+    for k, v in headers.items():
+        response.headers[k] = v
     
     if not result['success']:
         raise HTTPException(status_code=404, detail=result['error'])
@@ -132,9 +189,12 @@ async def get_returns_chart(backtest_id: int) -> Dict[str, Any]:
 
 
 @router.get("/charts/{backtest_id}/trades")
-async def get_trades_chart(backtest_id: int) -> Dict[str, Any]:
+async def get_trades_chart(request: Request, response: Response, backtest_id: int, max_points: Optional[int] = Query(None, ge=100, le=200000)) -> Dict[str, Any]:
     """Get trades chart overlaid on equity curve"""
-    result = analytics_service.get_charts(backtest_id, ['trades'])
+    result = analytics_service.get_charts(backtest_id, ['trades'], max_points=max_points)
+    headers = _etag_for_backtest(backtest_id, extra=f"trades:{max_points or 'none'}")
+    for k, v in headers.items():
+        response.headers[k] = v
     
     if not result['success']:
         raise HTTPException(status_code=404, detail=result['error'])
@@ -147,9 +207,12 @@ async def get_trades_chart(backtest_id: int) -> Dict[str, Any]:
 
 
 @router.get("/charts/{backtest_id}/monthly_returns")
-async def get_monthly_returns_chart(backtest_id: int) -> Dict[str, Any]:
+async def get_monthly_returns_chart(request: Request, response: Response, backtest_id: int) -> Dict[str, Any]:
     """Get monthly returns heatmap for a specific backtest"""
     result = analytics_service.get_charts(backtest_id, ['monthly_returns'])
+    headers = _etag_for_backtest(backtest_id, extra="monthly_returns")
+    for k, v in headers.items():
+        response.headers[k] = v
     
     if not result['success']:
         raise HTTPException(status_code=404, detail=result['error'])
@@ -245,7 +308,7 @@ async def get_chart_data(
     backtest_id: int,
     include_trades: bool = Query(True, description="Include trade markers"),
     include_indicators: bool = Query(True, description="Include strategy indicators"),
-    max_candles: Optional[int] = Query(None, description="Maximum number of candles to return"),
+    max_candles: Optional[int] = Query(None, ge=1, le=200000, description="Maximum number of candles to return (downsampling)"),
     start: Optional[str] = Query(None, description="Start datetime or date (YYYY-MM-DD)"),
     end: Optional[str] = Query(None, description="End datetime or date (YYYY-MM-DD)"),
     tz: Optional[str] = Query(None, description="Timezone of dataset (e.g., 'Asia/Kolkata') for date parsing and display consistency")

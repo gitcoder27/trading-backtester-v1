@@ -26,6 +26,13 @@
 - Coverage: aim for 90%+ in touched areas; parametrize and use minimal fixtures.
 - Naming: colocate tests mirroring source (e.g., `foo.test.tsx`, `test_engine.py`).
 
+### Frontend Testing (Vitest)
+- Install: `npm -C frontend install`
+- Run once with coverage: `CI=1 npm -C frontend run test:coverage --silent -- --run`
+- Alternate: `npm -C frontend run test --silent -- --run` or `vitest --run --coverage`
+- Coverage HTML: open `frontend/coverage/index.html`
+- Avoid watch-mode hang: always pass `--run` or set `CI=1` (don’t rely on default watch)
+
 ## Commit & Pull Request Guidelines
 - Commits: Conventional Commits (e.g., `feat:`, `fix:`, `refactor:`, `test:`, `docs:`); imperative mood and scoped.
 - PRs: clear description, what/why, linked issues, test plan; screenshots for UI diffs. Ensure lint and tests pass across backend, core, and frontend.

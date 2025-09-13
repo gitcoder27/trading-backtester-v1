@@ -57,13 +57,13 @@ describe('BacktestService', () => {
       expect(mockApiClient.post).toHaveBeenCalledWith('/backtests', {
         strategy: '1',
         dataset: '2',
-        initial_cash: 100000,
-        lots: 10,
-        commission: 20,
-        slippage: 0.01,
-        start_date: '2024-01-01',
-        end_date: '2024-12-31',
-        parameters: { fast_ema: 10, slow_ema: 20 }
+        strategy_params: { fast_ema: 10, slow_ema: 20 },
+        engine_options: expect.objectContaining({
+          initial_cash: 100000,
+          lots: 10,
+          fee_per_trade: 20,
+          slippage: 0.01,
+        })
       });
       expect(result).toEqual(mockResult);
     });
@@ -84,9 +84,13 @@ describe('BacktestService', () => {
 
       await BacktestService.runBacktest(mockConfig);
 
-      expect(mockApiClient.post).toHaveBeenCalledWith('/backtests', expect.objectContaining({
-        parameters: {}
-      }));
+      expect(mockApiClient.post).toHaveBeenCalledWith(
+        '/backtests',
+        expect.objectContaining({
+          strategy_params: {},
+          engine_options: expect.any(Object)
+        })
+      );
     });
   });
 
@@ -124,7 +128,8 @@ describe('BacktestService', () => {
 
       const result = await BacktestService.getBacktest('123');
 
-      expect(mockApiClient.get).toHaveBeenCalledWith('/backtests/123');
+      // Service passes an empty params object for consistency
+      expect(mockApiClient.get).toHaveBeenCalledWith('/backtests/123', {});
       expect(result).toEqual(mockBacktest);
     });
   });
@@ -284,16 +289,16 @@ describe('JobService', () => {
 
       const result = await JobService.submitBackgroundJob(mockConfig);
 
-      expect(mockApiClient.post).toHaveBeenCalledWith('/jobs', {
+      expect(mockApiClient.post).toHaveBeenCalledWith('/jobs/', {
         strategy: '1',
         dataset: '2',
-        initial_cash: 100000,
-        lots: 10,
-        commission: 20,
-        slippage: 0.01,
-        start_date: '2024-01-01',
-        end_date: '2024-12-31',
-        parameters: { fast_ema: 10 }
+        strategy_params: { fast_ema: 10 },
+        engine_options: expect.objectContaining({
+          initial_cash: 100000,
+          lots: 10,
+          fee_per_trade: 20,
+          slippage: 0.01,
+        })
       });
       expect(result).toEqual(mockJob);
     });

@@ -38,7 +38,7 @@ class AnalyticsService:
         self.risk_calc = RiskCalculator()
         self.formatter = DataFormatter()
     
-    def get_performance_summary(self, backtest_id: int) -> Dict[str, Any]:
+    def get_performance_summary(self, backtest_id: int, sections: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Get comprehensive performance summary for a backtest.
         
@@ -65,40 +65,107 @@ class AnalyticsService:
             trades = pd.DataFrame(trades_list)
             metrics = results.get('metrics', {})
             engine_config = results.get('engine_config', {})
+
+            # Determine which sections to compute/return
+            allowed_sections = {
+                'basic_metrics',
+                'advanced_analytics',
+                'risk_metrics',
+                'trade_analysis',
+                'daily_target_stats',
+                'drawdown_analysis',
+            }
+            requested_sections: Optional[set]
+            if sections is None:
+                requested_sections = None  # Means all
+            else:
+                requested_sections = {s for s in sections if s in allowed_sections}
             
+            # Attempt cache hit from results JSON
+            cached_summary = results.get('analytics_summary') if isinstance(results, dict) else None
+            cached_available = set(cached_summary.keys()) if isinstance(cached_summary, dict) else set()
+
+            performance_payload: Dict[str, Any] = {}
+
+            def need(section: str) -> bool:
+                return (requested_sections is None or section in requested_sections)
+
+            # basic_metrics comes from stored metrics always
+            if need('basic_metrics'):
+                performance_payload['basic_metrics'] = metrics
+
+            # Use cached values when available
+            if cached_summary and isinstance(cached_summary, dict):
+                for key in allowed_sections - {'basic_metrics'}:
+                    if need(key) and key in cached_summary:
+                        performance_payload[key] = cached_summary[key]
+
+            # Compute any missing requested sections
+            missing_sections = [
+                s for s in (requested_sections or allowed_sections)
+                if s not in performance_payload and s in allowed_sections
+            ]
+
             # Daily target stats (use configured daily_target if available)
+            if 'daily_target_stats' in missing_sections:
+                try:
+                    daily_target = float(engine_config.get('daily_target', 30.0))
+                except Exception:
+                    daily_target = 30.0
+                performance_payload['daily_target_stats'] = daily_profit_target_stats(trades, daily_target)
+
+            if 'drawdown_analysis' in missing_sections:
+                performance_payload['drawdown_analysis'] = self.risk_calc.compute_drawdown_analysis(equity_curve)
+
+            if 'advanced_analytics' in missing_sections:
+                performance_payload['advanced_analytics'] = self.performance_calc.compute_basic_analytics(equity_curve, trades)
+
+            if 'risk_metrics' in missing_sections:
+                performance_payload['risk_metrics'] = self.risk_calc.compute_risk_metrics(equity_curve)
+
+            if 'trade_analysis' in missing_sections:
+                performance_payload['trade_analysis'] = self.trade_analyzer.analyze_trades_comprehensive(trades)
+
+            # Persist cache if first compute or filling gaps
             try:
-                daily_target = float(engine_config.get('daily_target', 30.0))
+                cache_dirty = False
+                if not cached_summary or not isinstance(cached_summary, dict):
+                    results['analytics_summary'] = {}
+                    cached_summary = results['analytics_summary']
+                    cache_dirty = True
+                for k, v in performance_payload.items():
+                    if k not in cached_summary and k in allowed_sections:
+                        cached_summary[k] = v
+                        cache_dirty = True
+                # Always ensure basic metrics cached
+                if 'basic_metrics' not in cached_summary:
+                    cached_summary['basic_metrics'] = metrics
+                    cache_dirty = True
+                if cache_dirty:
+                    results['analytics_cache'] = {
+                        'cached_at': datetime.utcnow().isoformat() + 'Z',
+                        'cache_version': 1,
+                        'sections': sorted(list(cached_summary.keys())),
+                        'backtest_completed_at': backtest.completed_at.isoformat() + 'Z' if backtest.completed_at else None,
+                    }
+                    backtest.results = results
+                    db.add(backtest)
+                    db.commit()
             except Exception:
-                daily_target = 30.0
-            daily_stats = daily_profit_target_stats(trades, daily_target)
-            
-            # Additional drawdown analysis details
-            drawdown_analysis = self.risk_calc.compute_drawdown_analysis(equity_curve)
-            
-            # Compute analytics using specialized components
-            advanced_analytics = self.performance_calc.compute_basic_analytics(equity_curve, trades)
-            risk_metrics = self.risk_calc.compute_risk_metrics(equity_curve)
-            trade_analysis = self.trade_analyzer.analyze_trades_comprehensive(trades)
-            
+                # Cache write failures should not break the response
+                pass
+
             response = {
                 'success': True,
                 'backtest_id': backtest_id,
-                'performance': {
-                    'basic_metrics': metrics,
-                    'advanced_analytics': advanced_analytics,
-                    'risk_metrics': risk_metrics,
-                    'trade_analysis': trade_analysis,
-                    'daily_target_stats': daily_stats,
-                    'drawdown_analysis': drawdown_analysis,
-                }
+                'performance': performance_payload
             }
             # Sanitize for JSON (avoid NaN/Inf causing 500s)
             return self.formatter.sanitize_json(response)
         finally:
             db.close()
     
-    def get_charts(self, backtest_id: int, chart_types: Optional[List[str]] = None) -> Dict[str, Any]:
+    def get_charts(self, backtest_id: int, chart_types: Optional[List[str]] = None, max_points: Optional[int] = None) -> Dict[str, Any]:
         """
         Generate charts for a backtest.
         
@@ -132,16 +199,16 @@ class AnalyticsService:
             charts = {}
             
             if 'equity' in chart_types:
-                charts['equity'] = self.chart_gen.create_equity_chart(equity_curve)
+                charts['equity'] = self.chart_gen.create_equity_chart(equity_curve, max_points=max_points)
             
             if 'drawdown' in chart_types:
-                charts['drawdown'] = self.chart_gen.create_drawdown_chart(equity_curve)
+                charts['drawdown'] = self.chart_gen.create_drawdown_chart(equity_curve, max_points=max_points)
             
             if 'returns' in chart_types:
                 charts['returns'] = self.chart_gen.create_returns_distribution_chart(equity_curve)
             
             if 'trades' in chart_types:
-                charts['trades'] = self.chart_gen.create_trades_scatter_chart(trades, equity_curve)
+                charts['trades'] = self.chart_gen.create_trades_scatter_chart(trades, equity_curve, max_points=max_points)
             
             if 'monthly_returns' in chart_types:
                 charts['monthly_returns'] = self.chart_gen.create_monthly_returns_heatmap(equity_curve)

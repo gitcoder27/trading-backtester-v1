@@ -144,7 +144,7 @@ const ExecutionSection: React.FC<ExecutionSectionProps> = ({
         
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Fee Per Trade
+            Commission (per-trade fee, absolute)
           </label>
           <input
             type="number"
@@ -154,6 +154,9 @@ const ExecutionSection: React.FC<ExecutionSectionProps> = ({
             step={1}
             className="w-32 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
           />
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Use a fixed currency amount per trade. For percentage-based commission, use the Backtests form instead.
+          </p>
         </div>
       </div>
     </div>

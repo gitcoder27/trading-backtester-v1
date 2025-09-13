@@ -1,21 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
 import type { PerformanceData } from './types';
+import { AnalyticsService } from '../../../services/analytics';
 
-const fetchPerformanceData = async (backtestId: string): Promise<PerformanceData> => {
-  const response = await fetch(`http://localhost:8000/api/v1/analytics/performance/${backtestId}`);
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch performance data: ${response.statusText}`);
-  }
-  
-  return response.json();
-};
+export const usePerformanceData = (
+  backtestId: string,
+  options?: { enabled?: boolean; sections?: string[] }
+) => {
+  const sections = options?.sections ?? [
+    'basic_metrics',
+    'advanced_analytics',
+    'risk_metrics',
+    'trade_analysis',
+    'daily_target_stats',
+    'drawdown_analysis',
+  ];
 
-export const usePerformanceData = (backtestId: string) => {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['performance', backtestId],
-    queryFn: () => fetchPerformanceData(backtestId),
-    enabled: !!backtestId,
+    queryKey: ['performance', backtestId, sections.join(',')],
+    queryFn: () => AnalyticsService.getPerformanceSummary(backtestId, sections),
+    enabled: !!backtestId && (options?.enabled ?? true),
     staleTime: 10 * 60 * 1000,
     keepPreviousData: true,
     refetchOnWindowFocus: false,
@@ -23,9 +26,9 @@ export const usePerformanceData = (backtestId: string) => {
   });
 
   return {
-    data,
+    data: data as PerformanceData | undefined,
     isLoading,
     error,
-    performance: data?.performance
+    performance: (data as any)?.performance
   };
 };

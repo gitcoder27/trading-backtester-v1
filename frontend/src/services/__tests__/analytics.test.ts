@@ -40,7 +40,8 @@ describe('AnalyticsService', () => {
 
       const result = await AnalyticsService.getPerformanceSummary('123');
 
-      expect(mockApiClient.get).toHaveBeenCalledWith('/analytics/performance/123');
+      // Service now passes a params object (possibly empty)
+      expect(mockApiClient.get).toHaveBeenCalledWith('/analytics/performance/123', {});
       expect(result).toEqual(mockSummary);
     });
 
@@ -72,7 +73,8 @@ describe('AnalyticsService', () => {
 
       const result = await AnalyticsService.getCharts('123');
 
-      expect(mockApiClient.get).toHaveBeenCalledWith('/analytics/charts/123');
+      // Service now passes a params object (possibly empty)
+      expect(mockApiClient.get).toHaveBeenCalledWith('/analytics/charts/123', {});
       expect(result).toEqual(mockCharts);
     });
   });
@@ -133,7 +135,8 @@ describe('AnalyticsService', () => {
 
       const result = await AnalyticsService.getEquityChart('123');
 
-      expect(mockApiClient.get).toHaveBeenCalledWith('/analytics/charts/123/equity');
+      // Service now passes a params object (possibly empty)
+      expect(mockApiClient.get).toHaveBeenCalledWith('/analytics/charts/123/equity', {});
       expect(result).toEqual(mockEquityChart);
     });
   });
@@ -153,7 +156,8 @@ describe('AnalyticsService', () => {
 
       const result = await AnalyticsService.getDrawdownChart('123');
 
-      expect(mockApiClient.get).toHaveBeenCalledWith('/analytics/charts/123/drawdown');
+      // Service now passes a params object (possibly empty)
+      expect(mockApiClient.get).toHaveBeenCalledWith('/analytics/charts/123/drawdown', {});
       expect(result).toEqual(mockDrawdownChart);
     });
   });
@@ -189,7 +193,8 @@ describe('AnalyticsService', () => {
 
       const result = await AnalyticsService.getTradesChart('123');
 
-      expect(mockApiClient.get).toHaveBeenCalledWith('/analytics/charts/123/trades');
+      // Service now passes a params object (possibly empty)
+      expect(mockApiClient.get).toHaveBeenCalledWith('/analytics/charts/123/trades', {});
       expect(result).toEqual(mockTradesChart);
     });
   });
