@@ -8,7 +8,7 @@ from .analytics.analytics_service import AnalyticsService as ModularAnalyticsSer
 
 # For complex methods not yet migrated, import from legacy
 from .analytics_service_legacy import AnalyticsService as LegacyAnalyticsService
-from typing import Optional
+from typing import Optional, List
 
 
 class AnalyticsService:
@@ -26,13 +26,13 @@ class AnalyticsService:
         self.modular_service = ModularAnalyticsService()
         self.legacy_service = LegacyAnalyticsService()
     
-    def get_performance_summary(self, backtest_id: int):
+    def get_performance_summary(self, backtest_id: int, sections: Optional[List[str]] = None):
         """Get comprehensive performance summary - uses modular service"""
-        return self.modular_service.get_performance_summary(backtest_id)
+        return self.modular_service.get_performance_summary(backtest_id, sections)
     
-    def get_charts(self, backtest_id: int, chart_types=None):
+    def get_charts(self, backtest_id: int, chart_types=None, max_points: Optional[int] = None):
         """Generate charts - uses modular service"""
-        return self.modular_service.get_charts(backtest_id, chart_types)
+        return self.modular_service.get_charts(backtest_id, chart_types, max_points=max_points)
     
     def compare_strategies(self, backtest_ids):
         """Compare strategies - uses modular service"""

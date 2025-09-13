@@ -18,6 +18,10 @@ Legacy notice: The old Streamlit app is no longer used. It remains available und
 - Processes large intraday datasets quickly using vectorized operations + numba
 - Real-time progress and robust analytics via the backend services
 - HTML reports, trade logs, and detailed performance metrics available from the engine
+- Phase 2 analytics improvements:
+  - Server-side downsampling for charts via `max_points` to keep payloads small
+  - Selective performance sections with server caching for faster loads
+  - ETag/Last-Modified headers on analytics endpoints + GZip compression
 
 ---
 
@@ -78,6 +82,40 @@ npm -C frontend run dev
 - Core coverage: `pytest --cov=backtester -q`
 - Backend tests: `pytest -c backend/pytest.ini -q` (or `cd backend && pytest -q`)
 - Frontend: `npm -C frontend run test:coverage`
+
+---
+
+## Analytics API (Phase 2 Updates)
+
+Endpoints now support selective sections and downsampling for improved performance.
+
+- Performance summary (selective compute + server cache)
+  - `GET /api/v1/analytics/performance/{backtest_id}?sections=basic_metrics&sections=advanced_analytics`
+  - Notes: accepts repeated `sections` keys; caches computed sections under `Backtest.results.analytics_summary`. Returns `ETag` and `Last-Modified` headers; always responds 200 with a body.
+
+- Charts (downsampled)
+  - `GET /api/v1/analytics/charts/{backtest_id}?chart_types=equity&chart_types=drawdown&max_points=1500`
+  - Focused endpoints: `/equity`, `/drawdown`, `/trades` each accept `max_points`.
+  - Notes: downsampling preserves the last point and samples evenly across the series.
+
+- TradingView chart data
+  - `GET /api/v1/analytics/chart-data/{backtest_id}?include_trades=true&include_indicators=true&max_candles=3000&start=YYYY-MM-DD&end=YYYY-MM-DD&tz=Zone`
+  - Notes: `max_candles` supports 1–200000 (1 is used by the UI for a prime query).
+
+Curl examples
+
+```bash
+curl -s "http://localhost:8000/api/v1/analytics/performance/42?sections=basic_metrics&sections=risk_metrics" | jq .
+
+curl -s "http://localhost:8000/api/v1/analytics/charts/42/equity?max_points=600" | jq .
+
+curl -s "http://localhost:8000/api/v1/analytics/charts/42?chart_types=equity&chart_types=drawdown&max_points=1500" | jq .
+```
+
+Frontend defaults
+
+- Overview quick charts request `maxPoints≈600`; Analytics tab charts request `≈1500`.
+- Performance metrics request a full set of sections on first view and then rely on server cache.
 
 ---
 
@@ -146,6 +184,7 @@ CSV should include at minimum:
 - Backend: If CORS errors occur, verify the frontend URL matches the allowed origins in `backend/app/main.py`.
 - Tests: Backend tests require FastAPI deps from `backend/requirements.txt`.
 - Streamlit: The legacy Streamlit UI is archived and not used in this setup.
+- Analytics: If you see 422 on analytics endpoints, ensure array params use repeated keys (e.g., `&sections=a&sections=b`), and that `max_candles` is within allowed bounds (1–200000).
 
 ---
 
@@ -153,6 +192,7 @@ CSV should include at minimum:
 
 - Backend details: `backend/README.md`
 - Frontend details: `frontend/README_COMPREHENSIVE.md`
+- Handoff: `docs/HANDOFF.md` (Phase 2 summary, next steps)
 
 ---
 

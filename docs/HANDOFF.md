@@ -1,4 +1,4 @@
-# Project Handoff – Trading Backtester (Phase 1 Complete)
+# Project Handoff – Trading Backtester (Phase 2 Complete)
 
 This document summarizes what was implemented, why, how to use it, and what’s next. It is intended as a practical handoff to the next developer/agent to continue with Phase 2+ performance work and features.
 
@@ -11,6 +11,48 @@ This document summarizes what was implemented, why, how to use it, and what’s 
   - API enhancements to reduce payloads and avoid recomputation on page loads.
   - Analytics page restructured to emphasize the price+trades (TradingView) experience and lazy‑load heavy charts.
 - Next phases focus on server‑side caching, downsampling, and background precompute to make large backtests feel instantaneous.
+
+---
+
+## What’s Implemented (Phase 2)
+
+This phase focused on backend performance primitives and frontend integration to keep analytics snappy on large datasets.
+
+- Performance sections + server cache
+  - `GET /api/v1/analytics/performance/{id}?sections=...` computes only requested sections: `basic_metrics`, `advanced_analytics`, `risk_metrics`, `trade_analysis`, `daily_target_stats`, `drawdown_analysis`.
+  - First compute persists to `Backtest.results.analytics_summary` and stamps `results.analytics_cache` (cached_at, version, sections, completed_at).
+  - Responses include `ETag`/`Last-Modified` headers; to keep clients simple, endpoints always return 200 with a body.
+
+- Chart downsampling
+  - `GET /api/v1/analytics/charts/{id}` and focused variants (`/equity`, `/drawdown`, `/trades`) accept `max_points` (100–200000) and downsample server‑side while preserving last point.
+
+- Transport + validation
+  - GZip middleware enabled.
+  - Input bounds enforced for `max_points` and `chart-data` `max_candles` (now allows 1 to support prime query).
+
+- Frontend integration
+  - API client now encodes arrays as repeated query params (FastAPI‑compatible for `sections`, `chart_types`).
+  - Equity/Drawdown charts request `maxPoints` and lazy‑fetch on intersection.
+  - Advanced metrics call the new sections endpoint and load reliably on Overview.
+
+Key files (Phase 2)
+- BE: `backend/app/api/v1/analytics.py`, `backend/app/services/analytics/analytics_service.py`, `backend/app/services/analytics/chart_generator.py`, `backend/app/services/analytics_service.py`, `backend/app/main.py`.
+- FE: `frontend/src/services/api.ts`, `frontend/src/services/analytics.ts`, `frontend/src/components/charts/{EquityChart,DrawdownChart}.tsx`, `frontend/src/pages/Analytics/Analytics.tsx`, `frontend/src/components/analytics/AdvancedMetrics/{index.tsx,usePerformanceData.ts}`, `frontend/src/hooks/useInView.ts`.
+- Tests: `backend/tests/test_analytics_phase2.py`.
+
+How to validate (Phase 2 highlights)
+- Overview: metrics load; quick charts request `max_points≈600` and fetch on visibility.
+- Analytics tab: Equity/Drawdown use `max_points≈1500`; Returns/Monthly unchanged.
+- TradingView: primes with `max_candles=1` then loads the selected window (default 3000).
+- API spot checks:
+  - `GET /api/v1/analytics/performance/{id}?sections=basic_metrics&sections=risk_metrics`
+  - `GET /api/v1/analytics/charts/{id}/equity?max_points=600`
+
+What's not done yet (left for Phase 3/4)
+- Downsampling for returns/monthly charts and comparison chart.
+- Persistent chart caches keyed by `{chart_type,max_points}` with TTL.
+- Rolling metrics API route (service method exists) and more lightweight endpoints for tiles.
+- Trade log table (virtualized) and broader frontend polish.
 
 ---
 
@@ -81,6 +123,21 @@ Key files:
 
 ## Data Contracts and Endpoints (Quick Reference)
 
+### Phase 2 Endpoint Updates (Delta)
+
+- Performance
+  - `GET /api/v1/analytics/performance/{id}?sections=...`
+    - Accepts repeated `sections` params; computes only requested sections and serves from cache when present.
+    - Caches under `Backtest.results.analytics_summary` with metadata in `results.analytics_cache`.
+    - Includes `ETag`/`Last-Modified` headers; endpoint always returns 200 with body.
+- Charts
+  - `GET /api/v1/analytics/charts/{id}?chart_types=...&max_points=1500`
+  - `GET /api/v1/analytics/charts/{id}/{equity|drawdown|trades}?max_points=600`
+    - Downsamples large series to keep payload sizes bounded while preserving the last point.
+- TradingView
+  - `GET /api/v1/analytics/chart-data/{id}?include_trades=true&include_indicators=true&max_candles=3000&start=YYYY-MM-DD&end=YYYY-MM-DD&tz=Zone`
+    - `max_candles` now allows 1 to support prime queries.
+
 - Backtests
   - `GET /api/v1/backtests?compact=true&page=1&size=50` → `{ total, page, size, results: [{ id, strategy_name, dataset_id, status, created_at, completed_at }] }`
   - `GET /api/v1/backtests/{id}?minimal=true` → minimal fields + `metrics` + `engine_config` (omits heavy `results`)
@@ -104,6 +161,8 @@ Key files:
 ---
 
 ## Next Steps (Phase 2 → Phase 4)
+
+Note: Phase 2 items in this section are now complete. See “What’s Implemented (Phase 2)” above. Focus next on Phase 3/4 tasks.
 
 ### Phase 2 – API Controls + Caching (High ROI)
 
@@ -173,25 +232,30 @@ Key files:
 - Phase 1 commit: `feat: redesign dashboard and optimize analytics performance` (hash visible in `git log`)
 - Current working branch for Phase 2: `feat/enhancements-phase-2` (pushed and tracking origin)
 
+Additional:
+- Phase 2 changes have been merged into `main`. New tests: `backend/tests/test_analytics_phase2.py`.
+
 ---
 
 ## Suggested Work Breakdown (Actionable)
 
-1) Backend
-- Add `sections` to `/analytics/performance/{id}` and implement per‑section computation.
-- Persist `analytics_summary` on first compute + add cache metadata.
-- Add `max_points` to `/analytics/charts/{id}` and apply downsampling; add GZip middleware.
-- Add ETag/Last‑Modified headers to analytics endpoints.
-- Enforce hard limits for `max_candles`/`max_points` and input validation.
+1) Backend (Phase 3)
+- Persist downsampled chart caches per `{chart_type,max_points}` with TTL; invalidate on backtest changes.
+- Add downsampling for `returns` and `monthly_returns`; consider comparison chart downsampling.
+- Optional: re‑enable 304 conditional responses once clients handle them gracefully.
+- Add rolling metrics API route (service method exists) and lightweight endpoints for tile data.
+- Add stricter guards/rate limits for `max_points`/`max_candles`.
 
-2) Frontend
-- Switch quick charts to call lighter server endpoints when available (downsampled/compact).
-- Add IntersectionObserver to delay Analytics tab chart fetches until visible.
-- Align commission semantics across Backtests form and Modal (explicit UI labels or conversion logic).
+2) Frontend (Phase 3/4)
+- Extend downsampled usage to Returns/Trade Analysis/Monthly charts (where appropriate).
+- Virtualize trade log table and add sort/filter UX.
+- Unify commission semantics across forms (absolute fee vs percent toggle or consistent labels).
+- Extend IntersectionObserver to remaining heavy tiles; keep skeletons for perceived performance.
 
-3) Testing
-- Add API tests for `compact` and `minimal` flags.
-- Add performance smoke tests (simple timers) around analytics endpoints to catch regressions.
+3) Testing & Observability
+- Add API tests for `compact`/`minimal` flags and performance `sections` filtering.
+- Add performance smoke tests and set baseline payload size/latency caps for analytics endpoints.
+- Add basic server metrics (P95 latency, cache hit rate) and wire simple dashboards.
 
 ---
 
@@ -201,4 +265,3 @@ Key files:
 - The repository has recent changes that remove unused components; be mindful when rebasing long‑lived branches.
 
 *** End of handoff ***
-

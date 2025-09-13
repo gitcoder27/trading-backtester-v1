@@ -30,17 +30,20 @@ class ChartGenerator:
             'pink': '#E91E63'
         }
     
-    def create_equity_chart(self, equity_curve: pd.DataFrame) -> str:
+    def create_equity_chart(self, equity_curve: pd.DataFrame, max_points: Optional[int] = None) -> str:
         """Create equity curve chart"""
         if equity_curve.empty or 'equity' not in equity_curve.columns:
             return self._create_empty_chart("Equity Curve")
+        
+        # Downsample if needed
+        data = self._downsample_timeseries(equity_curve, max_points)
         
         fig = go.Figure()
         
         # Add equity line
         fig.add_trace(go.Scatter(
-            x=equity_curve['timestamp'] if 'timestamp' in equity_curve.columns else equity_curve.index,
-            y=equity_curve['equity'],
+            x=data['timestamp'] if 'timestamp' in data.columns else data.index,
+            y=data['equity'],
             mode='lines',
             name='Equity',
             line=dict(color=self.colors['primary'], width=2),
@@ -59,13 +62,14 @@ class ChartGenerator:
         
         return json.dumps(fig, cls=PlotlyJSONEncoder)
     
-    def create_drawdown_chart(self, equity_curve: pd.DataFrame) -> str:
+    def create_drawdown_chart(self, equity_curve: pd.DataFrame, max_points: Optional[int] = None) -> str:
         """Create drawdown chart with underwater curve"""
         if equity_curve.empty or 'equity' not in equity_curve.columns:
             return self._create_empty_chart("Drawdown")
         
         # Calculate drawdown
         drawdown_data = self._compute_drawdown(equity_curve)
+        drawdown_data = self._downsample_timeseries(drawdown_data, max_points)
         
         fig = go.Figure()
         
@@ -133,15 +137,16 @@ class ChartGenerator:
         
         return json.dumps(fig, cls=PlotlyJSONEncoder)
     
-    def create_trades_scatter_chart(self, trades: pd.DataFrame, equity_curve: pd.DataFrame) -> str:
+    def create_trades_scatter_chart(self, trades: pd.DataFrame, equity_curve: pd.DataFrame, max_points: Optional[int] = None) -> str:
         """Create trades scatter plot on equity curve"""
         fig = go.Figure()
         
         # Add equity curve as background
         if not equity_curve.empty and 'equity' in equity_curve.columns:
+            data = self._downsample_timeseries(equity_curve, max_points)
             fig.add_trace(go.Scatter(
-                x=equity_curve['timestamp'] if 'timestamp' in equity_curve.columns else equity_curve.index,
-                y=equity_curve['equity'],
+                x=data['timestamp'] if 'timestamp' in data.columns else data.index,
+                y=data['equity'],
                 mode='lines',
                 name='Equity Curve',
                 line=dict(color=self.colors['primary'], width=2),
@@ -373,3 +378,24 @@ class ChartGenerator:
         )
         
         return json.dumps(fig, cls=PlotlyJSONEncoder)
+
+    def _downsample_timeseries(self, df: pd.DataFrame, max_points: Optional[int]) -> pd.DataFrame:
+        """Downsample a time series DataFrame to at most max_points rows.
+
+        Preserves the last point and samples evenly across the series.
+        """
+        if max_points is None:
+            return df
+        try:
+            n = len(df)
+            if n <= 0 or max_points <= 0 or n <= max_points:
+                return df
+            step = int(np.ceil(n / float(max_points)))
+            sampled = df.iloc[::step].copy()
+            # Ensure last row is included
+            if sampled.index[-1] != df.index[-1]:
+                sampled = pd.concat([sampled, df.iloc[[-1]]])
+            return sampled
+        except Exception:
+            # Fallback to original data on any error
+            return df

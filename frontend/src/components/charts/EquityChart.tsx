@@ -2,19 +2,22 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import PlotlyChart from './PlotlyChart';
 import { AnalyticsService } from '../../services/analytics';
+import { useInView } from '../../hooks/useInView';
 
 interface EquityChartProps {
   data?: Array<{timestamp: string; equity: number}>;
   backtestId?: string;
   className?: string;
+  maxPoints?: number;
 }
 
-const EquityChart: React.FC<EquityChartProps> = ({ data, backtestId, className = '' }) => {
+const EquityChart: React.FC<EquityChartProps> = ({ data, backtestId, className = '', maxPoints = 1000 }) => {
   // If data not provided, fetch Plotly figure from backend
+  const { ref, inView } = useInView({ once: true, rootMargin: '0px 0px -15% 0px' });
   const { data: apiData, isLoading, error } = useQuery({
-    queryKey: ['equity-chart', backtestId],
-    queryFn: async () => AnalyticsService.getEquityChart(backtestId as string),
-    enabled: !!backtestId && !data,
+    queryKey: ['equity-chart', backtestId, maxPoints],
+    queryFn: async () => AnalyticsService.getEquityChart(backtestId as string, { maxPoints }),
+    enabled: !!backtestId && !data && inView,
     staleTime: 10 * 60 * 1000,
     keepPreviousData: true,
     refetchOnWindowFocus: false,
@@ -64,13 +67,14 @@ const EquityChart: React.FC<EquityChartProps> = ({ data, backtestId, className =
   const errMsg = error ? (error as Error).message : (!data && !isLoading && (!apiData || !(apiData as any).chart) ? 'No equity data available' : undefined);
 
   return (
-    <PlotlyChart
-      data={traces}
-      layout={layout}
-      loading={!!backtestId && !data ? isLoading : false}
-      error={errMsg}
-      className={className}
-    />
+    <div ref={ref} className={className}>
+      <PlotlyChart
+        data={traces}
+        layout={layout}
+        loading={!!backtestId && !data ? (isLoading || !inView) : false}
+        error={errMsg}
+      />
+    </div>
   );
 };
 

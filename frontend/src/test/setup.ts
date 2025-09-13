@@ -33,6 +33,14 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
+// Mock IntersectionObserver used by useInView
+// @ts-expect-error jsdom missing type
+global.IntersectionObserver = vi.fn().mockImplementation(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn(),
+}));
+
 // Mock Plotly for chart testing
 vi.mock('plotly.js', () => ({
   newPlot: vi.fn(),

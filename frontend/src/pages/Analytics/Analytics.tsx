@@ -157,7 +157,7 @@ const Analytics: React.FC = () => {
                 </Button>
               </div>
               <div className="h-64">
-                {backtestId && <EquityChart backtestId={backtestId} />}
+                {backtestId && <EquityChart backtestId={backtestId} maxPoints={600} />}
               </div>
             </Card>
 
@@ -169,7 +169,7 @@ const Analytics: React.FC = () => {
                 </Button>
               </div>
               <div className="h-64">
-                {backtestId && <DrawdownChart backtestId={backtestId} />}
+                {backtestId && <DrawdownChart backtestId={backtestId} maxPoints={600} />}
               </div>
             </Card>
           </div>
@@ -198,7 +198,7 @@ const Analytics: React.FC = () => {
               <div className="h-80">
                 {backtestId && (
                   <Suspense fallback={<div className="h-80 flex items-center justify-center text-gray-500">Loading…</div>}>
-                    <EquityChart backtestId={backtestId} />
+                    <EquityChart backtestId={backtestId} maxPoints={1500} />
                   </Suspense>
                 )}
               </div>
@@ -209,7 +209,7 @@ const Analytics: React.FC = () => {
               <div className="h-80">
                 {backtestId && (
                   <Suspense fallback={<div className="h-80 flex items-center justify-center text-gray-500">Loading…</div>}>
-                    <DrawdownChart backtestId={backtestId} />
+                    <DrawdownChart backtestId={backtestId} maxPoints={1500} />
                   </Suspense>
                 )}
               </div>

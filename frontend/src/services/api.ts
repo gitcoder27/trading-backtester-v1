@@ -47,12 +47,15 @@ export class ApiClient {
     const url = new URL(endpoint, this.baseURL);
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
+        if (value === undefined || value === null) return;
+        if (Array.isArray(value)) {
+          // Append repeated keys for arrays to satisfy FastAPI List[str]
+          value.forEach((v) => url.searchParams.append(key, String(v)));
+        } else {
           url.searchParams.append(key, String(value));
         }
       });
     }
-    
     return this.request<T>(url.pathname + url.search);
   }
 
