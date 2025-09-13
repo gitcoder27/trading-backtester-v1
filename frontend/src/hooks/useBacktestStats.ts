@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { JobService } from '../services/backtest';
 import type { BacktestDisplay } from '../types/backtest';
 
 export interface BacktestStats {
@@ -30,19 +29,10 @@ export function useBacktestStats(backtests: BacktestDisplay[]) {
   const [stats, setStats] = useState<BacktestStats>(baseStats);
 
   useEffect(() => {
-    setStats(prev => ({ ...prev, ...baseStats }));
-    (async () => {
-      try {
-        const res = await JobService.getJobStats();
-        const running = (res as any)?.stats?.running ?? 0;
-        setStats(prev => ({ ...prev, runningJobs: running }));
-      } catch (e) {
-        const running = backtests.filter(bt => bt.status === 'running').length;
-        setStats(prev => ({ ...prev, runningJobs: running }));
-      }
-    })();
+    // Use client-side derived running jobs to avoid extra network calls
+    const running = backtests.filter(bt => bt.status === 'running').length;
+    setStats({ ...baseStats, runningJobs: running });
   }, [baseStats, backtests]);
 
   return stats;
 }
-
