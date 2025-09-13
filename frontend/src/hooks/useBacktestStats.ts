@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { JobService } from '../services/backtest';
+import { useMemo } from 'react';
+import { useJobStats } from './useJobStats';
 import type { BacktestDisplay } from '../types/backtest';
 
 export interface BacktestStats {
@@ -27,22 +27,8 @@ export function useBacktestStats(backtests: BacktestDisplay[]) {
     };
   }, [backtests]);
 
-  const [stats, setStats] = useState<BacktestStats>(baseStats);
+  const { data } = useJobStats();
+  const runningJobs = (data as any)?.stats?.running ?? backtests.filter(bt => bt.status === 'running').length;
 
-  useEffect(() => {
-    setStats(prev => ({ ...prev, ...baseStats }));
-    (async () => {
-      try {
-        const res = await JobService.getJobStats();
-        const running = (res as any)?.stats?.running ?? 0;
-        setStats(prev => ({ ...prev, runningJobs: running }));
-      } catch (e) {
-        const running = backtests.filter(bt => bt.status === 'running').length;
-        setStats(prev => ({ ...prev, runningJobs: running }));
-      }
-    })();
-  }, [baseStats, backtests]);
-
-  return stats;
+  return { ...baseStats, runningJobs };
 }
-

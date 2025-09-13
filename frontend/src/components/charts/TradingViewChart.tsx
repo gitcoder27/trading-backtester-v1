@@ -1,45 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { 
-  createChart, 
-  CandlestickSeries,
-  LineSeries,
-  ColorType,
-  createSeriesMarkers,
-} from 'lightweight-charts';
-import type { 
-  IChartApi, 
-  ISeriesApi, 
-  CandlestickData, 
-  LineData,
-  SeriesMarker,
-  UTCTimestamp
-} from 'lightweight-charts';
-import { Maximize2, Download, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
-
-interface CandleData {
-  time: UTCTimestamp;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-}
-
-interface TradeMarker {
-  time: UTCTimestamp;
-  position: 'belowBar' | 'aboveBar';
-  color: string;
-  shape: 'arrowUp' | 'arrowDown' | 'circle' | 'square';
-  text: string;
-  size: number;
-}
-
-interface IndicatorLine {
-  name: string;
-  color: string;
-  data: LineData[];
-  lineWidth?: number;
-  visible?: boolean;
-}
+import type { CandlestickData, SeriesMarker, UTCTimestamp } from 'lightweight-charts';
+import { useTradingViewChart } from '../../hooks/charts/useTradingViewChart';
+import { useSeriesMarkers } from '../../hooks/charts/useSeriesMarkers';
+import { useIndicators } from '../../hooks/charts/useIndicators';
+import ChartControls from './ChartControls';
+import type { CandleData, TradeMarker, IndicatorLine } from '../../types/chart';
+import { getChartOptions } from '../../utils/chartOptions';
 
 interface TradingViewChartProps {
   candleData: CandleData[];
@@ -69,186 +35,99 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   timeZone
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const indicatorSeriesRef = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
-  const markersPluginRef = useRef<any>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [visibleIndicators, setVisibleIndicators] = useState<Set<string>>(new Set());
+  const { chartRef, candleSeriesRef, ready } = useTradingViewChart(chartContainerRef, { height, theme, timeZone, isFullscreen, enabled: !loading, withCandles: true });
 
-  // Chart theme configuration
-  // Time formatter respecting an explicit time zone
-  const formatTimeInZone = (t: any) => {
-    try {
-      const date = typeof t === 'number' ? new Date(t * 1000) :
-        (t?.year && t?.month && t?.day ? new Date(Date.UTC(t.year, t.month - 1, t.day)) : new Date());
-      return new Intl.DateTimeFormat('en-IN', {
-        timeZone: timeZone || 'UTC',
-        year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit'
-      }).format(date);
-    } catch {
-      const date = typeof t === 'number' ? new Date(t * 1000) : new Date();
-      return date.toISOString();
-    }
+  // Split indicators into overlay (with price) and separate pane (oscillators like RSI/MACD)
+  const overlayIndicators = React.useMemo(() => (indicators || []).filter(ind => {
+    // Respect explicit pane flag if provided
+    if ((ind as any).pane === 'separate') return false;
+    // Heuristic: common oscillators should be in a separate pane
+    const name = (ind.name || '').toLowerCase();
+    const separateNames = ['rsi', 'macd', 'stoch', 'stochastic', 'cci', 'atr'];
+    return !separateNames.some(k => name.includes(k));
+  }), [indicators]);
+
+  const separateIndicators = React.useMemo(() => (indicators || []).filter(ind => {
+    if ((ind as any).pane === 'separate') return true;
+    const name = (ind.name || '').toLowerCase();
+    const separateNames = ['rsi', 'macd', 'stoch', 'stochastic', 'cci', 'atr'];
+    return separateNames.some(k => name.includes(k));
+  }), [indicators]);
+
+  const { visibleIndicators: visibleOverlay, toggleIndicator: toggleOverlay } = useIndicators(chartRef, overlayIndicators, ready);
+  useSeriesMarkers(
+    candleSeriesRef,
+    (tradeMarkers || []).map(m => ({ ...m, size: (m as any).size || 1 })) as SeriesMarker<UTCTimestamp>[],
+    ready
+  );
+
+  // Separate pane for oscillators
+  const paneContainerRef = useRef<HTMLDivElement>(null);
+  const paneHeight = separateIndicators.length > 0 ? Math.max(160, Math.round(height * 0.28)) : 0;
+  const { chartRef: paneChartRef, candleSeriesRef: paneCandleSeriesRef, ready: paneReady } = useTradingViewChart(
+    paneContainerRef,
+    { height: paneHeight, theme, timeZone, isFullscreen, enabled: !loading && separateIndicators.length > 0, withCandles: false }
+  );
+  const { visibleIndicators: visiblePane, toggleIndicator: togglePane } = useIndicators(paneChartRef, separateIndicators, paneReady);
+
+  // Combine indicator visibility and toggles for controls
+  const allIndicators = React.useMemo(() => [...overlayIndicators, ...separateIndicators], [overlayIndicators, separateIndicators]);
+  const visibleCombined = React.useMemo(() => {
+    const s = new Set<string>();
+    visibleOverlay.forEach(v => s.add(v));
+    visiblePane.forEach(v => s.add(v));
+    return s;
+  }, [visibleOverlay, visiblePane]);
+  const overlayNames = React.useMemo(() => new Set(overlayIndicators.map(i => i.name)), [overlayIndicators]);
+  const toggleCombined = (name: string) => {
+    if (overlayNames.has(name)) toggleOverlay(name);
+    else togglePane(name);
   };
 
-  const getChartOptions = () => ({
-    layout: {
-      background: { 
-        type: ColorType.Solid, 
-        color: theme === 'dark' ? '#0a0e16' : '#ffffff' 
-      },
-      textColor: theme === 'dark' ? '#d1d5db' : '#374151',
-      fontSize: 12,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    },
-    localization: {
-      locale: 'en-IN',
-      timeFormatter: (time: any) => formatTimeInZone(time),
-      priceFormatter: (p: number) => (Math.abs(p) < 1 ? p.toFixed(4) : p.toFixed(2)),
-      dateFormat: 'dd MMM yyyy'
-    },
-    grid: {
-      vertLines: { 
-        color: theme === 'dark' ? '#1f2937' : '#e5e7eb',
-        visible: true,
-      },
-      horzLines: { 
-        color: theme === 'dark' ? '#1f2937' : '#e5e7eb',
-        visible: true,
-      },
-    },
-    crosshair: {
-      mode: 1 as const,
-      vertLine: {
-        color: theme === 'dark' ? '#6b7280' : '#9ca3af',
-        width: 1 as const,
-        style: 3 as const,
-        visible: true,
-        labelVisible: true,
-      },
-      horzLine: {
-        color: theme === 'dark' ? '#6b7280' : '#9ca3af',
-        width: 1 as const,
-        style: 3 as const,
-        visible: true,
-        labelVisible: true,
-      },
-    },
-    rightPriceScale: {
-      borderColor: theme === 'dark' ? '#374151' : '#d1d5db',
-      visible: true,
-      borderVisible: true,
-      scaleMargins: {
-        top: 0.1,
-        bottom: 0.1,
-      },
-    },
-    timeScale: {
-      borderColor: theme === 'dark' ? '#374151' : '#d1d5db',
-      borderVisible: true,
-      fixLeftEdge: false,
-      fixRightEdge: false,
-      lockVisibleTimeRangeOnResize: true,
-      rightBarStaysOnScroll: true,
-      shiftVisibleRangeOnNewBar: true,
-      timeVisible: true,
-      secondsVisible: false,
-      tickMarkFormatter: (time: any) => {
-        // Axis labels: show only HH:mm for intraday, or date for daily
-        try {
-          const d = new Date((time as number) * 1000);
-          const opts: Intl.DateTimeFormatOptions = {
-            timeZone: timeZone || 'UTC',
-            hour: '2-digit', minute: '2-digit'
-          };
-          return new Intl.DateTimeFormat('en-IN', opts).format(d);
-        } catch {
-          return String(time);
-        }
-      },
-    },
-    handleScroll: {
-      mouseWheel: true,
-      pressedMouseMove: true,
-      horzTouchDrag: true,
-      vertTouchDrag: true,
-    },
-    handleScale: {
-      axisPressedMouseMove: true,
-      mouseWheel: true,
-      pinch: true,
-    },
-  });
-
-  // Candlestick series configuration
-  const getCandlestickOptions = () => ({
-    upColor: '#26a69a',
-    downColor: '#ef5350',
-    borderVisible: false,
-    wickUpColor: '#26a69a',
-    wickDownColor: '#ef5350',
-    priceLineVisible: true,
-    lastValueVisible: true,
-  });
-
-  // Initialize chart
+  // Sync timescales between panes using logical ranges for smoother drag at edges
   useEffect(() => {
-    if (!chartContainerRef.current || loading) return;
+    const top = chartRef.current;
+    const bottom = paneChartRef.current;
+    if (!top || !bottom) return;
+    let syncing = false;
 
-    // Create chart
-    const chart = createChart(chartContainerRef.current, {
-      ...getChartOptions(),
-      width: chartContainerRef.current.clientWidth,
-      height: height,
-    });
-
-    chartRef.current = chart;
-
-    // Add candlestick series
-    const candleSeries = chart.addSeries(CandlestickSeries, getCandlestickOptions());
-    candleSeriesRef.current = candleSeries;
-
-    // Prepare markers plugin attached to the candlestick series
-    try {
-      markersPluginRef.current = createSeriesMarkers(candleSeries);
-    } catch (err) {
-      // Plugin not available; markers will be skipped gracefully
-      markersPluginRef.current = null;
-    }
-
-    // Handle resize
-    const handleResize = () => {
-      if (chartContainerRef.current && chart) {
-        chart.applyOptions({ 
-          width: chartContainerRef.current.clientWidth,
-          height: isFullscreen ? window.innerHeight - 100 : height 
-        });
-      }
+    const syncBottomToTop = () => {
+      if (syncing) return;
+      const lr = top.timeScale().getVisibleLogicalRange();
+      if (!lr) return;
+      syncing = true;
+      try { bottom.timeScale().setVisibleLogicalRange(lr as any); } finally { syncing = false; }
+    };
+    const syncTopToBottom = () => {
+      if (syncing) return;
+      const lr = bottom.timeScale().getVisibleLogicalRange();
+      if (!lr) return;
+      syncing = true;
+      try { top.timeScale().setVisibleLogicalRange(lr as any); } finally { syncing = false; }
     };
 
-    const resizeObserver = new ResizeObserver(handleResize);
-    resizeObserver.observe(chartContainerRef.current);
-
-    // Cleanup
+    top.timeScale().subscribeVisibleLogicalRangeChange(syncBottomToTop);
+    bottom.timeScale().subscribeVisibleLogicalRangeChange(syncTopToBottom);
     return () => {
-      resizeObserver.disconnect();
-      if (chartRef.current) {
-        chartRef.current.remove();
-        chartRef.current = null;
-      }
-      candleSeriesRef.current = null;
-      if (markersPluginRef.current && typeof markersPluginRef.current.detach === 'function') {
-        try { markersPluginRef.current.detach(); } catch {}
-      }
-      markersPluginRef.current = null;
-      indicatorSeriesRef.current.clear();
+      try { top.timeScale().unsubscribeVisibleLogicalRangeChange(syncBottomToTop); } catch {}
+      try { bottom.timeScale().unsubscribeVisibleLogicalRangeChange(syncTopToBottom); } catch {}
     };
-  }, [height, theme, loading, isFullscreen]);
+  }, [ready, paneReady]);
+
+  // Re-apply size/options when fullscreen toggles
+  useEffect(() => {
+    if (!chartRef.current || !chartContainerRef.current) return;
+    chartRef.current.applyOptions({
+      ...getChartOptions(theme, timeZone),
+      width: chartContainerRef.current.clientWidth,
+      height: isFullscreen ? window.innerHeight - 100 : height,
+    });
+  }, [isFullscreen, height, theme, timeZone]);
 
   // Update candlestick data
   useEffect(() => {
-    if (!candleSeriesRef.current || !candleData.length) return;
+    if (!ready || !candleSeriesRef.current || !candleData.length) return;
 
     try {
       const formattedData: CandlestickData[] = candleData.map(candle => ({
@@ -269,70 +148,9 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     } catch (error) {
       console.error('Error setting candlestick data:', error);
     }
-  }, [candleData, autoFit]);
+  }, [candleData, autoFit, ready]);
 
-  // Update trade markers via series markers plugin
-  // Include candleData so markers apply after series creation/data load as well
-  useEffect(() => {
-    if (!candleSeriesRef.current || !tradeMarkers.length) return;
-
-    try {
-      const formattedMarkers: SeriesMarker<UTCTimestamp>[] = tradeMarkers.map(marker => ({
-        time: marker.time,
-        position: marker.position,
-        color: marker.color,
-        shape: marker.shape,
-        text: marker.text,
-        size: marker.size || 1,
-      }));
-
-      // Prefer plugin API for modern lightweight-charts
-      if (markersPluginRef.current && typeof markersPluginRef.current.setMarkers === 'function') {
-        markersPluginRef.current.setMarkers(formattedMarkers);
-      }
-    } catch (error) {
-      console.error('Error setting trade markers:', error);
-    }
-  }, [tradeMarkers, candleData]);
-
-  // Update indicators
-  useEffect(() => {
-    if (!chartRef.current) return;
-
-    // Remove existing indicator series
-    indicatorSeriesRef.current.forEach((series) => {
-      chartRef.current?.removeSeries(series);
-    });
-    indicatorSeriesRef.current.clear();
-
-    // Add new indicator series
-    indicators.forEach((indicator) => {
-      if (!chartRef.current) return;
-
-      try {
-        const lineSeries = chartRef.current.addSeries(LineSeries, {
-          color: indicator.color,
-          lineWidth: (indicator.lineWidth || 2) as any,
-          priceLineVisible: false,
-          lastValueVisible: true,
-          crosshairMarkerVisible: true,
-          title: indicator.name,
-        });
-
-        lineSeries.setData(indicator.data);
-        indicatorSeriesRef.current.set(indicator.name, lineSeries);
-
-        // Set initial visibility
-        if (indicator.visible === false) {
-          lineSeries.applyOptions({ visible: false });
-        } else {
-          setVisibleIndicators(prev => new Set([...prev, indicator.name]));
-        }
-      } catch (error) {
-        console.error(`Error adding indicator ${indicator.name}:`, error);
-      }
-    });
-  }, [indicators]);
+  // Indicators handled in useIndicators; markers handled in useSeriesMarkers
 
   // Chart control functions
   const handleZoomIn = () => {
@@ -390,23 +208,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     }
   };
 
-  const toggleIndicator = (indicatorName: string) => {
-    const series = indicatorSeriesRef.current.get(indicatorName);
-    if (series) {
-      const isVisible = visibleIndicators.has(indicatorName);
-      series.applyOptions({ visible: !isVisible });
-      
-      setVisibleIndicators(prev => {
-        const newSet = new Set(prev);
-        if (isVisible) {
-          newSet.delete(indicatorName);
-        } else {
-          newSet.add(indicatorName);
-        }
-        return newSet;
-      });
-    }
-  };
+  // toggleIndicator provided by useIndicators hook
 
   if (loading) {
     return (
@@ -440,76 +242,35 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
           )}
         </div>
 
-        {showControls && (
-          <div className="flex items-center space-x-2">
-            {/* Indicator toggles */}
-            {indicators.length > 0 && (
-              <div className="flex items-center space-x-2 mr-4">
-                {indicators.map((indicator) => (
-                  <button
-                    key={indicator.name}
-                    onClick={() => toggleIndicator(indicator.name)}
-                    className={`px-2 py-1 text-xs rounded ${
-                      visibleIndicators.has(indicator.name)
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-600 text-gray-300'
-                    }`}
-                    style={{
-                      borderLeft: `3px solid ${indicator.color}`,
-                    }}
-                  >
-                    {indicator.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Chart controls */}
-            <button
-              onClick={handleZoomIn}
-              className="p-2 text-gray-400 hover:text-white transition-colors"
-              title="Zoom In"
-            >
-              <ZoomIn className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleZoomOut}
-              className="p-2 text-gray-400 hover:text-white transition-colors"
-              title="Zoom Out"
-            >
-              <ZoomOut className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleReset}
-              className="p-2 text-gray-400 hover:text-white transition-colors"
-              title="Fit Content"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleDownload}
-              className="p-2 text-gray-400 hover:text-white transition-colors"
-              title="Download PNG"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleFullscreen}
-              className="p-2 text-gray-400 hover:text-white transition-colors"
-              title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-            >
-              <Maximize2 className="w-4 h-4" />
-            </button>
-          </div>
-        )}
+        <ChartControls
+          show={showControls}
+          indicators={allIndicators.map(i => ({ name: i.name, color: i.color }))}
+          visible={visibleCombined}
+          onToggleIndicator={toggleCombined}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onReset={handleReset}
+          onDownload={handleDownload}
+          onFullscreen={handleFullscreen}
+          isFullscreen={isFullscreen}
+        />
       </div>
 
-      {/* Chart container */}
+      {/* Main price pane */}
       <div 
         ref={chartContainerRef}
         className="w-full"
         style={{ height: isFullscreen ? window.innerHeight - 100 : height }}
       />
+
+      {/* Indicator pane (oscillators) */}
+      {separateIndicators.length > 0 && (
+        <div 
+          ref={paneContainerRef}
+          className="w-full border-t border-gray-700"
+          style={{ height: isFullscreen ? Math.floor((window.innerHeight - 100) * 0.28) : paneHeight }}
+        />
+      )}
 
       {/* Attribution */}
       <div className="absolute bottom-2 right-2 text-xs text-gray-500">
