@@ -110,3 +110,20 @@ export interface PerformanceMetrics {
   consecutive_losses: number;
   kelly_criterion: number;
 }
+
+// Lightweight display model for Backtests list page
+export interface BacktestDisplay {
+  id: string;
+  jobId?: string;
+  strategy: string;
+  dataset: string;
+  status: 'completed' | 'running' | 'failed' | 'pending';
+  totalReturn: string;
+  sharpeRatio: number;
+  maxDrawdown: string;
+  totalTrades: number;
+  winRate: string;
+  createdAt: string;
+  createdAtTs: number;
+  duration: string;
+}

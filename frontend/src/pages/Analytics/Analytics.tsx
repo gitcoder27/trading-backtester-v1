@@ -11,8 +11,7 @@ import { EquityChart, DrawdownChart, PriceChartPanel } from '../../components/ch
 
 const Analytics: React.FC = () => {
   const [searchParams] = useSearchParams();
-  // Support both backtest_id and backtestId params to be resilient
-  const backtestId = searchParams.get('backtest_id') || searchParams.get('backtestId') || '';
+  const backtestId = searchParams.get('backtest_id') || '';
   const [activeTab, setActiveTab] = useState<'overview' | 'price' | 'analytics'>('overview');
   const DEFAULT_TZ = 'Asia/Kolkata';
 

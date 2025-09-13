@@ -16,7 +16,7 @@ import {
 
 const Analytics: React.FC = () => {
   const [searchParams] = useSearchParams();
-  const backtestId = searchParams.get('backtestId') || '1'; // Default to ID 1 for demo
+  const backtestId = searchParams.get('backtest_id') || '1'; // Default to ID 1 for demo
   const [activeTab, setActiveTab] = useState<'overview' | 'charts' | 'trades'>('overview');
   const DEFAULT_TZ = 'Asia/Kolkata';
 
@@ -59,7 +59,7 @@ const Analytics: React.FC = () => {
             value={backtestId}
             onChange={(e) => {
               const params = new URLSearchParams(searchParams);
-              params.set('backtestId', e.target.value);
+              params.set('backtest_id', e.target.value);
               window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
             }}
             className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
