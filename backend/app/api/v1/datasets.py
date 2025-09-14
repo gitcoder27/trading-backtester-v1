@@ -112,6 +112,12 @@ async def list_datasets(limit: int = Query(50, ge=1, le=100)):
         raise HTTPException(status_code=500, detail=f"Failed to list datasets: {str(e)}")
 
 
+# Alias without trailing slash for clients that call /api/v1/datasets
+@router.get("")
+async def list_datasets_no_slash(limit: int = Query(50, ge=1, le=100)):
+    return await list_datasets(limit=limit)
+
+
 @router.get("/{dataset_id}")
 async def get_dataset(dataset_id: int):
     """
