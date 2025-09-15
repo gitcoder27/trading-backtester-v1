@@ -8,6 +8,7 @@ import Button from '../../components/ui/Button';
 import AdvancedMetrics from '../../components/analytics/AdvancedMetrics';
 import { BacktestService } from '../../services/backtest';
 import { EquityChart, DrawdownChart, PriceChartPanel } from '../../components/charts';
+import { getStatusVariant } from '../../utils/status';
 
 const Analytics: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -33,19 +34,7 @@ const Analytics: React.FC = () => {
     return backtestId ? `Backtest #${backtestId}` : 'No Backtest Selected';
   }, [backtest?.strategy_name, backtestId]);
 
-  const getStatusVariant = (status?: string): 'success' | 'info' | 'danger' | 'secondary' => {
-    if (!status) return 'secondary';
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return 'success';
-      case 'running':
-        return 'info';
-      case 'failed':
-        return 'danger';
-      default:
-        return 'secondary';
-    }
-  };
+  // status variants centralized in utils/status
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Activity },

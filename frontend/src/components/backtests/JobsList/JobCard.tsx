@@ -1,9 +1,9 @@
 import React from 'react';
-import { Clock, CheckCircle, XCircle, Play, Square } from 'lucide-react';
 import Card from '../../ui/Card';
 import Badge from '../../ui/Badge';
 import JobActions from './JobActions';
 import type { JobCardProps, JobStatus } from './types';
+import { getStatusIcon, getStatusColor, getStatusVariant } from '../../../utils/status';
 
 const JobCard: React.FC<JobCardProps> = ({
   job,
@@ -12,39 +12,6 @@ const JobCard: React.FC<JobCardProps> = ({
   onDownload,
   onClick
 }) => {
-  const getStatusIcon = (status: JobStatus) => {
-    switch (status) {
-      case 'completed': return CheckCircle;
-      case 'running': return Play;
-      case 'failed': return XCircle;
-      case 'cancelled': return Square;
-      case 'pending':
-      default: return Clock;
-    }
-  };
-
-  const getStatusColor = (status: JobStatus) => {
-    switch (status) {
-      case 'completed': return 'text-green-500';
-      case 'running': return 'text-blue-500';
-      case 'failed': return 'text-red-500';
-      case 'cancelled': return 'text-gray-500';
-      case 'pending':
-      default: return 'text-yellow-500';
-    }
-  };
-
-  const getStatusVariant = (status: JobStatus): 'success' | 'primary' | 'danger' | 'warning' => {
-    switch (status) {
-      case 'completed': return 'success';
-      case 'running': return 'primary';
-      case 'failed': return 'danger';
-      case 'cancelled':
-      case 'pending':
-      default: return 'warning';
-    }
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString();
   };

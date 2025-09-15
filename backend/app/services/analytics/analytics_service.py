@@ -1,19 +1,24 @@
-"""
-Analytics Service - Modular Version
-Main orchestrator for analytics operations with clean separation of concerns
-"""
+"""Modular analytics service bringing together individual components."""
+
+import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
-from typing import Dict, Any, List, Optional
-from datetime import datetime
 
-from backend.app.database.models import get_session_factory, Backtest, Dataset
+from backend.app.database.models import Backtest, get_session_factory
 from backtester.metrics import daily_profit_target_stats
-from .performance_calculator import PerformanceCalculator
+
 from .chart_generator import ChartGenerator
-from .trade_analyzer import TradeAnalyzer
-from .risk_calculator import RiskCalculator
+from .data_fetcher import AnalyticsDataFetcher, PriceDataError
 from .data_formatter import DataFormatter
+from .performance_calculator import PerformanceCalculator
+from .risk_calculator import RiskCalculator
+from .trade_analyzer import TradeAnalyzer
+from .tradingview_builder import TradingViewBuilder
+
+
+logger = logging.getLogger(__name__)
 
 
 class AnalyticsService:
@@ -32,11 +37,13 @@ class AnalyticsService:
         self.SessionLocal = get_session_factory()
         
         # Initialize specialized components
+        self.data_fetcher = AnalyticsDataFetcher()
         self.performance_calc = PerformanceCalculator()
         self.chart_gen = ChartGenerator()
         self.trade_analyzer = TradeAnalyzer()
         self.risk_calc = RiskCalculator()
         self.formatter = DataFormatter()
+        self.tradingview_builder = TradingViewBuilder()
     
     def get_performance_summary(self, backtest_id: int, sections: Optional[List[str]] = None) -> Dict[str, Any]:
         """
@@ -314,37 +321,85 @@ class AnalyticsService:
             db.close()
     
     def get_chart_data(
-        self, 
-        backtest_id: int, 
-        include_trades: bool = True, 
+        self,
+        backtest_id: int,
+        include_trades: bool = True,
         include_indicators: bool = True,
         max_candles: Optional[int] = None,
         start: Optional[str] = None,
         end: Optional[str] = None,
         tz: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Get TradingView Lightweight Charts formatted data with actual dataset data.
-        
-        This method is delegated from the original analytics service to maintain
-        backward compatibility while using the new modular structure.
-        """
-        # Import here to avoid circular imports
-        from ..analytics_service import AnalyticsService as LegacyAnalyticsService
-        
-        # Create a temporary instance of the legacy service for this complex method
-        # TODO: Gradually migrate this method to use the new modular components
-        legacy_service = LegacyAnalyticsService()
-        
-        return legacy_service.get_chart_data(
-            backtest_id,
-            include_trades,
-            include_indicators,
-            max_candles,
-            start=start,
-            end=end,
-            tz=tz,
-        )
+        """Return TradingView-friendly candlesticks, trades, and indicators."""
+
+        db = self.SessionLocal()
+        try:
+            backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
+
+            if not backtest:
+                return {'success': False, 'error': 'Backtest not found'}
+
+            if not backtest.results:
+                return {'success': False, 'error': 'No results available for this backtest'}
+
+            results: Dict[str, Any] = backtest.results
+
+            try:
+                bundle = self.data_fetcher.load_price_data(
+                    backtest,
+                    results,
+                    db,
+                    tz=tz,
+                    start=start,
+                    end=end,
+                    max_candles=max_candles,
+                )
+            except PriceDataError as exc:
+                return {'success': False, 'error': str(exc)}
+
+            candles = self.tradingview_builder.build_candles(bundle.dataframe)
+            if not candles:
+                return {'success': False, 'error': 'No valid candlestick data could be generated'}
+
+            response: Dict[str, Any] = {
+                'success': True,
+                'backtest_id': backtest_id,
+                'dataset_name': bundle.dataset_name,
+                'candlestick_data': candles,
+                'total_candles': bundle.total_candles,
+                'returned_candles': len(candles),
+                'sampled': bundle.sampled,
+                'filtered': bundle.filtered,
+                'date_range': {
+                    'start': candles[0]['time'] if candles else None,
+                    'end': candles[-1]['time'] if candles else None,
+                },
+            }
+
+            if include_trades:
+                response['trade_markers'] = self.tradingview_builder.build_trade_markers(
+                    results,
+                    bundle.dataframe,
+                    tz=tz,
+                    start_ts=bundle.start_bound,
+                    end_ts=bundle.end_bound,
+                )
+
+            if include_indicators:
+                strategy_params = getattr(backtest, 'strategy_params', None)
+                response['indicators'] = self.tradingview_builder.build_indicator_series(
+                    results,
+                    bundle.dataframe,
+                    strategy_params=strategy_params,
+                )
+                response['indicator_config'] = results.get('indicator_cfg') or []
+
+            return self.formatter.sanitize_json(response)
+        except Exception:  # pragma: no cover - defensive logging
+            logger.exception('Error generating chart data for backtest_id=%s', backtest_id)
+            return {'success': False, 'error': 'Error generating chart data'}
+        finally:
+            db.close()
     
     def get_rolling_metrics(self, backtest_id: int, window: int = 50) -> Dict[str, Any]:
         """Get rolling performance metrics for a backtest"""

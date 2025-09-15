@@ -333,14 +333,46 @@ class ResultProcessor:
             except Exception:
                 clean_metrics[k] = v
 
-        return {
+        # Serialize indicator data from raw engine result if present
+        indicators_serialized: Dict[str, list] = {}
+        try:
+            raw_engine = raw_results.get('raw_engine_result', {}) if isinstance(raw_results, dict) else {}
+            raw_ind = raw_engine.get('indicators') if isinstance(raw_engine, dict) else None
+            if raw_ind is not None:
+                if hasattr(raw_ind, 'to_dict'):
+                    # DataFrame-like: convert to dict of columns, drop timestamp
+                    ind_dict = raw_ind.to_dict(orient='list')  # type: ignore[attr-defined]
+                    for key, arr in ind_dict.items():
+                        if key and key.lower() != 'timestamp':
+                            # Coerce to floats where possible, leaving None for invalid
+                            try:
+                                indicators_serialized[key] = [float(x) if x is not None and x == x else None for x in arr]
+                            except Exception:
+                                indicators_serialized[key] = arr
+                elif isinstance(raw_ind, dict):
+                    # Already a mapping; keep as-is
+                    indicators_serialized = {k: v for k, v in raw_ind.items() if k and k.lower() != 'timestamp'}
+        except Exception:
+            indicators_serialized = {}
+
+        result_obj = {
             'success': True,
             'equity_curve': equity_curve,
             'trade_log': trades,
             'metrics': clean_metrics,
-            'indicators': {},
+            'indicators': indicators_serialized,
             'engine_config': engine_cfg,
         }
+
+        # Pass through indicator config metadata if available from engine
+        try:
+            raw_engine = raw_results.get('raw_engine_result', {}) if isinstance(raw_results, dict) else {}
+            if isinstance(raw_engine, dict) and 'indicator_cfg' in raw_engine:
+                result_obj['indicator_cfg'] = raw_engine['indicator_cfg']
+        except Exception:
+            pass
+
+        return result_obj
     
     def save_to_database(self, job_id: int, processed_results: Dict[str, Any]) -> bool:
         """

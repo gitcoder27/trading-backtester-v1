@@ -13,6 +13,7 @@ import {
   PriceChartPanel,
 } from '../../components/charts';
 import { BacktestService, JobService } from '../../services/backtest';
+import { getStatusVariant } from '../../utils/status';
 
 const BacktestDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -79,21 +80,6 @@ const BacktestDetail: React.FC = () => {
     );
   }
 
-  const getStatusColor = (status: string | undefined) => {
-    if (!status) return 'secondary';
-    
-    switch (status.toLowerCase()) {
-      case 'completed':
-        return 'success';
-      case 'running':
-        return 'info';
-      case 'failed':
-        return 'danger';
-      default:
-        return 'secondary';
-    }
-  };
-
   // Determine if we are rendering from job results
   const isJobMode = !backtest && jobResults?.success && jobResults?.results;
   const resultsFromJob = (jobResults?.results) || {};
@@ -127,7 +113,7 @@ const BacktestDetail: React.FC = () => {
                   {backtest?.duration}
                 </div>
               )}
-              <Badge variant={getStatusColor(backtest?.status || jobResults?.status)} size="sm">
+              <Badge variant={getStatusVariant(backtest?.status || jobResults?.status || 'pending')} size="sm">
                 {(backtest?.status || jobResults?.status || 'Unknown')}
               </Badge>
             </div>
@@ -171,8 +157,7 @@ const BacktestDetail: React.FC = () => {
             <p className="font-medium text-gray-900 dark:text-gray-100">
               {backtest.dataset_name && backtest.dataset_name !== 'Unknown Dataset' 
                 ? backtest.dataset_name 
-                : 'NIFTY Aug 2025 (1min)'
-              }
+                : 'Unknown Dataset'}
             </p>
           </div>
           <div>

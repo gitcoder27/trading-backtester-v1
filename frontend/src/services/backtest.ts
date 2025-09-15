@@ -7,20 +7,33 @@ import type {
   PaginationParams 
 } from '../types/index';
 
+interface EngineOptions {
+  initial_cash: number;
+  lots: number;
+  fee_per_trade: number;
+  slippage: number;
+  intraday?: boolean;
+  daily_target?: number;
+  daily_profit_target?: number;
+  option_delta?: number;
+  option_price_per_unit?: number;
+}
+
 export class BacktestService {
   static async runBacktest(config: BacktestConfig): Promise<BacktestResult> {
     // Map to BacktestRequest schema: strategy, strategy_params, dataset, engine_options
-    const engineOptions: any = {
+    const p = config.parameters || {};
+    const engineOptions: EngineOptions = {
       initial_cash: config.initial_capital,
       lots: config.position_size,
       fee_per_trade: config.commission,
       slippage: config.slippage,
       // Map enhanced params if present
-      intraday: (config.parameters as any)?.intraday_mode ?? true,
-      daily_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
-      daily_profit_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
-      option_delta: (config.parameters as any)?.option_delta ?? 0.5,
-      option_price_per_unit: (config.parameters as any)?.option_price_per_unit ?? 1.0,
+      intraday: (p as any).intraday_mode ?? true,
+      daily_target: (p as any).daily_profit_target ?? 30.0,
+      daily_profit_target: (p as any).daily_profit_target ?? 30.0,
+      option_delta: (p as any).option_delta ?? 0.5,
+      option_price_per_unit: (p as any).option_price_per_unit ?? 1.0,
     };
 
     const backtestRequest = {
@@ -52,16 +65,17 @@ export class BacktestService {
     const formData = new FormData();
     formData.append('file', file);
     
-    const engineOptions: any = {
-      initial_cash: config.initial_capital,
-      lots: config.position_size,
-      fee_per_trade: config.commission,
-      slippage: config.slippage,
-      intraday: (config.parameters as any)?.intraday_mode ?? true,
-      daily_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
-      daily_profit_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
-      option_delta: (config.parameters as any)?.option_delta ?? 0.5,
-      option_price_per_unit: (config.parameters as any)?.option_price_per_unit ?? 1.0,
+    const p = config.parameters || {};
+    const engineOptions: EngineOptions = {
+      initial_cash: config.initial_capital!,
+      lots: config.position_size!,
+      fee_per_trade: config.commission || 0,
+      slippage: config.slippage || 0,
+      intraday: (p as any).intraday_mode ?? true,
+      daily_target: (p as any).daily_profit_target ?? 30.0,
+      daily_profit_target: (p as any).daily_profit_target ?? 30.0,
+      option_delta: (p as any).option_delta ?? 0.5,
+      option_price_per_unit: (p as any).option_price_per_unit ?? 1.0,
     };
 
     formData.append('strategy', String(config.strategy_id ?? ''));
