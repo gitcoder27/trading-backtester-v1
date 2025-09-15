@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { BacktestService } from '../services/backtest';
-import { formatDuration } from '../utils/formatters';
+import { formatDuration, formatTradingSessionsDuration } from '../utils/formatters';
 import type { BacktestDisplay } from '../types/backtest';
 
 const FALLBACK_DATASET_LABEL = 'NIFTY Aug 2025 (1min)';
@@ -42,6 +42,21 @@ export function useBacktestsList() {
       return `${sign}${pct.toFixed(2)}%`;
     };
 
+    // Compute trading sessions based duration
+    const tradingDays: number | undefined = (
+      metrics.trading_sessions_days ??
+      metrics.trading_days ??
+      metrics.total_trading_days
+    );
+    const durationDisplay =
+      typeof tradingDays === 'number' && tradingDays > 0
+        ? formatTradingSessionsDuration(tradingDays)
+        : bt.status === 'running'
+        ? 'In Progress'
+        : bt.status === 'pending'
+        ? 'Pending'
+        : '—';
+
     return {
       id: bt.id,
       jobId: (bt.job_id ?? bt.backtest_job_id)?.toString(),
@@ -59,11 +74,7 @@ export function useBacktestsList() {
       winRate: typeof metrics.win_rate === 'number' ? `${metrics.win_rate.toFixed(1)}%` : 'N/A',
       createdAt: new Date(bt.created_at).toLocaleDateString(),
       createdAtTs: new Date(bt.created_at).getTime(),
-      duration: bt.completed_at
-        ? formatDuration(bt.created_at, bt.completed_at)
-        : bt.status === 'running'
-        ? 'In Progress'
-        : 'Pending',
+      duration: durationDisplay,
     };
   };
 
@@ -125,4 +136,3 @@ export function useBacktestsList() {
 
   return { backtests, loading, error, refetch: fetchBacktests, setBacktests, removeBacktestLocally };
 }
-

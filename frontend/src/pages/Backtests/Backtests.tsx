@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Play, Activity } from 'lucide-react';
 import Card from '../../components/ui/Card';
@@ -31,6 +32,7 @@ const Backtests: React.FC = () => {
   const { recentJobs, refetch: refetchRecentJobs } = useRecentJobs(5);
   const [submittingBacktest, setSubmittingBacktest] = useState(false);
   const [notifiedJobs, setNotifiedJobs] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
   
   useEffect(() => {
     // Load data only once when component mounts
@@ -96,6 +98,23 @@ const Backtests: React.FC = () => {
     } catch (err) {
       console.error('Failed to open backtest from job:', err);
       showToast.error('Failed to load backtest details for this job');
+    }
+  };
+
+  const handleRefresh = async () => {
+    const toastId = showToast.loading('Refreshing...');
+    try {
+      await Promise.all([
+        refetch(),
+        refetchRecentJobs(),
+        queryClient.invalidateQueries({ queryKey: ['jobs-stats'] }),
+      ]);
+      showToast.success('Refreshed');
+    } catch (e) {
+      console.error('Failed to refresh:', e);
+      showToast.error('Refresh failed');
+    } finally {
+      showToast.dismiss(toastId as any);
     }
   };
 
@@ -191,13 +210,7 @@ const Backtests: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center space-x-3">
-          <Button
-            variant="outline"
-            onClick={() => loadData()}
-            size="sm"
-          >
-            Refresh
-          </Button>
+          <Button variant="outline" onClick={handleRefresh} size="sm">Refresh</Button>
           <Button
             variant="secondary"
             icon={Activity}

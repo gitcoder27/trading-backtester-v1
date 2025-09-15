@@ -5,7 +5,7 @@ import Badge from '../ui/Badge';
 import type { ParameterSchema } from '../../types';
 
 interface StrategyParameterFormProps {
-  schema: ParameterSchema[];
+  schema: ParameterSchema[] | any;
   initialValues?: Record<string, any>;
   onParametersChange: (parameters: Record<string, any>) => void;
   onValidate?: (parameters: Record<string, any>) => void;
@@ -29,7 +29,8 @@ const StrategyParameterForm: React.FC<StrategyParameterFormProps> = ({
   useEffect(() => {
     // Initialize with default values
     const defaultParams: Record<string, any> = {};
-    schema.forEach(param => {
+    const list: ParameterSchema[] = Array.isArray(schema) ? schema : [];
+    list.forEach(param => {
       if (param.default !== undefined) {
         defaultParams[param.name] = param.default;
       }
@@ -64,7 +65,8 @@ const StrategyParameterForm: React.FC<StrategyParameterFormProps> = ({
   };
 
   const handleParameterChange = (paramName: string, value: any) => {
-    const param = schema.find(p => p.name === paramName);
+    const list: ParameterSchema[] = Array.isArray(schema) ? schema : [];
+    const param = list.find(p => p.name === paramName);
     if (!param) return;
 
     // Type conversion
@@ -161,7 +163,8 @@ const StrategyParameterForm: React.FC<StrategyParameterFormProps> = ({
   };
 
   const isFormValid = () => {
-    return schema.every(param => {
+    const list: ParameterSchema[] = Array.isArray(schema) ? schema : [];
+    return list.every(param => {
       const value = parameters[param.name];
       return validateField(param, value) === null;
     });
@@ -204,7 +207,7 @@ const StrategyParameterForm: React.FC<StrategyParameterFormProps> = ({
 
       {/* Parameters Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {schema.map((param) => (
+        {(Array.isArray(schema) ? schema : []).map((param: ParameterSchema) => (
           <div key={param.name} className="space-y-2">
             <div className="flex items-center space-x-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -251,7 +254,7 @@ const StrategyParameterForm: React.FC<StrategyParameterFormProps> = ({
       <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-600 dark:text-gray-400">
-            Parameters configured: {Object.keys(parameters).length} of {schema.length}
+            Parameters configured: {Object.keys(parameters).length} of {(Array.isArray(schema) ? schema.length : 0)}
           </span>
           <div className="flex items-center space-x-2">
             {isFormValid() ? (

@@ -16,6 +16,31 @@ router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
 # Initialize database on startup
 init_db()
 
+@router.get("/stats", response_model=Dict[str, Any])
+async def get_job_stats():
+    """
+    Get statistics about job execution.
+    Note: Declared before dynamic `/{job_id}` routes to avoid shadowing
+    that can lead to 422 errors when requesting `/stats`.
+    """
+    job_runner = get_job_runner()
+    jobs = job_runner.list_jobs(limit=100)
+    
+    # Calculate stats
+    stats = {
+        "total_jobs": len(jobs),
+        "pending": len([j for j in jobs if j["status"] == JobStatus.PENDING]),
+        "running": len([j for j in jobs if j["status"] == JobStatus.RUNNING]),
+        "completed": len([j for j in jobs if j["status"] == JobStatus.COMPLETED]),
+        "failed": len([j for j in jobs if j["status"] == JobStatus.FAILED]),
+        "cancelled": len([j for j in jobs if j["status"] == JobStatus.CANCELLED])
+    }
+    
+    return {
+        "success": True,
+        "stats": stats
+    }
+
 @router.post("/", response_model=Dict[str, Any])
 async def submit_backtest_job(request: BacktestRequest):
     """
@@ -275,30 +300,6 @@ async def list_jobs(limit: int = 50):
 @router.get("", response_model=Dict[str, Any])
 async def list_jobs_no_slash(limit: int = 50):
     return await list_jobs(limit=limit)
-
-
-@router.get("/stats", response_model=Dict[str, Any])
-async def get_job_stats():
-    """
-    Get statistics about job execution
-    """
-    job_runner = get_job_runner()
-    jobs = job_runner.list_jobs(limit=100)
-    
-    # Calculate stats
-    stats = {
-        "total_jobs": len(jobs),
-        "pending": len([j for j in jobs if j["status"] == JobStatus.PENDING]),
-        "running": len([j for j in jobs if j["status"] == JobStatus.RUNNING]),
-        "completed": len([j for j in jobs if j["status"] == JobStatus.COMPLETED]),
-        "failed": len([j for j in jobs if j["status"] == JobStatus.FAILED]),
-        "cancelled": len([j for j in jobs if j["status"] == JobStatus.CANCELLED])
-    }
-    
-    return {
-        "success": True,
-        "stats": stats
-    }
 
 
 @router.delete("/{job_id}", response_model=Dict[str, Any])

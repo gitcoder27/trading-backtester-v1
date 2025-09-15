@@ -186,6 +186,8 @@ class BacktestEngine:
         # Include all configured indicators
         if indicator_cols:
             result['indicators'] = df[['timestamp'] + indicator_cols]
+            # Also include indicator configuration metadata for downstream consumers (colors, labels, panes)
+            result['indicator_cfg'] = indicator_cfg
         trade_log = result['trade_log']
         if trade_log is not None and not trade_log.empty:
             tl = trade_log.copy()
