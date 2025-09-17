@@ -9,6 +9,7 @@ import { useDatasets } from '../../hooks/useDatasets';
 import { DatasetService } from '../../services/dataset';
 import UploadDatasetModal from '../../components/datasets/UploadDatasetModal';
 import DatasetPreviewModal from '../../components/datasets/DatasetPreviewModal';
+import DatasetDiscovery from '../../components/datasets/DatasetDiscovery';
 
 const Datasets: React.FC = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -68,13 +69,16 @@ const Datasets: React.FC = () => {
             Upload and manage your market data files
           </p>
         </div>
-        <Button
-          icon={Upload}
-          onClick={() => setShowUploadModal(true)}
-          className="shadow-sm"
-        >
-          Upload Dataset
-        </Button>
+        <div className="flex items-center space-x-2">
+          <DatasetDiscovery onDatasetsRegistered={() => refetch()} />
+          <Button
+            icon={Upload}
+            onClick={() => setShowUploadModal(true)}
+            className="shadow-sm"
+          >
+            Upload Dataset
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -142,12 +146,21 @@ const Datasets: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-400 mb-6">
             Upload your first market data file to get started with backtesting
           </p>
-          <Button
-            icon={Upload}
-            onClick={() => setShowUploadModal(true)}
-          >
-            Upload Your First Dataset
-          </Button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Button
+              variant="outline"
+              onClick={() => refetch()}
+            >
+              Refresh
+            </Button>
+            <DatasetDiscovery onDatasetsRegistered={() => refetch()} />
+            <Button
+              icon={Upload}
+              onClick={() => setShowUploadModal(true)}
+            >
+              Upload Your First Dataset
+            </Button>
+          </div>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

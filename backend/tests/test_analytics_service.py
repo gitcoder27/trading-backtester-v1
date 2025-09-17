@@ -166,6 +166,200 @@ def test_get_charts_specific_types(analytics_service, sample_backtest_in_db):
         assert chart_type in charts
 
 
+def test_get_chart_data_filters_indicator_values(analytics_service):
+    """Indicator series should track the filtered candlesticks rather than retaining cached values."""
+
+    SessionLocal = get_session_factory()
+    db = SessionLocal()
+
+    try:
+        base_time = datetime(2024, 1, 1, 9, 30)
+        price_rows = []
+        indicator_values = []
+
+        # Build two trading days, each with four candles
+        for day_offset in range(2):
+            for candle_offset in range(4):
+                ts = base_time + timedelta(days=day_offset, minutes=candle_offset * 15)
+                price_rows.append(
+                    {
+                        "timestamp": ts.isoformat(),
+                        "open": 100 + day_offset + candle_offset * 0.5,
+                        "high": 100.5 + day_offset + candle_offset * 0.5,
+                        "low": 99.5 + day_offset + candle_offset * 0.5,
+                        "close": 100.2 + day_offset + candle_offset * 0.5,
+                        "volume": 1000 + candle_offset,
+                    }
+                )
+                indicator_values.append(10 * (day_offset + 1) + candle_offset)
+
+        backtest = Backtest(
+            strategy_name="IndicatorFilterStrategy",
+            strategy_params={},
+            status="completed",
+            results={
+                "price_data": price_rows,
+                "indicators": {"custom": indicator_values},
+                "indicator_cfg": [{"column": "custom", "label": "Custom"}],
+            },
+            created_at=datetime.utcnow(),
+        )
+        db.add(backtest)
+        db.commit()
+        db.refresh(backtest)
+
+        day_one = analytics_service.get_chart_data(
+            backtest.id,
+            start="2024-01-01",
+            end="2024-01-01",
+            tz="UTC",
+            single_day=True,
+        )
+        day_two = analytics_service.get_chart_data(
+            backtest.id,
+            cursor="2024-01-01",
+            navigate="next",
+            tz="UTC",
+            single_day=True,
+        )
+
+        assert day_one["success"] and day_two["success"]
+
+        first_indicator = day_one["indicators"][0]
+        second_indicator = day_two["indicators"][0]
+
+        day_one_values = [point["value"] for point in first_indicator["data"]]
+        day_two_values = [point["value"] for point in second_indicator["data"]]
+
+        assert day_one_values == [10, 11, 12, 13]
+        assert day_two_values == [20, 21, 22, 23]
+    finally:
+        db.query(Backtest).filter(Backtest.strategy_name == "IndicatorFilterStrategy").delete()
+        db.commit()
+        db.close()
+
+
+def test_get_chart_data_navigation_skips_missing_sessions(analytics_service):
+    """Navigation metadata should point to the next/previous available sessions."""
+
+    SessionLocal = get_session_factory()
+    db = SessionLocal()
+
+    try:
+        base_time = datetime(2024, 1, 5, 9, 30)  # Friday
+        price_rows = []
+
+        # Four candles on Friday
+        for offset in range(4):
+            ts = base_time + timedelta(minutes=offset * 15)
+            price_rows.append(
+                {
+                    "timestamp": ts.isoformat(),
+                    "open": 100 + offset,
+                    "high": 101 + offset,
+                    "low": 99 + offset,
+                    "close": 100.5 + offset,
+                    "volume": 1000 + offset,
+                }
+            )
+
+        # Four candles on the following Monday (skip weekend)
+        monday_time = datetime(2024, 1, 8, 9, 30)
+        for offset in range(4):
+            ts = monday_time + timedelta(minutes=offset * 15)
+            price_rows.append(
+                {
+                    "timestamp": ts.isoformat(),
+                    "open": 200 + offset,
+                    "high": 201 + offset,
+                    "low": 199 + offset,
+                    "close": 200.5 + offset,
+                    "volume": 1100 + offset,
+                }
+            )
+
+        trades = [
+            {
+                "entry_time": "2024-01-05T09:30:00+00:00",
+                "exit_time": "2024-01-05T10:00:00+00:00",
+                "entry_price": 100.25,
+                "exit_price": 102.75,
+                "direction": "long",
+                "pnl": 250.0,
+            },
+            {
+                "entry_time": "2024-01-08T09:45:00+00:00",
+                "exit_time": "2024-01-08T10:15:00+00:00",
+                "entry_price": 201.0,
+                "exit_price": 198.5,
+                "direction": "short",
+                "pnl": -250.0,
+            },
+        ]
+
+        backtest = Backtest(
+            strategy_name="NavigationStrategy",
+            strategy_params={},
+            status="completed",
+            results={
+                "price_data": price_rows,
+                "trade_log": trades,
+            },
+            created_at=datetime.utcnow(),
+        )
+        db.add(backtest)
+        db.commit()
+        db.refresh(backtest)
+
+        friday = analytics_service.get_chart_data(
+            backtest.id,
+            cursor="2024-01-05",
+            navigate="current",
+            tz="UTC",
+            single_day=True,
+        )
+        assert friday["success"] is True
+        friday_nav = friday["navigation"]
+        assert friday_nav["resolved_dates"] == ["2024-01-05"]
+        assert friday_nav["next_date"] == "2024-01-08"
+        assert friday_nav["previous_date"] is None
+
+        monday = analytics_service.get_chart_data(
+            backtest.id,
+            cursor="2024-01-05",
+            navigate="next",
+            tz="UTC",
+            single_day=True,
+        )
+        assert monday["success"] is True
+        monday_nav = monday["navigation"]
+        assert monday_nav["resolved_dates"] == ["2024-01-08"]
+        assert monday_nav["previous_date"] == "2024-01-05"
+        assert monday_nav["next_date"] is None
+        assert len(monday["trade_markers"]) >= 2
+
+        weekend = analytics_service.get_chart_data(
+            backtest.id,
+            cursor="2024-01-06",
+            navigate="current",
+            tz="UTC",
+            single_day=True,
+        )
+        assert weekend["success"] is True
+        weekend_nav = weekend["navigation"]
+        assert weekend_nav["resolved_dates"] == ["2024-01-08"]
+        assert weekend_nav["previous_date"] == "2024-01-05"
+        assert weekend_nav["next_date"] is None
+        assert weekend_nav["requested_cursor"] == "2024-01-06"
+        weekend_markers = weekend["trade_markers"]
+        assert all("text" in marker for marker in weekend_markers)
+        assert any("Entry" in marker["text"] for marker in weekend_markers)
+    finally:
+        db.query(Backtest).filter(Backtest.strategy_name == "NavigationStrategy").delete()
+        db.commit()
+        db.close()
+
+
 def test_compare_strategies(analytics_service, sample_backtest_in_db):
     """Test strategy comparison"""
     # Create another backtest for comparison

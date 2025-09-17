@@ -96,8 +96,11 @@ export class BacktestService {
       includeIndicators?: boolean;
       maxCandles?: number;
       tz?: string;
-      start?: string; // ISO datetime or YYYY-MM-DD
-      end?: string;   // ISO datetime or YYYY-MM-DD
+      start?: string | null;
+      end?: string | null;
+      singleDay?: boolean | null;
+      cursor?: string | null;
+      navigate?: 'next' | 'previous' | 'current' | null;
     }
   ): Promise<any> {
     const params = new URLSearchParams();
@@ -119,7 +122,16 @@ export class BacktestService {
     if (options?.tz) {
       params.append('tz', options.tz);
     }
-    
+    if (options?.singleDay !== undefined && options.singleDay !== null) {
+      params.append('single_day', options.singleDay ? 'true' : 'false');
+    }
+    if (options?.cursor) {
+      params.append('cursor', options.cursor);
+    }
+    if (options?.navigate) {
+      params.append('navigate', options.navigate);
+    }
+
     const queryString = params.toString();
     const url = `/analytics/chart-data/${id}${queryString ? `?${queryString}` : ''}`;
     return apiClient.get<any>(url);

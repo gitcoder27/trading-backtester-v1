@@ -3,16 +3,21 @@ Optimization API endpoints
 Provides parameter optimization functionality for trading strategies
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any, List, Union, Optional
 from pydantic import BaseModel, Field
 
-from backend.app.services.optimization_service import OptimizationService, create_parameter_range
-from backend.app.tasks.job_runner import JobRunner, JobStatus
+from backend.app.api.dependencies import (
+    get_dataset_service,
+    get_job_runner_dependency,
+    get_optimization_service,
+)
+from backend.app.services.dataset_service import DatasetService
+from backend.app.services.optimization import ParameterGridError, generate_parameter_grid
+from backend.app.services.optimization_service import OptimizationService
+from backend.app.tasks import JobRunner, JobStatus
 
 router = APIRouter(prefix="/api/v1/optimize", tags=["optimization"])
-optimization_service = OptimizationService()
-job_runner = JobRunner()
 
 
 class ParameterRange(BaseModel):
@@ -34,7 +39,10 @@ class OptimizationRequest(BaseModel):
 
 
 @router.post("/")
-async def start_optimization(request: OptimizationRequest, background_tasks: BackgroundTasks) -> Dict[str, Any]:
+async def start_optimization(
+    request: OptimizationRequest,
+    optimization_service: OptimizationService = Depends(get_optimization_service),
+) -> Dict[str, Any]:
     """
     Start a parameter optimization job
     
@@ -81,7 +89,10 @@ async def start_optimization(request: OptimizationRequest, background_tasks: Bac
 
 
 @router.get("/{job_id}/status")
-async def get_optimization_status(job_id: str) -> Dict[str, Any]:
+async def get_optimization_status(
+    job_id: str,
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
+) -> Dict[str, Any]:
     """
     Get the status of an optimization job
     
@@ -105,7 +116,10 @@ async def get_optimization_status(job_id: str) -> Dict[str, Any]:
 
 
 @router.get("/{job_id}/results")
-async def get_optimization_results(job_id: str) -> Dict[str, Any]:
+async def get_optimization_results(
+    job_id: str,
+    optimization_service: OptimizationService = Depends(get_optimization_service),
+) -> Dict[str, Any]:
     """
     Get the results of a completed optimization job
     
@@ -128,7 +142,10 @@ async def get_optimization_results(job_id: str) -> Dict[str, Any]:
 
 
 @router.post("/{job_id}/cancel")
-async def cancel_optimization(job_id: str) -> Dict[str, Any]:
+async def cancel_optimization(
+    job_id: str,
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
+) -> Dict[str, Any]:
     """
     Cancel a running optimization job
     
@@ -150,7 +167,8 @@ async def cancel_optimization(job_id: str) -> Dict[str, Any]:
 async def list_optimization_jobs(
     status: Optional[str] = None,
     limit: int = 50,
-    offset: int = 0
+    offset: int = 0,
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
 ) -> Dict[str, Any]:
     """
     List optimization jobs with optional filtering
@@ -175,7 +193,9 @@ async def list_optimization_jobs(
 
 
 @router.get("/stats/summary")
-async def get_optimization_stats() -> Dict[str, Any]:
+async def get_optimization_stats(
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
+) -> Dict[str, Any]:
     """
     Get summary statistics for optimization jobs
     
@@ -190,7 +210,11 @@ async def get_optimization_stats() -> Dict[str, Any]:
 
 
 @router.post("/validate")
-async def validate_optimization_request(request: OptimizationRequest) -> Dict[str, Any]:
+async def validate_optimization_request(
+    request: OptimizationRequest,
+    optimization_service: OptimizationService = Depends(get_optimization_service),
+    dataset_service: DatasetService = Depends(get_dataset_service),
+) -> Dict[str, Any]:
     """
     Validate an optimization request without running it
     
@@ -199,28 +223,22 @@ async def validate_optimization_request(request: OptimizationRequest) -> Dict[st
     """
     try:
         # Convert parameter ranges
-        param_ranges_dict = {}
-        for param_name, param_range in request.param_ranges.items():
-            param_ranges_dict[param_name] = param_range.dict(exclude_none=True)
-        
-        # Generate parameter combinations to estimate scope
-        from backend.app.services.optimization_service import OptimizationService
-        opt_service = OptimizationService()
-        param_combinations = opt_service._generate_parameter_combinations(param_ranges_dict)
-        
-        # Validate dataset exists
-        from backend.app.database.models import get_session_factory, Dataset
-        SessionLocal = get_session_factory()
-        db = SessionLocal()
+        param_ranges_dict = {
+            name: config.dict(exclude_none=True)
+            for name, config in request.param_ranges.items()
+        }
+
         try:
-            dataset = db.query(Dataset).filter(Dataset.id == request.dataset_id).first()
-            if not dataset:
-                raise HTTPException(status_code=404, detail="Dataset not found")
-        finally:
-            db.close()
-        
-        # Estimate runtime
-        estimated_time_minutes = opt_service._estimate_optimization_time(len(param_combinations))
+            param_combinations = generate_parameter_grid(param_ranges_dict)
+        except ParameterGridError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        try:
+            dataset_service.get_dataset_quality(request.dataset_id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Dataset not found")
+
+        estimated_time_minutes = optimization_service._estimate_optimization_time(len(param_combinations))
         
         return {
             'success': True,
@@ -297,7 +315,8 @@ async def quick_optimization(
     dataset_id: int,
     param_name: str,
     param_values: List[Union[int, float]],
-    optimization_metric: str = "sharpe_ratio"
+    optimization_metric: str = "sharpe_ratio",
+    optimization_service: OptimizationService = Depends(get_optimization_service),
 ) -> Dict[str, Any]:
     """
     Run a quick optimization for a single parameter
@@ -316,14 +335,11 @@ async def quick_optimization(
         }
     }
     
-    # Run optimization synchronously
-    optimization_service = OptimizationService()
-    
     job_data = {
         'strategy_path': strategy_path,
         'dataset_id': dataset_id,
         'param_ranges': param_ranges,
-        'param_combinations': optimization_service._generate_parameter_combinations(param_ranges),
+        'param_combinations': generate_parameter_grid(param_ranges),
         'optimization_metric': optimization_metric,
         'engine_options': {},
         'max_workers': 1,

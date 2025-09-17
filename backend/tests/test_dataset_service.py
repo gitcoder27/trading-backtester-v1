@@ -187,6 +187,41 @@ def test_dataset_analysis_with_gaps():
     assert analysis['quality_checks']['timestamp_gaps']['has_gaps'] is True
 
 
+def _write_sample_csv(path: Path) -> None:
+    content = """timestamp,open,high,low,close,volume
+2024-01-01 09:15:00,100,101,99,100.5,1000
+2024-01-01 09:16:00,100.5,102,100,101,1100
+2024-01-01 09:17:00,101,103,100.2,102,1200
+"""
+    path.write_text(content.strip() + "\n")
+
+
+def test_discover_local_datasets(dataset_service):
+    csv_path = dataset_service.data_dir / "discover_sample.csv"
+    _write_sample_csv(csv_path)
+
+    discovered = dataset_service.discover_local_datasets()
+    assert isinstance(discovered, list)
+    match = next((item for item in discovered if item.get("file_path", "").endswith("discover_sample.csv")), None)
+    assert match is not None
+    assert match["registered"] is False
+    assert match["rows_count"] == 3
+    assert match["name"] == "discover_sample.csv"
+
+
+def test_register_local_datasets(dataset_service):
+    csv_path = dataset_service.data_dir / "register_sample.csv"
+    _write_sample_csv(csv_path)
+
+    result = dataset_service.register_local_datasets()
+    assert result["success"] is True
+    assert len(result["registered"]) == 1
+    datasets = dataset_service.list_datasets()
+    assert len(datasets) == 1
+    assert datasets[0]["file_path"].endswith("register_sample.csv")
+    assert datasets[0]["name"] == "register_sample.csv"
+
+
 def test_dataset_analysis_with_missing_data():
     """Test dataset analysis with missing data"""
     data = pd.DataFrame({
@@ -251,6 +286,25 @@ def test_dataset_analysis_error_handling():
                 file_name="invalid.csv",
                 file_content=invalid_csv
             )
+
+
+def test_dataset_preview(dataset_service, sample_csv_data):
+    """Ensure dataset preview returns limited rows and aggregate stats."""
+    result = dataset_service.upload_dataset(
+        file_name="preview.csv",
+        file_content=sample_csv_data,
+    )
+
+    dataset_id = result['dataset_id']
+    preview = dataset_service.preview_dataset(dataset_id, rows=5)
+
+    assert preview['success'] is True
+    assert preview['dataset_id'] == dataset_id
+    assert len(preview['preview']) == 5
+    assert preview['total_rows'] == 50
+    assert 'open' in preview['statistics']
+    stats = preview['statistics']['open']
+    assert all(key in stats for key in ['mean', 'std', 'min', 'max', 'count'])
 
 
 def test_nonexistent_dataset_operations(dataset_service):

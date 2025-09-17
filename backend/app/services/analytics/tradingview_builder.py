@@ -97,6 +97,11 @@ class TradingViewBuilder:
         for _, trade in trades_df.iterrows():
             try:
                 entry_time_raw = trade.get("entry_time")
+                entry_price_raw = trade.get("entry_price")
+                exit_price_raw = trade.get("exit_price")
+                entry_price = float(entry_price_raw) if entry_price_raw is not None else None
+                exit_price = float(exit_price_raw) if exit_price_raw is not None else None
+
                 if entry_time_raw:
                     entry_time = pd.to_datetime(entry_time_raw, errors="coerce")
                     if pd.isna(entry_time):
@@ -108,16 +113,23 @@ class TradingViewBuilder:
                     direction_raw = trade.get("direction", trade.get("side", "unknown"))
                     direction = str(direction_raw).lower() if direction_raw is not None else "unknown"
 
-                    markers.append(
-                        {
-                            "time": int(entry_time.timestamp()),
-                            "position": "belowBar",
-                            "color": "#26a69a" if direction == "long" else "#ef5350",
-                            "shape": "arrowUp" if direction == "long" else "arrowDown",
-                            "text": f"Entry {direction.upper()}",
-                            "size": 1,
-                        }
-                    )
+                    label_parts = ["Entry", direction.upper() if direction != "unknown" else "?"]
+                    if entry_price is not None:
+                        label_parts.append(f"@ {entry_price:,.2f}")
+                    label = " ".join(label_parts)
+
+                    entry_marker = {
+                        "time": int(entry_time.timestamp()),
+                        "position": "belowBar",
+                        "color": "#26a69a" if direction == "long" else "#ef5350",
+                        "shape": "arrowUp" if direction == "long" else "arrowDown",
+                        "text": label,
+                        "size": 2,
+                    }
+                    if entry_price is not None:
+                        entry_marker["price"] = entry_price
+
+                    markers.append(entry_marker)
 
                 exit_time_raw = trade.get("exit_time")
                 if exit_time_raw and pd.notna(exit_time_raw):
@@ -134,21 +146,30 @@ class TradingViewBuilder:
                     except Exception:
                         pnl_value = 0.0
 
-                    markers.append(
-                        {
-                            "time": int(exit_time.timestamp()),
-                            "position": "aboveBar",
-                            "color": "#26a69a" if pnl_value > 0 else "#ef5350",
-                            "shape": "circle",
-                            "text": f"Exit: ${pnl_value:+.0f}",
-                            "size": 1,
-                        }
-                    )
+                    exit_label = f"Exit {'WIN' if pnl_value > 0 else 'LOSS'} {pnl_value:+.0f}"
+                    if exit_price is not None:
+                        exit_label += f" @ {exit_price:,.2f}"
+
+                    exit_marker = {
+                        "time": int(exit_time.timestamp()),
+                        "position": "aboveBar",
+                        "color": "#26a69a" if pnl_value > 0 else "#ef5350",
+                        "shape": "circle" if pnl_value >= 0 else "square",
+                        "text": exit_label,
+                        "size": 2,
+                    }
+                    if exit_price is not None:
+                        exit_marker["price"] = exit_price
+
+                    markers.append(exit_marker)
             except Exception:  # pragma: no cover - defensive safety
                 continue
 
         if not markers:
             return []
+
+        # Sort markers chronologically for deterministic rendering
+        markers.sort(key=lambda marker: marker.get("time", 0))
 
         if start_ts is not None or end_ts is not None:
             start_epoch = int(pd.Timestamp(start_ts).timestamp()) if start_ts is not None else None
@@ -326,13 +347,49 @@ class TradingViewBuilder:
         return indicators
 
     def _build_indicator_line(self, price_df: pd.DataFrame, values: Iterable[Any]) -> List[Dict[str, Any]]:
+        """Align indicator values with the corresponding price rows."""
+
+        if price_df is None or price_df.empty:
+            return []
+
+        try:
+            series = pd.Series(values)
+        except Exception:
+            series = pd.Series(list(values) if values is not None else [])
+
+        if series.empty:
+            return []
+
         data: List[Dict[str, Any]] = []
-        for idx, value in enumerate(values):
-            if idx >= len(price_df):
-                break
-            if pd.isna(value):
+        source_column = "_source_index" if "_source_index" in price_df.columns else None
+
+        for _, row in price_df.iterrows():
+            source_idx = row.get(source_column) if source_column else row.name
+
+            if pd.isna(source_idx):
                 continue
-            row = price_df.iloc[idx]
+
+            try:
+                source_idx_int = int(source_idx)
+            except (TypeError, ValueError):
+                continue
+
+            if source_idx_int < 0 or source_idx_int >= len(series):
+                continue
+
+            value = series.iloc[source_idx_int]
+
+            if isinstance(value, dict):
+                if "value" in value:
+                    value = value["value"]
+                elif "close" in value:
+                    value = value["close"]
+                else:
+                    continue
+
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                continue
+
             timestamp = row.get("timestamp_utc", row.get("timestamp"))
             try:
                 data.append(
@@ -343,6 +400,7 @@ class TradingViewBuilder:
                 )
             except (TypeError, ValueError):
                 continue
+
         return data
 
     def _resolve_indicator_color(

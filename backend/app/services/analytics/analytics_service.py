@@ -1,7 +1,8 @@
 """Modular analytics service bringing together individual components."""
 
 import logging
-from datetime import datetime
+from bisect import bisect_left, bisect_right
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -10,7 +11,7 @@ from backend.app.database.models import Backtest, get_session_factory
 from backtester.metrics import daily_profit_target_stats
 
 from .chart_generator import ChartGenerator
-from .data_fetcher import AnalyticsDataFetcher, PriceDataError
+from .data_fetcher import AnalyticsDataFetcher, PriceDataBundle, PriceDataError
 from .data_formatter import DataFormatter
 from .performance_calculator import PerformanceCalculator
 from .risk_calculator import RiskCalculator
@@ -329,6 +330,9 @@ class AnalyticsService:
         start: Optional[str] = None,
         end: Optional[str] = None,
         tz: Optional[str] = None,
+        single_day: Optional[bool] = None,
+        cursor: Optional[str] = None,
+        navigate: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Return TradingView-friendly candlesticks, trades, and indicators."""
 
@@ -353,13 +357,23 @@ class AnalyticsService:
                     start=start,
                     end=end,
                     max_candles=max_candles,
+                    single_day=single_day,
+                    cursor=cursor,
+                    navigate=navigate,
                 )
             except PriceDataError as exc:
                 return {'success': False, 'error': str(exc)}
 
+            navigation = self._build_navigation(bundle, tz, start=start, end=end, cursor=cursor)
+
             candles = self.tradingview_builder.build_candles(bundle.dataframe)
             if not candles:
-                return {'success': False, 'error': 'No valid candlestick data could be generated'}
+                payload = {
+                    'success': False,
+                    'error': 'No valid candlestick data could be generated',
+                    'navigation': navigation,
+                }
+                return self.formatter.sanitize_json(payload)
 
             response: Dict[str, Any] = {
                 'success': True,
@@ -374,6 +388,7 @@ class AnalyticsService:
                     'start': candles[0]['time'] if candles else None,
                     'end': candles[-1]['time'] if candles else None,
                 },
+                'navigation': navigation,
             }
 
             if include_trades:
@@ -400,7 +415,120 @@ class AnalyticsService:
             return {'success': False, 'error': 'Error generating chart data'}
         finally:
             db.close()
-    
+
+    def _build_navigation(
+        self,
+        bundle: PriceDataBundle,
+        tz: Optional[str],
+        *,
+        start: Optional[str],
+        end: Optional[str],
+        cursor: Optional[str],
+    ) -> Dict[str, Any]:
+        local_tz = tz or 'UTC'
+        available_dates = self._sessions_to_dates(bundle.available_sessions, local_tz)
+        resolved_dates = sorted(set(self._sessions_to_dates(bundle.resolved_sessions, local_tz)))
+
+        requested_start = self._timestamp_to_date(bundle.requested_start, local_tz)
+        requested_end = self._timestamp_to_date(bundle.requested_end, local_tz)
+        requested_cursor = self._parse_date(cursor, local_tz) if cursor else None
+
+        ordered_dates = sorted(set(available_dates))
+        previous_date: Optional[date] = None
+        next_date: Optional[date] = None
+
+        if ordered_dates:
+            anchor_start = resolved_dates[0] if resolved_dates else (requested_start or requested_end)
+            anchor_end = resolved_dates[-1] if resolved_dates else (requested_end or requested_start or anchor_start)
+
+            previous_date = self._find_previous(ordered_dates, anchor_start)
+            next_date = self._find_next(ordered_dates, anchor_end)
+
+        navigation = {
+            'available_dates': [d.isoformat() for d in ordered_dates],
+            'resolved_dates': [d.isoformat() for d in resolved_dates],
+            'previous_date': previous_date.isoformat() if previous_date else None,
+            'next_date': next_date.isoformat() if next_date else None,
+            'requested_start': requested_start.isoformat() if requested_start else start,
+            'requested_end': requested_end.isoformat() if requested_end else end,
+            'requested_cursor': requested_cursor.isoformat() if requested_cursor else cursor,
+            'resolved_start': resolved_dates[0].isoformat() if resolved_dates else None,
+            'resolved_end': resolved_dates[-1].isoformat() if resolved_dates else None,
+            'has_data': bool(bundle.dataframe is not None and not bundle.dataframe.empty),
+        }
+
+        return navigation
+
+    @staticmethod
+    def _parse_date(value: Optional[str], tz: str) -> Optional[date]:
+        if not value:
+            return None
+        try:
+            ts = pd.to_datetime(value)
+            if isinstance(value, str) and len(value) == 10:
+                ts = ts.replace(hour=0, minute=0, second=0, microsecond=0)
+            if ts.tzinfo is None:
+                ts = ts.tz_localize(tz)
+            else:
+                ts = ts.tz_convert(tz)
+            return ts.date()
+        except Exception:
+            return None
+
+    def _sessions_to_dates(self, sessions: List[pd.Timestamp], tz: str) -> List[date]:
+        dates: List[date] = []
+        for session in sessions:
+            local_date = self._timestamp_to_date(session, tz)
+            if local_date is not None:
+                dates.append(local_date)
+        return dates
+
+    @staticmethod
+    def _timestamp_to_date(ts: Optional[pd.Timestamp], tz: str) -> Optional[date]:
+        if ts is None:
+            return None
+
+        try:
+            stamp = pd.Timestamp(ts)
+        except Exception:
+            return None
+
+        if stamp.tzinfo is None:
+            try:
+                stamp = stamp.tz_localize('UTC')
+            except Exception:
+                stamp = stamp.tz_localize('UTC', nonexistent='shift_forward', ambiguous='infer')
+
+        try:
+            stamp = stamp.tz_convert(tz)
+        except Exception:
+            stamp = stamp.tz_convert('UTC')
+
+        return stamp.date()
+
+    @staticmethod
+    def _find_previous(ordered_dates: List[date], anchor: Optional[date]) -> Optional[date]:
+        if not ordered_dates or anchor is None:
+            return None
+
+        idx = bisect_left(ordered_dates, anchor)
+        if idx == 0:
+            return None
+        return ordered_dates[idx - 1]
+
+    @staticmethod
+    def _find_next(ordered_dates: List[date], anchor: Optional[date]) -> Optional[date]:
+        if not ordered_dates:
+            return None
+
+        if anchor is None:
+            return ordered_dates[0]
+
+        idx = bisect_right(ordered_dates, anchor)
+        if idx >= len(ordered_dates):
+            return None
+        return ordered_dates[idx]
+
     def get_rolling_metrics(self, backtest_id: int, window: int = 50) -> Dict[str, Any]:
         """Get rolling performance metrics for a backtest"""
         db = self.SessionLocal()

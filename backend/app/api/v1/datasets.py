@@ -2,10 +2,12 @@
 Dataset management API endpoints
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from typing import Optional, List
-import json
 
+from pydantic import BaseModel
+
+from backend.app.api.dependencies import get_dataset_service
 from backend.app.services.dataset_service import DatasetService
 from backend.app.database.models import init_db
 
@@ -14,13 +16,48 @@ router = APIRouter(prefix="/api/v1/datasets", tags=["datasets"])
 # Initialize database on startup
 init_db()
 
+
+class DatasetRegisterRequest(BaseModel):
+    file_paths: Optional[List[str]] = None
+
+
+@router.get("/discover")
+async def discover_datasets(
+    dataset_service: DatasetService = Depends(get_dataset_service),
+):
+    try:
+        datasets = dataset_service.discover_local_datasets()
+        return {
+            "success": True,
+            "datasets": datasets,
+            "total": len(datasets),
+            "data_directory": str(dataset_service.data_dir),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to discover datasets: {str(e)}")
+
+
+@router.post("/register")
+async def register_datasets(
+    request: DatasetRegisterRequest | None = None,
+    dataset_service: DatasetService = Depends(get_dataset_service),
+):
+    try:
+        return dataset_service.register_local_datasets(
+            file_paths=request.file_paths if request else None
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to register datasets: {str(e)}")
+
+
 @router.post("/upload")
 async def upload_dataset(
     file: UploadFile = File(...),
     name: Optional[str] = Form(None),
     symbol: Optional[str] = Form(None),
     exchange: Optional[str] = Form(None),
-    data_source: Optional[str] = Form(None)
+    data_source: Optional[str] = Form(None),
+    dataset_service: DatasetService = Depends(get_dataset_service),
 ):
     """
     Upload a new dataset CSV file
@@ -47,7 +84,6 @@ async def upload_dataset(
             raise HTTPException(status_code=400, detail="Uploaded file is empty")
         
         # Process dataset
-        dataset_service = DatasetService()
         result = dataset_service.upload_dataset(
             file_name=file.filename,
             file_content=file_content,
@@ -66,7 +102,10 @@ async def upload_dataset(
 
 
 @router.get("/{dataset_id}/quality")
-async def get_dataset_quality(dataset_id: int):
+async def get_dataset_quality(
+    dataset_id: int,
+    dataset_service: DatasetService = Depends(get_dataset_service),
+):
     """
     Get detailed quality analysis for a dataset
     
@@ -77,7 +116,6 @@ async def get_dataset_quality(dataset_id: int):
         Quality analysis including missing data, outliers, gaps, etc.
     """
     try:
-        dataset_service = DatasetService()
         result = dataset_service.get_dataset_quality(dataset_id)
         return result
         
@@ -88,7 +126,10 @@ async def get_dataset_quality(dataset_id: int):
 
 
 @router.get("/")
-async def list_datasets(limit: int = Query(50, ge=1, le=100)):
+async def list_datasets(
+    limit: int = Query(50, ge=1, le=100),
+    dataset_service: DatasetService = Depends(get_dataset_service),
+):
     """
     List all uploaded datasets
     
@@ -99,7 +140,6 @@ async def list_datasets(limit: int = Query(50, ge=1, le=100)):
         List of dataset metadata
     """
     try:
-        dataset_service = DatasetService()
         datasets = dataset_service.list_datasets(limit=limit)
         
         return {
@@ -114,12 +154,18 @@ async def list_datasets(limit: int = Query(50, ge=1, le=100)):
 
 # Alias without trailing slash for clients that call /api/v1/datasets
 @router.get("")
-async def list_datasets_no_slash(limit: int = Query(50, ge=1, le=100)):
-    return await list_datasets(limit=limit)
+async def list_datasets_no_slash(
+    limit: int = Query(50, ge=1, le=100),
+    dataset_service: DatasetService = Depends(get_dataset_service),
+):
+    return await list_datasets(limit=limit, dataset_service=dataset_service)
 
 
 @router.get("/{dataset_id}")
-async def get_dataset(dataset_id: int):
+async def get_dataset(
+    dataset_id: int,
+    dataset_service: DatasetService = Depends(get_dataset_service),
+):
     """
     Get detailed information about a specific dataset
     
@@ -130,7 +176,6 @@ async def get_dataset(dataset_id: int):
         Dataset metadata and quality information
     """
     try:
-        dataset_service = DatasetService()
         result = dataset_service.get_dataset_quality(dataset_id)
         return result
         
@@ -141,7 +186,10 @@ async def get_dataset(dataset_id: int):
 
 
 @router.delete("/{dataset_id}")
-async def delete_dataset(dataset_id: int):
+async def delete_dataset(
+    dataset_id: int,
+    dataset_service: DatasetService = Depends(get_dataset_service),
+):
     """
     Delete a dataset and its associated file
     
@@ -152,7 +200,6 @@ async def delete_dataset(dataset_id: int):
         Deletion confirmation
     """
     try:
-        dataset_service = DatasetService()
         result = dataset_service.delete_dataset(dataset_id)
         return result
         
@@ -165,7 +212,8 @@ async def delete_dataset(dataset_id: int):
 @router.get("/{dataset_id}/preview")
 async def preview_dataset(
     dataset_id: int,
-    rows: int = Query(10, ge=1, le=100)
+    rows: int = Query(10, ge=1, le=100),
+    dataset_service: DatasetService = Depends(get_dataset_service),
 ):
     """
     Get a preview of the dataset (first N rows)
@@ -178,51 +226,8 @@ async def preview_dataset(
         Preview data and basic statistics
     """
     try:
-        dataset_service = DatasetService()
-        
-        # Get dataset info
-        dataset_info = dataset_service.get_dataset_quality(dataset_id)
-        if not dataset_info['success']:
-            raise ValueError("Dataset not found")
-        
-        dataset = dataset_info['dataset']
-        
-        # Read and preview the file
-        import pandas as pd
-        from pathlib import Path
-        
-        file_path = Path(dataset['file_path'])
-        if not file_path.exists():
-            raise ValueError("Dataset file not found")
-        
-        df = pd.read_csv(file_path)
-        
-        # Get preview data
-        preview_data = df.head(rows).to_dict(orient='records')
-        
-        # Get basic statistics
-        numeric_columns = df.select_dtypes(include=['number']).columns
-        stats = {}
-        
-        for col in numeric_columns:
-            stats[col] = {
-                'mean': float(df[col].mean()) if not df[col].isna().all() else None,
-                'std': float(df[col].std()) if not df[col].isna().all() else None,
-                'min': float(df[col].min()) if not df[col].isna().all() else None,
-                'max': float(df[col].max()) if not df[col].isna().all() else None,
-                'count': int(df[col].count())
-            }
-        
-        return {
-            'success': True,
-            'dataset_id': dataset_id,
-            'dataset_info': dataset,
-            'preview': preview_data,
-            'statistics': stats,
-            'total_rows': len(df),
-            'columns': list(df.columns)
-        }
-        
+        return dataset_service.preview_dataset(dataset_id, rows=rows)
+
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -230,7 +235,10 @@ async def preview_dataset(
 
 
 @router.get("/{dataset_id}/download")
-async def download_dataset(dataset_id: int):
+async def download_dataset(
+    dataset_id: int,
+    dataset_service: DatasetService = Depends(get_dataset_service),
+):
     """
     Download the original dataset file
     
@@ -243,8 +251,6 @@ async def download_dataset(dataset_id: int):
     try:
         from fastapi.responses import FileResponse
         from pathlib import Path
-        
-        dataset_service = DatasetService()
         
         # Get dataset info
         dataset_info = dataset_service.get_dataset_quality(dataset_id)
@@ -270,7 +276,9 @@ async def download_dataset(dataset_id: int):
 
 
 @router.get("/stats/summary")
-async def get_datasets_summary():
+async def get_datasets_summary(
+    dataset_service: DatasetService = Depends(get_dataset_service),
+):
     """
     Get summary statistics for all datasets
     
@@ -278,7 +286,6 @@ async def get_datasets_summary():
         Summary statistics and metrics
     """
     try:
-        dataset_service = DatasetService()
         datasets = dataset_service.list_datasets(limit=1000)  # Get all datasets
         
         if not datasets:
