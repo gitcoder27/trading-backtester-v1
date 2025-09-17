@@ -1,192 +1,121 @@
-## Backend Codebase Analysis and Refactor Plan
+## Backend Codebase Assessment
 
-### Executive summary
-- **Overall**: The backend is functionally rich with clear modularization for backtests and analytics, but it carries legacy bridges, duplicated logic, and several long files that hinder maintainability.
-- **Top priorities**: Fix job runner bugs, remove/replace legacy analytics and backtest paths, de-duplicate shared helpers, and split very long service/router files.
-- **Quick wins**: Resolve broken references in optimization, unify job status handling, centralize dataset and strategy resolution, and prune dead code.
+### Executive Summary
+- **State**: Core analytics/backtest flows are now modular, but background jobs, dataset handling, and router layers remain monolithic with ad-hoc dependencies that slow iteration.
+- **Risks**: The job runner couples orchestration, database writes, and optimization execution; dataset and optimization services duplicate logic; API layers lack shared helpers and schema validation. These issues increase defect risk and make testing difficult.
+- **Focus**: Harden job infrastructure, split oversized services, standardize API/helper layers, and raise test coverage for the new analytics utilities.
 
----
+### Current Strengths
+- Modular analytics stack (`backend/app/services/analytics/`) now covers TradingView data, charts, and risk/metrics calculations with clear separation (`data_fetcher`, `tradingview_builder`, etc.).
+- Backtest execution pipeline (`services/backtest/`) provides deterministic engine + result processing with reusable callbacks.
+- Database models and FastAPI routers already expose complete functionality for datasets, backtests, analytics, and optimizations.
 
-## Long files and refactor recommendations
-Below are the long or complex files that would benefit most from refactor. Line counts are approximate.
+### Top Priorities (ordered)
+1. **Job infrastructure hardening** (`backend/app/tasks/job_runner.py`, `services/optimization_service.py`)
+   - Split DB CRUD vs orchestration, convert `JobStatus` to an `Enum`, remove duplicate logic, and provide lifecycle-managed thread pools.
+2. **Dataset service modularization** (`backend/app/services/dataset_service.py`)
+   - Extract IO/analysis into dedicated helpers to shorten the 560+ LOC service and enable reuse/testing.
+3. **Optimization service cleanup** (`backend/app/services/optimization_service.py`)
+   - Decouple from direct `JobRunner` instantiation, isolate parameter-combination logic, and align with modular backtest service contract.
+4. **Router/helper consolidation** (`backend/app/api/v1/*.py`)
+   - Introduce shared request parsing, dataset/strategy resolution, and consistent response shaping to reduce duplication.
+5. **Observability & configuration**
+   - Replace scattered `logging.basicConfig` calls, centralize settings (CORS, DB paths, thread counts) via environment-driven config, and ensure graceful shutdown for background executors.
 
-- **backend/app/services/analytics_service_legacy.py (~1410 LOC)**
-  - **Issue**: Huge, largely duplicated with new modular analytics. Only `get_chart_data()` remains actively needed (others overlap with modular components).
-  - **Plan**:
-    - Extract a new modular component `analytics/data_fetcher.py` for dataset/backtest result loading and time range filtering.
-    - Move TradingView formatting, trade markers, and indicator synthesis into `analytics/chart_generator.py` or a dedicated `analytics/tradingview_builder.py`.
-    - Port `get_chart_data()` into `analytics/analytics_service.py` using the above helpers.
-    - Delete unused legacy methods; keep a slim legacy shim only if strictly necessary during transition.
+### Quick Wins
+- Remove `logging.basicConfig` inside libraries (`backend/app/tasks/job_runner.py`) and rely on FastAPI/global logging configuration.
+- Delete unused `analytics_service_legacy` shim once all imports point to the modular service.
+- Replace inline `print` statements (e.g., `backend/app/main.py`, dataset analysis errors) with structured logging.
+- Add unit tests for `AnalyticsDataFetcher` and `TradingViewBuilder` to lock in recent regressions (date filtering, indicator colors).
+- Document and enforce a single `JobRunner` singleton to avoid multiple thread pools (currently `OptimizationService` instantiates its own).
 
-- **backend/app/tasks/job_runner.py (~615 LOC)**
-  - **Issues**:
-    - Duplicate `list_jobs` method (one overrides the other); dead code present.
-    - Uses `JobStatus.PENDING.value` as if `JobStatus` were an Enum; it's a string container → runtime errors.
-    - References undefined `is_cancelled()` (actual method is `_is_cancelled`).
-    - Calls `_store_job_results()` which is not implemented.
-    - Mixed concerns (DB CRUD, orchestration, progress, optimization) in a single class.
-  - **Plan**:
-    - Introduce `enum.Enum` for `JobStatus`, remove all `.value` usage.
-    - Remove the earlier, overridden `list_jobs(limit=50)` function.
-    - Rename calls to `_is_cancelled()` or implement `is_cancelled()` wrapper.
-    - Replace `_store_job_results()` usage with `_update_job_status(..., result_data=...)` or implement the missing method.
-    - Split into modules:
-      - `tasks/job_store.py` (DB CRUD; list, get, delete, stats)
-      - `tasks/backtest_runner.py` (backtest job execution)
-      - `tasks/optimization_runner.py` (optimization execution)
-      - Retain `job_runner.py` as thin facade and global singleton.
+### Detailed Observations & Recommendations
 
-- **backend/app/services/dataset_service.py (~565 LOC)**
-  - **Issues**: Monolithic service containing file IO, DB, quality analysis, validations, and helpers.
-  - **Plan**:
-    - Move analysis helpers to `services/datasets/dataset_analyzer.py`.
-    - Move DB accessors to `services/datasets/dataset_repository.py`.
-    - Keep `DatasetService` as an orchestrator calling analyzer + repo.
-    - Centralize timestamp/column detection and JSON sanitation into shared utils.
+#### Job infrastructure (`backend/app/tasks/job_runner.py`, `backend/app/services/optimization_service.py`)
+- File size ~614 LOC with mixed responsibilities (job creation, DB writes, optimization execution, polling). Cancellation uses mutable dict flags with no thread-safe checks inside workers. Logging is configured globally via `logging.basicConfig`, which should not live in reusable modules.
+- `JobRunner` exposes both legacy backtest parameters and new optimization flows, yet `_run_backtest_job` and `_run_optimization_job` blend DB persistence, orchestration, and progress updates.
+- `OptimizationService` (`~457 LOC`) constructs a new `JobRunner()` per request, causing extra thread pools and disjoint job state. It also performs synchronous optimization via `ThreadPoolExecutor` even when invoked through the job runner.
 
-- **backend/app/services/optimization_service.py (~458 LOC)**
-  - **Issues**:
-    - Calls non-existent `BacktestService.run_backtest_from_data(...)`.
-    - Tightly couples to a direct `JobRunner()` instance; status handling assumes Enum `.value`.
-  - **Plan**:
-    - Switch to `BacktestService.run_backtest(data=csv_bytes, ...)` or `run_backtest_from_upload(...)`.
-    - Use the global job runner singleton (via the API router or a shared accessor) for consistency.
-    - Extract parameter-combination generation and analysis to `services/optimization/utils.py`.
+**Actions**
+1. Introduce `JobStatus` as `enum.Enum` with helper converters; update persistence to store `.value`.
+2. Split job responsibilities:
+   - `job_store.py`: CRUD on `BacktestJob`, job summaries/history.
+   - `backtest_runner.py`: Handles `_run_backtest_job`, progress callbacks, DB updates.
+   - `optimization_runner.py`: Dedicated optimization workflow; reuse modular services.
+   - `job_runner.py`: Thin facade/DI container managing thread pool lifecycle and delegating to the above modules.
+3. Inject a singleton `JobRunner` into FastAPI routers/services instead of new-ing in `OptimizationService`; provide `shutdown()` to gracefully stop the executor on app exit.
+4. Provide async-compatible polling via background tasks rather than blocking loops; align progress updates with defined schema.
 
-- **backend/app/api/v1/backtests.py (~404 LOC)**
-  - **Issues**: Contains repeated logic for dataset resolution, strategy ID resolution, and result shaping.
-  - **Plan**:
-    - Extract helpers: `resolve_dataset_path_or_id()`, `resolve_strategy_path()`, and `shape_backtest_response()` into `services/_helpers.py` or `api/_utils.py`.
-    - Consider deprecating in-memory `results_store` endpoints after confirming no tests depend on them.
+#### Dataset management (`backend/app/services/dataset_service.py`)
+- ~566 LOC mixing file storage, analysis, Pandas profiling, and DB persistence. `_analyze_dataset` re-implements repeated logic (timestamp detection, missing data checks) inline and raises broad exceptions that bubble as `ValueError`.
 
-- **backend/app/services/backtest/backtest_service.py (~344 LOC)**
-  - **Plan**: Mostly OK; ensure progress tracking and error handling remain cohesive. Consider moving CSV/bytes normalization logic into `ExecutionEngine` only.
+**Actions**
+1. Extract analysis helpers into `services/datasets/` modules, e.g., `dataset_analyzer.py`, `dataset_repository.py`, `dataset_storage.py`.
+2. Replace ad-hoc dictionaries with typed dataclasses / Pydantic models to clarify return contracts (analysis results, dataset DTOs).
+3. Support chunked CSV reading / sampling for preview endpoints to avoid loading very large datasets entirely into memory (`api/v1/datasets.py:preview_dataset`).
+4. Add caching of derived metadata (timezone, timeframe) to avoid repeated expensive scans when listing datasets.
 
-- **backend/app/services/backtest/execution_engine.py (~416 LOC)**
-  - **Plan**: Acceptable length. Optionally move `_process_equity_curve` and `_process_trades` into `ResultProcessor` to keep execution engine focused on running and validating.
+#### Optimization workflow (`backend/app/services/optimization_service.py`)
+- Still references `JobRunner` constants (`JobStatus`) and performs manual CSV reads. Parameter generation and result analysis live in the same class, which complicates testing.
 
-- **backend/app/services/backtest/result_processor.py (~452 LOC)**
-  - **Plan**: Acceptable; ensure reliance on `backtester.metrics` stays canonical. Consider moving DB write to a separate repository layer.
+**Actions**
+- Extract parameter grid generation & validation to `services/optimization/utils.py`.
+- Reuse `BacktestService.run_backtest` with in-memory DataFrames or bytes to avoid manual strategy loading.
+- Store intermediate optimization metrics in the database or temp storage via the shared job store.
+- Add validation for `optimization_metric` to ensure compatibility with metrics schema.
 
-- **backend/app/api/v1/analytics.py (~340 LOC)**
-  - **Plan**: Extract ETag/header logic to a small helper; keep routes lean.
+#### Analytics stack (`backend/app/services/analytics/*`)
+- New modules (`data_fetcher.py`, `tradingview_builder.py`) dramatically improved maintainability. Remaining gaps:
+  - `get_session_factory` usage remains per-instance; consider dependency injection to ease testing.
+  - `AnalyticsService` (`~514 LOC`) still contains broad responsibilities (performance summaries, chart generation, comparison, rolling metrics). Some methods (e.g., caching logic) could move to dedicated managers or repositories.
+  - `analytics_service_legacy.py` is now a thin shim—target full removal after ensuring no external imports rely on it.
 
-- **backend/app/api/v1/strategies.py (~400 LOC)** and **backend/app/api/v1/datasets.py (~336 LOC)**, **backend/app/api/v1/optimization.py (~339 LOC)**
-  - **Plan**: Similar extraction of shared request parsing/validation helpers. Replace direct `JobRunner()` with global accessor in optimization router.
+**Actions**
+- Add targeted unit tests for date filtering, timezone localization, and indicator styling to prevent regressions.
+- Extract caching/persistence helpers for analytics summaries to a small repository/service layer.
+- Replace inline `try/except` blocks returning `{success: False}` with typed exceptions and central error handlers.
 
-- **backend/app/services/analytics/chart_generator.py (~402 LOC)** and other analytics modules (PerformanceCalculator ~307 LOC, RiskCalculator ~255 LOC, TradeAnalyzer ~352 LOC, DataFormatter ~221 LOC)
-  - **Plan**: These are reasonable; keep as-is. Consider splitting `ChartGenerator` into submodules if new chart types grow.
+#### API routers (`backend/app/api/v1/*.py`)
+- Routers for backtests, datasets, strategies, analytics, and optimization still share duplicated code for dataset resolution, strategy loading, and response shaping. Response schemas (Pydantic models) are underutilized; many endpoints return `dict`.
 
----
+**Actions**
+- Create `backend/app/api/dependencies.py` (or similar) to resolve dataset path/bytes, validate strategy references, and fetch job runners/services.
+- Introduce Pydantic response/request models for chart data, optimization results, and job states to standardize output.
+- Extract header/ETag helpers out of routers (especially analytics chart endpoints) for easier testing.
 
-## Duplicated/overlapping logic
-- **Legacy vs Modular Analytics**: `analytics_service_legacy.py` duplicates chart and analytics logic now present in `analytics/*` modules. Only `get_chart_data()` is still needed. Refactor as described and remove duplicates.
-- **`get_column_mapping`** appears both in legacy analytics and `DataFormatter`. Centralize on `DataFormatter.get_column_mapping()`.
-- **Job progress + storage**: Similar responsibilities exist across `job_runner.py`, `backtest_service.ProgressCallback`, and `backtest/progress_tracker.py`. Consolidate on `ProgressTracker`.
-- **Dataset and Strategy resolution**: Implemented in multiple routers (backtests, jobs). Centralize in shared helper(s).
-- **Drawdown/returns computations**: Provided by both `ChartGenerator` and legacy analytics. Keep only `ChartGenerator`.
+#### Database & configuration (`backend/app/database/models.py`, `backend/app/main.py`)
+- `BacktestMetrics` model remains unused; decide whether to implement persistence or remove it. `init_db()` prints directly.
+- Config (DB URL, CORS origins, worker counts) is hardcoded; rely on environment variables or a settings module (e.g., Pydantic `BaseSettings`).
+- Background tasks use direct session factories; consider SQLAlchemy session scopes/context managers to avoid leaks.
 
----
+#### Testing & tooling
+- Backend tests exist (`backend/tests`), but new analytics helpers lack coverage. Job runner, optimization flows, and dataset uploads need dedicated unit/integration tests.
+- Add contract tests for API endpoints using FastAPI `TestClient` to cover happy-path and failure responses (invalid dataset IDs, job cancellations, etc.).
+- Integrate mypy/ruff (or stricter flake8) for backend modules to catch typing regressions early.
 
-## Unused or dead code (candidates for removal)
-- **`backend/app/services/backtest_service_legacy.py`**: Not referenced (the bridge imports are commented out). Safe to remove after confirming tests don’t import it.
-- **Legacy methods in `analytics_service_legacy.py`**: Almost all besides `get_chart_data()` look unused by current routers. Remove after porting `get_chart_data()` to modular service.
-- **`BacktestMetrics` SQLAlchemy model**: Not used by current services. Keep only if tests assert its presence; otherwise, consider removing or implementing proper persistence.
-- **Earlier `list_jobs(self, limit=50)` in `job_runner.py`**: Overridden further down; dead code.
+### Cleanup Candidates
+- Remove `backend/app/services/backtest_service_legacy.py` (if not referenced in tests) and the new shim once no external imports rely on it.
+- Drop unused columns/models (`BacktestMetrics`) or wire them into persistence to avoid confusion.
+- Prune legacy analytics cache keys (e.g., `analytics_summary` vs `analytics_cache`) after confirming new caching strategy.
+- Consolidate duplicated strategy/dataset resolution helpers scattered across services and routers.
 
----
+### Validation & Tooling Checklist
+- Backend: `pytest -c backend/pytest.ini -q`
+- Core engine: `pytest tests -q`
+- Coverage: `pytest --cov=backtester -q`
+- API smoke: `pytest -c backend/pytest.ini -q -k smoke`
+- Add targeted unit tests for `AnalyticsDataFetcher` and `TradingViewBuilder`.
 
-## Bugs and inconsistencies to fix
-- **JobRunner API mismatches**:
-  - Uses `JobStatus.PENDING.value` while `JobStatus` is a simple class of strings → AttributeError risk.
-  - Calls `self.is_cancelled(job_id)` but only `_is_cancelled()` exists.
-  - References `_store_job_results()` (missing definition). Should store via `_update_job_status(..., result_data=...)` or implement the function.
-  - Two `list_jobs` definitions; the earlier one is dead and confusing.
-- **Optimization paths**:
-  - `OptimizationService._run_single_backtest()` calls `BacktestService.run_backtest_from_data(...)` which does not exist. Should call `run_backtest(data=csv_bytes, ...)` or `run_backtest_from_upload(...)`.
-  - `backend/app/api/v1/optimization.py` instantiates a new `JobRunner()` and expects Enum `.value` in status; use global accessor and plain string statuses.
-- **Router duplication**:
-  - Engine option key bridging (`daily_profit_target` → `daily_target`) repeated across multiple routes; centralize to avoid drift.
-  - Dataset path resolution logic duplicated between backtests and jobs routers; centralize via `utils/path_utils.resolve_dataset_path` and a small service helper.
+### Appendix – Largest backend files (approx LOC)
+- `backend/app/tasks/job_runner.py` – 614
+- `backend/app/services/dataset_service.py` – 566
+- `backend/app/services/analytics/analytics_service.py` – 514
+- `backend/app/services/backtest/result_processor.py` – 484
+- `backend/app/services/optimization_service.py` – 457
+- `backend/app/services/backtest/execution_engine.py` – 415
+- `backend/app/services/analytics/tradingview_builder.py` – 418
+- `backend/app/api/v1/backtests.py` – 403
+- `backend/app/api/v1/strategies.py` – 399
+- `backend/app/api/v1/datasets.py` – 341
 
----
-
-## Proposed refactor plan (phased)
-
-### Phase 1 – Safety and correctness (quick wins)
-- Fix `OptimizationService` to call existing `BacktestService.run_backtest` with `data=csv_bytes`.
-- Replace `JobRunner` string-class `JobStatus` with a real Enum, remove `.value` usages, and fix `is_cancelled` call.
-- Remove the earlier (overridden) `list_jobs` method in `job_runner.py`.
-- In `optimization` router, switch to global job runner accessor and treat statuses as strings.
-- Centralize engine option bridging and dataset/strategy resolution in small helpers used by backtests/jobs routers.
-
-### Phase 2 – De-duplication and modularization
-- Port `get_chart_data()` out of legacy analytics into modular `analytics/analytics_service.py`, using `ChartGenerator` and a new `DataFetcher` helper.
-- Delete unused legacy analytics methods and (optionally) the entire legacy module after verifying coverage.
-- Consolidate progress logic on `ProgressTracker`; remove duplicate `ProgressCallback` classes.
-- Split `dataset_service.py` into analyzer + repository submodules.
-
-### Phase 3 – Structural cleanup
-- Split `job_runner.py` into `job_store.py`, `backtest_runner.py`, and `optimization_runner.py`; keep `job_runner.py` as the thin facade/DI root.
-- Extract router helpers to `api/_utils.py`; keep route functions concise and declarative.
-- Optional: Move `ExecutionEngine` post-processing into `ResultProcessor` to reduce responsibilities.
-
-### Phase 4 – Data model alignment (optional)
-- Either implement `BacktestMetrics` persistence or remove the model to avoid confusion.
-- If trades need persistence, add a `TradeRepository` and use it from `ResultProcessor.save_to_database`.
-
----
-
-## Specific file-by-file notes
-- **backend/app/main.py (~95 LOC)**: CORS list is verbose; consider env-driven configuration. Replace prints with `logging` in DB init.
-- **backend/app/database/models.py (~255 LOC)**: Clear and organized. `init_db()` prints to stdout; prefer `logging`.
-- **backend/app/api/v1/backtests.py**: Good validation and robust JSON parsing; factor common helpers; consider deprecating in-memory result storage.
-- **backend/app/api/v1/analytics.py**: Solid; factor ETag headers into helper.
-- **backend/app/api/v1/datasets.py**: Preview endpoint reads entire CSV; consider streaming/limit columns for very large files.
-- **backend/app/api/v1/optimization.py**: Fix runner instantiation and status enum assumptions; centralize validation.
-- **backend/app/services/backtest_service.py**: Bridge looks good; keep only what’s needed; rely on modular service.
-- **backend/app/services/backtest/execution_engine.py**: Leans robust; defer serialization to `ResultProcessor` where possible.
-- **backend/app/services/backtest/result_processor.py**: Canonical use of `backtester.metrics`; good JSON sanitation; consider repo split.
-- **backend/app/services/analytics/**: Modular structure is strong; continue migrating away from legacy.
-- **backend/app/utils/path_utils.py**: Useful cross-OS helpers; ensure routers/services consistently use `resolve_dataset_path`.
-
----
-
-## Deletions and cleanup candidates (after verification)
-- Remove `backend/app/services/backtest_service_legacy.py` if no tests import it.
-- Remove dead `list_jobs` implementation in `job_runner.py`.
-- Prune legacy analytics methods after `get_chart_data()` is ported.
-- Consider removing `BacktestMetrics` model or implement its usage.
-
----
-
-## Validation steps (manual)
-- **Backend tests**: `pytest -c backend/pytest.ini -q`
-- **Core tests**: `pytest tests -q`
-- **Coverage (core)**: `pytest --cov=backtester -q`
-- Ensure API smoke tests pass: `pytest -c backend/pytest.ini -q -k smoke`
-
----
-
-## Suggested PR structure
-- PR 1: Job runner fixes (Enum, missing methods, duplicate removal), and optimization service call fix.
-- PR 2: Router helper extraction (dataset/strategy/engine options), replace direct runner instantiation.
-- PR 3: Port `get_chart_data()` to modular analytics and delete legacy duplicates.
-- PR 4: Split `dataset_service.py`; optional ExecutionEngine/ResultProcessor responsibility shift.
-- PR 5: Optional model cleanup (`BacktestMetrics`) and trade persistence decision.
-
----
-
-## Appendix: Largest files (approx LOC)
-- `backend/app/services/analytics_service_legacy.py` ~1410
-- `backend/app/tasks/job_runner.py` ~615
-- `backend/app/services/dataset_service.py` ~565
-- `backend/app/services/backtest/result_processor.py` ~452
-- `backend/app/services/backtest/execution_engine.py` ~416
-- `backend/app/api/v1/backtests.py` ~404
-- `backend/app/services/analytics/chart_generator.py` ~402
-- `backend/app/api/v1/strategies.py` ~400
-- `backend/app/services/optimization_service.py` ~458
-- `backend/app/services/analytics/analytics_service.py` ~460
-
-These are the best candidates for targeted refactors to improve maintainability.
+These remain prime refactor candidates to improve readability and maintainability.

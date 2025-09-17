@@ -2,14 +2,16 @@
 Job management API endpoints for background backtests
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from typing import Optional, Dict, Any
 import json
-import os
 
-from backend.app.tasks.job_runner import get_job_runner, JobStatus
-from backend.app.schemas.backtest import BacktestRequest, EngineOptions
-from backend.app.database.models import init_db, Dataset, get_session_factory
+from backend.app.api.dependencies import get_dataset_service, get_job_runner_dependency
+from backend.app.schemas.backtest import BacktestRequest
+from backend.app.schemas.job import JobListResponse, JobResultResponse, JobStatusResponse
+from backend.app.database.models import init_db
+from backend.app.services.dataset_service import DatasetService
+from backend.app.tasks import JobStatus, JobRunner
 
 router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
 
@@ -17,13 +19,12 @@ router = APIRouter(prefix="/api/v1/jobs", tags=["jobs"])
 init_db()
 
 @router.get("/stats", response_model=Dict[str, Any])
-async def get_job_stats():
+async def get_job_stats(job_runner: JobRunner = Depends(get_job_runner_dependency)):
     """
     Get statistics about job execution.
     Note: Declared before dynamic `/{job_id}` routes to avoid shadowing
     that can lead to 422 errors when requesting `/stats`.
     """
-    job_runner = get_job_runner()
     jobs = job_runner.list_jobs(limit=100)
     
     # Calculate stats
@@ -42,14 +43,16 @@ async def get_job_stats():
     }
 
 @router.post("/", response_model=Dict[str, Any])
-async def submit_backtest_job(request: BacktestRequest):
+async def submit_backtest_job(
+    request: BacktestRequest,
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
+    dataset_service: DatasetService = Depends(get_dataset_service),
+):
     """
     Submit a backtest job for background execution
     Returns immediately with job ID for status tracking
     """
     try:
-        job_runner = get_job_runner()
-        
         # Convert Pydantic model to dict for service
         engine_options = request.engine_options.model_dump() if request.engine_options else {}
         # Bridge naming differences: map daily_profit_target -> daily_target for engine
@@ -61,30 +64,20 @@ async def submit_backtest_job(request: BacktestRequest):
         
         # Resolve dataset path from dataset ID if needed
         dataset_path = request.dataset_path
-        if request.dataset and not dataset_path:
-            db = get_session_factory()()
+        dataset_id = int(request.dataset) if request.dataset else None
+        if dataset_id and not dataset_path:
             try:
-                dataset = db.query(Dataset).filter(Dataset.id == int(request.dataset)).first()
-                if not dataset:
-                    raise HTTPException(status_code=404, detail=f"Dataset with ID {request.dataset} not found")
-                # Prefer stored file_path if it exists
-                candidate = dataset.file_path
-                if candidate and os.path.exists(candidate):
-                    dataset_path = candidate
-                else:
-                    # Try common fallbacks by original filename
-                    filename = (dataset.filename or '').split('/')[-1].split('\\')[-1]
-                    fallback_candidates = [
-                        os.path.join('data', 'market_data', filename),
-                        os.path.join('data', filename)
-                    ]
-                    dataset_path = next((p for p in fallback_candidates if p and os.path.exists(p)), None)
-                    if not dataset_path:
-                        # Last resort: keep original path; the engine will try cross-OS normalization
-                        dataset_path = candidate or filename
-            finally:
-                db.close()
-        
+                dataset_info = dataset_service.get_dataset_quality(dataset_id)
+            except ValueError as exc:
+                raise HTTPException(status_code=404, detail=str(exc))
+            dataset_meta = dataset_info['dataset']
+            candidate_path = dataset_meta.get('file_path')
+            if candidate_path:
+                resolved = dataset_service.storage.resolve(candidate_path)
+                if not resolved.exists():
+                    raise HTTPException(status_code=404, detail="Dataset file not found on disk")
+                dataset_path = str(resolved)
+
         if not dataset_path:
             raise HTTPException(status_code=400, detail="Either dataset or dataset_path must be provided")
         
@@ -123,19 +116,21 @@ async def submit_backtest_job(request: BacktestRequest):
         raise HTTPException(status_code=500, detail=f"Failed to submit job: {str(e)}")
 
 
-@router.get("/{job_id}", response_model=Dict[str, Any])
-async def get_job_status(job_id: int):
+@router.get("/{job_id}", response_model=JobStatusResponse)
+async def get_job_status(
+    job_id: int,
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
+):
     """
     Get the status and details of a specific job
     """
     try:
-        job_runner = get_job_runner()
         job = job_runner.get_job_status(job_id)
         
         if not job:
             raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
         
-        return job
+        return {"success": True, "job": job}
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
@@ -146,7 +141,8 @@ async def submit_backtest_job_with_upload(
     file: UploadFile = File(...),
     strategy: str = Form(...),
     strategy_params: str = Form(default="{}"),
-    engine_options: str = Form(default="{}")
+    engine_options: str = Form(default="{}"),
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
 ):
     """
     Submit a backtest job with uploaded CSV data for background execution
@@ -170,7 +166,6 @@ async def submit_backtest_job_with_upload(
         csv_bytes = await file.read()
         
         # Submit job
-        job_runner = get_job_runner()
         job_id = job_runner.submit_job(
             strategy=strategy,
             strategy_params=strategy_params_dict,
@@ -191,34 +186,34 @@ async def submit_backtest_job_with_upload(
         raise HTTPException(status_code=500, detail=f"Failed to submit job: {str(e)}")
 
 
-@router.get("/{job_id}/status", response_model=Dict[str, Any])
-async def get_job_status_detail(job_id: int):
+@router.get("/{job_id}/status", response_model=JobStatusResponse)
+async def get_job_status_detail(
+    job_id: int,
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
+):
     """
     Get the current status and progress of a background job
     """
     try:
-        job_runner = get_job_runner()
         status = job_runner.get_job_status(job_id)
         
         if not status:
             raise HTTPException(status_code=404, detail="Job not found")
         
-        return {
-            "success": True,
-            "job": status
-        }
+        return {"success": True, "job": status}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get job status: {str(e)}")
 
 
-@router.get("/{job_id}/results", response_model=Dict[str, Any])
-async def get_job_results(job_id: int):
+@router.get("/{job_id}/results", response_model=JobResultResponse)
+async def get_job_results(
+    job_id: int,
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
+):
     """
     Get the results of a completed background job
     """
     try:
-        job_runner = get_job_runner()
-        
         # First check if job exists and is completed
         status = job_runner.get_job_status(job_id)
         if not status:
@@ -237,7 +232,7 @@ async def get_job_results(job_id: int):
         
         return {
             "success": True,
-            "job_id": job_id,
+            "job_id": str(job_id),
             "status": status["status"],
             "results": results
         }
@@ -246,13 +241,14 @@ async def get_job_results(job_id: int):
 
 
 @router.post("/{job_id}/cancel", response_model=Dict[str, Any])
-async def cancel_job(job_id: int):
+async def cancel_job(
+    job_id: int,
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
+):
     """
     Cancel a running background job
     """
     try:
-        job_runner = get_job_runner()
-        
         # Check if job exists
         status = job_runner.get_job_status(job_id)
         if not status:
@@ -279,37 +275,40 @@ async def cancel_job(job_id: int):
         raise HTTPException(status_code=500, detail=f"Failed to cancel job: {str(e)}")
 
 
-@router.get("/", response_model=Dict[str, Any])
-async def list_jobs(limit: int = 50):
+@router.get("/", response_model=JobListResponse)
+async def list_jobs(
+    limit: int = 50,
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
+):
     """
     List recent background jobs with their status
     """
     if limit > 100:
         limit = 100  # Limit maximum to prevent abuse
     
-    job_runner = get_job_runner()
     jobs = job_runner.list_jobs(limit=limit)
     
     return {
         "success": True,
         "jobs": jobs,
-        "total": len(jobs)
+        "count": len(jobs)
     }
 
 # Alias without trailing slash for clients that call /api/v1/jobs
-@router.get("", response_model=Dict[str, Any])
-async def list_jobs_no_slash(limit: int = 50):
-    return await list_jobs(limit=limit)
+@router.get("", response_model=JobListResponse)
+async def list_jobs_no_slash(limit: int = 50, job_runner: JobRunner = Depends(get_job_runner_dependency)):
+    return await list_jobs(limit=limit, job_runner=job_runner)
 
 
 @router.delete("/{job_id}", response_model=Dict[str, Any])
-async def delete_job(job_id: int):
+async def delete_job(
+    job_id: int,
+    job_runner: JobRunner = Depends(get_job_runner_dependency),
+):
     """
     Delete a job from the system
     """
     try:
-        job_runner = get_job_runner()
-        
         # Check if job exists
         job = job_runner.get_job_status(job_id)
         if not job:

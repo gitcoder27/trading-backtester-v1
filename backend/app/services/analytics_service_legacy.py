@@ -31,6 +31,9 @@ class AnalyticsService:
         start: Optional[str] = None,
         end: Optional[str] = None,
         tz: Optional[str] = None,
+        single_day: Optional[bool] = None,
+        cursor: Optional[str] = None,
+        navigate: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Delegate TradingView chart generation to the modular service."""
 
@@ -42,6 +45,9 @@ class AnalyticsService:
             start=start,
             end=end,
             tz=tz,
+            single_day=single_day,
+            cursor=cursor,
+            navigate=navigate,
         )
 
     # ------------------------------------------------------------------

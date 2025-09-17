@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from datetime import date, datetime
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 
@@ -40,6 +40,10 @@ class PriceDataBundle:
     start_bound: Optional[pd.Timestamp]
     end_bound: Optional[pd.Timestamp]
     source: str
+    available_sessions: List[pd.Timestamp]
+    resolved_sessions: List[pd.Timestamp]
+    requested_start: Optional[pd.Timestamp]
+    requested_end: Optional[pd.Timestamp]
 
 
 class AnalyticsDataFetcher:
@@ -61,6 +65,9 @@ class AnalyticsDataFetcher:
         start: Optional[str] = None,
         end: Optional[str] = None,
         max_candles: Optional[int] = None,
+        single_day: Optional[bool] = None,
+        cursor: Optional[str] = None,
+        navigate: Optional[str] = None,
     ) -> PriceDataBundle:
         """Load and normalize price data used for TradingView charts.
 
@@ -76,10 +83,58 @@ class AnalyticsDataFetcher:
         if dataframe.empty:
             raise PriceDataError("Empty price data")
 
-        dataframe = self._normalize_dataframe(dataframe, tz)
+        local_tz = tz or "UTC"
 
-        dataframe, filtered, start_bound, end_bound = self._apply_date_filter(
-            dataframe, start=start, end=end, tz=tz
+        dataframe = self._normalize_dataframe(dataframe, tz)
+        session_bounds, available_sessions = self._build_session_metadata(dataframe, local_tz)
+
+        (
+            start_override,
+            end_override,
+            target_sessions,
+            anchor_utc,
+        ) = self._resolve_navigation_bounds(
+            session_bounds=session_bounds,
+            available_sessions=available_sessions,
+            local_tz=local_tz,
+            start=start,
+            end=end,
+            cursor=cursor,
+            navigate=navigate,
+            single_day=single_day,
+        )
+
+        navigation_requested = (navigate or "").strip().lower() in {"next", "previous", "current"}
+
+        filter_start = start_override if start_override is not None else start
+        filter_end = end_override if end_override is not None else end
+
+        (
+            dataframe,
+            filtered,
+            start_bound,
+            end_bound,
+            requested_start,
+            requested_end,
+        ) = self._apply_date_filter(
+            dataframe,
+            start=filter_start,
+            end=filter_end,
+            tz=tz,
+        )
+
+        if navigation_requested and not target_sessions:
+            dataframe = dataframe.iloc[0:0].copy()
+            filtered = True
+            start_bound = None
+            end_bound = None
+            if anchor_utc is not None:
+                requested_start = requested_start or anchor_utc
+                if requested_end is None:
+                    requested_end = anchor_utc
+
+        resolved_sessions = (
+            target_sessions if target_sessions else self._extract_sessions(dataframe, local_tz)
         )
 
         total_candles = int(len(dataframe))
@@ -95,6 +150,10 @@ class AnalyticsDataFetcher:
             start_bound=start_bound,
             end_bound=end_bound,
             source=source,
+            available_sessions=available_sessions,
+            resolved_sessions=resolved_sessions,
+            requested_start=requested_start,
+            requested_end=requested_end,
         )
 
     # ------------------------------------------------------------------
@@ -168,6 +227,8 @@ class AnalyticsDataFetcher:
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
         df = df.dropna(subset=["timestamp"])
         df = df.sort_values("timestamp").reset_index(drop=True)
+        # Preserve the original sequential position so indicators can be aligned after filtering
+        df["_source_index"] = df.index
 
         if df.empty:
             raise PriceDataError("No valid data after timestamp processing")
@@ -195,22 +256,233 @@ class AnalyticsDataFetcher:
             logger.debug("Falling back to naive UTC localization for price data timestamps")
             return series.dt.tz_localize("UTC", nonexistent="shift_forward", ambiguous="infer")
 
+    def _build_session_metadata(
+        self,
+        df: pd.DataFrame,
+        local_tz: str,
+    ) -> Tuple[Dict[pd.Timestamp, Tuple[pd.Timestamp, pd.Timestamp]], List[pd.Timestamp]]:
+        """Return per-session UTC bounds and sorted session list in local timezone."""
+
+        if df.empty or "timestamp_utc" not in df.columns:
+            return {}, []
+
+        df = df.copy()
+        df["_session_local"] = df["timestamp_utc"].dt.tz_convert(local_tz).dt.normalize()
+
+        session_bounds: Dict[pd.Timestamp, Tuple[pd.Timestamp, pd.Timestamp]] = {}
+        for session_key, group in df.groupby("_session_local", sort=True):
+            if group.empty:
+                continue
+            try:
+                session_ts = pd.Timestamp(session_key)
+                if session_ts.tzinfo is None:
+                    session_ts = session_ts.tz_localize(local_tz)
+                else:
+                    session_ts = session_ts.tz_convert(local_tz)
+
+                start_ts = pd.Timestamp(group["timestamp_utc"].min())
+                end_ts = pd.Timestamp(group["timestamp_utc"].max())
+                session_bounds[session_ts] = (start_ts, end_ts)
+            except Exception:
+                continue
+
+        sessions = sorted(session_bounds.keys())
+        return session_bounds, sessions
+
+    def _resolve_navigation_bounds(
+        self,
+        *,
+        session_bounds: Dict[pd.Timestamp, Tuple[pd.Timestamp, pd.Timestamp]],
+        available_sessions: List[pd.Timestamp],
+        local_tz: str,
+        start: Optional[str],
+        end: Optional[str],
+        cursor: Optional[str],
+        navigate: Optional[str],
+        single_day: Optional[bool],
+    ) -> Tuple[
+        Optional[pd.Timestamp],
+        Optional[pd.Timestamp],
+        List[pd.Timestamp],
+        Optional[pd.Timestamp],
+    ]:
+        """Determine overrides for navigation-based requests."""
+
+        if not available_sessions:
+            return None, None, [], None
+
+        navigation = (navigate or "").strip().lower()
+        navigation_requested = navigation in {"next", "previous", "current"}
+        single_day_flag = bool(single_day)
+
+        available_dates = [self._session_to_date(session, local_tz) for session in available_sessions]
+
+        anchor_date = self._determine_anchor_date(
+            cursor=cursor,
+            start=start,
+            end=end,
+            available_dates=available_dates,
+            local_tz=local_tz,
+        )
+        anchor_utc = self._normalize_bound(cursor or start, local_tz, is_start=True)
+
+        target_session: Optional[pd.Timestamp] = None
+
+        if navigation_requested:
+            if anchor_date is None and available_dates:
+                anchor_date = available_dates[0]
+
+            target_date: Optional[date] = None
+            if navigation == "next":
+                target_date = self._next_date(available_dates, anchor_date)
+            elif navigation == "previous":
+                target_date = self._previous_date(available_dates, anchor_date)
+            else:  # current
+                if anchor_date in available_dates:
+                    target_date = anchor_date
+                else:
+                    target_date = self._next_date(available_dates, anchor_date)
+                    if target_date is None:
+                        target_date = self._previous_date(available_dates, anchor_date)
+
+            if target_date is not None:
+                target_session = self._session_by_date(available_sessions, target_date, local_tz)
+        elif single_day_flag:
+            candidate_date = self._parse_date(cursor or start, local_tz)
+            if candidate_date and candidate_date in available_dates:
+                target_session = self._session_by_date(available_sessions, candidate_date, local_tz)
+
+        if target_session is None:
+            return None, None, [], anchor_utc
+
+        start_end = session_bounds.get(target_session)
+        if not start_end:
+            return None, None, [], anchor_utc
+
+        start_override, end_override = start_end
+        return start_override, end_override, [target_session], start_override
+
+    def _determine_anchor_date(
+        self,
+        *,
+        cursor: Optional[str],
+        start: Optional[str],
+        end: Optional[str],
+        available_dates: List[date],
+        local_tz: str,
+    ) -> Optional[date]:
+        candidates = [cursor, start, end]
+        for candidate in candidates:
+            parsed = self._parse_date(candidate, local_tz)
+            if parsed is not None:
+                return parsed
+        return available_dates[0] if available_dates else None
+
+    def _parse_date(self, value: Optional[str], local_tz: str) -> Optional[date]:
+        if not value:
+            return None
+        try:
+            timestamp = pd.to_datetime(value)
+            if isinstance(value, str) and len(value) == 10:
+                timestamp = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
+
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.tz_localize(local_tz)
+            else:
+                timestamp = timestamp.tz_convert(local_tz)
+
+            return timestamp.date()
+        except Exception:
+            return None
+
+    def _session_to_date(self, session: pd.Timestamp, local_tz: str) -> date:
+        try:
+            ts = pd.Timestamp(session)
+            if ts.tzinfo is None:
+                ts = ts.tz_localize(local_tz)
+            else:
+                ts = ts.tz_convert(local_tz)
+            return ts.date()
+        except Exception:
+            return pd.Timestamp(session).date()
+
+    def _session_by_date(
+        self,
+        sessions: List[pd.Timestamp],
+        target_date: date,
+        local_tz: str,
+    ) -> Optional[pd.Timestamp]:
+        for session in sessions:
+            if self._session_to_date(session, local_tz) == target_date:
+                return session
+        return None
+
+    @staticmethod
+    def _next_date(available_dates: List[date], anchor: Optional[date]) -> Optional[date]:
+        if not available_dates:
+            return None
+        if anchor is None:
+            return available_dates[0]
+
+        idx = pd.Index(available_dates).searchsorted(anchor, side="right")
+        if idx >= len(available_dates):
+            return None
+        return available_dates[idx]
+
+    @staticmethod
+    def _previous_date(available_dates: List[date], anchor: Optional[date]) -> Optional[date]:
+        if not available_dates or anchor is None:
+            return None
+
+        idx = pd.Index(available_dates).searchsorted(anchor, side="left")
+        if idx <= 0:
+            return None
+        return available_dates[idx - 1]
+
+    def _normalize_bound(
+        self,
+        value: Optional[Union[str, pd.Timestamp]],
+        tz: str,
+        *,
+        is_start: bool,
+    ) -> Optional[pd.Timestamp]:
+        if value is None:
+            return None
+
+        if isinstance(value, pd.Timestamp):
+            bound = pd.Timestamp(value)
+            if bound.tzinfo is None:
+                bound = bound.tz_localize("UTC")
+            return bound.tz_convert("UTC")
+
+        return self._parse_bound(value, tz, is_start=is_start)
+
     def _apply_date_filter(
         self,
         df: pd.DataFrame,
         *,
-        start: Optional[str],
-        end: Optional[str],
+        start: Optional[Union[str, pd.Timestamp]],
+        end: Optional[Union[str, pd.Timestamp]],
         tz: Optional[str],
-    ) -> Tuple[pd.DataFrame, bool, Optional[pd.Timestamp], Optional[pd.Timestamp]]:
+    ) -> Tuple[
+        pd.DataFrame,
+        bool,
+        Optional[pd.Timestamp],
+        Optional[pd.Timestamp],
+        Optional[pd.Timestamp],
+        Optional[pd.Timestamp],
+    ]:
         """Apply optional start/end filters and return resulting metadata."""
 
-        if not start and not end:
-            return df.reset_index(drop=True), False, None, None
+        if start is None and end is None:
+            return df.reset_index(drop=True), False, None, None, None, None
 
         local_tz = tz or "UTC"
-        start_ts = self._parse_bound(start, local_tz, is_start=True)
-        end_ts = self._parse_bound(end, local_tz, is_start=False)
+        requested_start = self._normalize_bound(start, local_tz, is_start=True)
+        requested_end = self._normalize_bound(end, local_tz, is_start=False)
+
+        start_ts = requested_start if requested_start is not None else df["timestamp_utc"].min()
+        end_ts = requested_end if requested_end is not None else df["timestamp_utc"].max()
 
         if start_ts is None:
             start_ts = df["timestamp_utc"].min()
@@ -220,7 +492,30 @@ class AnalyticsDataFetcher:
         mask = (df["timestamp_utc"] >= start_ts) & (df["timestamp_utc"] <= end_ts)
         filtered_df = df.loc[mask].copy().reset_index(drop=True)
 
-        return filtered_df, True, start_ts, end_ts
+        return filtered_df, True, start_ts, end_ts, requested_start, requested_end
+
+    def _extract_sessions(self, df: pd.DataFrame, local_tz: str) -> List[pd.Timestamp]:
+        if df is None or df.empty:
+            return []
+
+        if "_session_local" in df.columns:
+            normalized = df["_session_local"].dropna().unique()
+        elif "timestamp_utc" in df.columns:
+            normalized = df["timestamp_utc"].dt.tz_convert(local_tz).dt.normalize().dropna().unique()
+        else:
+            return []
+
+        sessions: List[pd.Timestamp] = []
+        for value in normalized:
+            ts = pd.Timestamp(value)
+            if ts.tzinfo is None:
+                ts = ts.tz_localize(local_tz)
+            else:
+                ts = ts.tz_convert(local_tz)
+            sessions.append(ts)
+
+        sessions.sort()
+        return sessions
 
     @staticmethod
     def _parse_bound(value: Optional[str], tz: str, *, is_start: bool) -> Optional[pd.Timestamp]:

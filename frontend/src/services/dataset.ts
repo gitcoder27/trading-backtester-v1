@@ -1,11 +1,13 @@
 import { apiClient } from './api';
-import type { 
-  Dataset, 
-  DatasetPreview, 
-  PaginatedResponse, 
+import type {
+  Dataset,
+  DatasetDiscoveryResponse,
+  DatasetPreview,
+  DatasetRegistrationResponse,
+  PaginatedResponse,
   PaginationParams,
   UploadResponse,
-  ValidationResult
+  ValidationResult,
 } from '../types';
 
 export class DatasetService {
@@ -52,5 +54,16 @@ export class DatasetService {
    */
   static async getSummary(): Promise<any> {
     return apiClient.get<any>('/datasets/stats/summary');
+  }
+
+  static async discoverLocalDatasets(): Promise<DatasetDiscoveryResponse> {
+    return apiClient.get<DatasetDiscoveryResponse>('/datasets/discover');
+  }
+
+  static async registerLocalDatasets(filePaths?: string[]): Promise<DatasetRegistrationResponse> {
+    return apiClient.post<DatasetRegistrationResponse>(
+      '/datasets/register',
+      filePaths && filePaths.length > 0 ? { file_paths: filePaths } : {}
+    );
   }
 }

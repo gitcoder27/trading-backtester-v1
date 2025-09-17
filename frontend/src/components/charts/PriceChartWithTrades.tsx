@@ -1,42 +1,137 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import type { UTCTimestamp } from 'lightweight-charts';
 import TradingViewChart from './TradingViewChart';
 import { BacktestService } from '../../services/backtest';
+import type { CandleData, TradeMarker } from '../../types/chart';
+
+export type ChartQueryParams = {
+  start?: string | null;
+  end?: string | null;
+  maxCandles?: number | null;
+  tz?: string | null;
+  singleDay?: boolean | null;
+  cursor?: string | null;
+  navigate?: 'next' | 'previous' | 'current' | null;
+};
 
 interface PriceChartWithTradesProps {
   backtestId: string;
   height?: number;
   title?: string;
-  start?: string; // ISO datetime or YYYY-MM-DD
-  end?: string;   // ISO datetime or YYYY-MM-DD
-  maxCandles?: number;
-  tz?: string;
+  queryParams: ChartQueryParams | null;
+  onNavigationChange?: (navigation: Record<string, any> | null) => void;
 }
 
-const PriceChartWithTrades: React.FC<PriceChartWithTradesProps> = ({ backtestId, height = 600, title = 'Price + Trades', start, end, maxCandles, tz }) => {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['tv-chart', backtestId, start || null, end || null, maxCandles || null, tz || null],
-    queryFn: async () => BacktestService.getChartData(backtestId, { 
-      includeTrades: true, 
-      includeIndicators: true, 
-      maxCandles: maxCandles ?? 3000,
-      start,
-      end,
-      tz,
-    }),
-    enabled: !!backtestId,
+const PriceChartWithTrades: React.FC<PriceChartWithTradesProps> = ({
+  backtestId,
+  height = 600,
+  title = 'Price + Trades',
+  queryParams,
+  onNavigationChange,
+}) => {
+  const queryKey = useMemo(() => {
+    if (!queryParams) {
+      return ['tv-chart', backtestId, 'idle'];
+    }
+
+    return [
+      'tv-chart',
+      backtestId,
+      queryParams.start ?? null,
+      queryParams.end ?? null,
+      queryParams.cursor ?? null,
+      queryParams.navigate ?? null,
+      queryParams.singleDay ?? null,
+      queryParams.maxCandles ?? null,
+      queryParams.tz ?? null,
+    ];
+  }, [backtestId, queryParams]);
+
+  const enabled = Boolean(backtestId && queryParams);
+
+  const { data, isLoading } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      if (!queryParams) return null;
+      return BacktestService.getChartData(backtestId, {
+        includeTrades: true,
+        includeIndicators: true,
+        maxCandles: queryParams.maxCandles ?? 3000,
+        start: queryParams.start ?? undefined,
+        end: queryParams.end ?? undefined,
+        tz: queryParams.tz ?? undefined,
+        singleDay: queryParams.singleDay ?? undefined,
+        cursor: queryParams.cursor ?? undefined,
+        navigate: queryParams.navigate ?? undefined,
+      });
+    },
+    enabled,
     staleTime: 5 * 60 * 1000,
   });
 
-  const candleData = React.useMemo(() => (data?.candlestick_data ?? []) as any[], [data]);
-  const tradeMarkers = React.useMemo(() => (data?.trade_markers ?? []) as any[], [data]);
-  const indicators = React.useMemo(() => (data?.indicators ?? []) as any[], [data]);
+  useEffect(() => {
+    if (!onNavigationChange) return;
+    const nav = (data as any)?.navigation ?? null;
+    onNavigationChange(nav);
+  }, [data, onNavigationChange]);
 
-  const dataBadge = React.useMemo(() => {
+  const candleData = useMemo(() => {
+    const candles = Array.isArray(data?.candlestick_data) ? data!.candlestick_data : [];
+    return (candles
+      .map((candle: any) => {
+        const timeValue = Number(candle.time);
+        if (!Number.isFinite(timeValue)) return null;
+
+        return {
+          time: timeValue as UTCTimestamp,
+          open: Number(candle.open ?? 0),
+          high: Number(candle.high ?? 0),
+          low: Number(candle.low ?? 0),
+          close: Number(candle.close ?? 0),
+        };
+      })
+      .filter((candle): candle is CandleData => Boolean(candle))) as CandleData[];
+  }, [data]);
+
+  const tradeMarkers = useMemo(() => {
+    if (!Array.isArray(data?.trade_markers)) return [] as TradeMarker[];
+
+    return (data!.trade_markers as any[])
+      .map((marker) => {
+        const timeValue = Number(marker.time);
+        if (!Number.isFinite(timeValue)) {
+          return null;
+        }
+
+        const priceValue = Number(marker.price);
+        const normalized: TradeMarker = {
+          time: timeValue as UTCTimestamp,
+        position: marker.position === 'aboveBar' ? 'aboveBar' : 'belowBar',
+        color: typeof marker.color === 'string' ? marker.color : '#ff9800',
+        shape: (marker.shape as any) || 'circle',
+        text: typeof marker.text === 'string' ? marker.text : '',
+        size: Number.isFinite(Number(marker.size)) ? Number(marker.size) : 1,
+      };
+
+      if (Number.isFinite(priceValue)) {
+        normalized.price = priceValue;
+      }
+
+      return normalized;
+      })
+      .filter((marker): marker is TradeMarker => Boolean(marker));
+  }, [data]);
+
+  const indicators = useMemo(() => (data?.indicators ?? []) as any[], [data]);
+
+  const dataBadge = useMemo(() => {
     const name = (data as any)?.dataset_name as string | undefined;
     if (!name) return undefined;
     return name.toLowerCase().includes('simulated') ? 'Sim' : 'Real';
   }, [data]);
+
+  const timeZone = queryParams?.tz ?? undefined;
 
   return (
     <TradingViewChart
@@ -45,7 +140,7 @@ const PriceChartWithTrades: React.FC<PriceChartWithTradesProps> = ({ backtestId,
       indicators={indicators}
       height={height}
       title={title}
-      timeZone={tz}
+      timeZone={timeZone}
       loading={isLoading}
       showControls
       autoFit

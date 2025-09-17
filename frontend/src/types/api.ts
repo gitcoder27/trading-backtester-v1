@@ -16,6 +16,36 @@ export interface Dataset {
   metadata?: Record<string, any>;
 }
 
+export interface DatasetDiscoveryItem {
+  dataset_id?: number | string | null;
+  file_path: string;
+  name?: string;
+  file_size?: number;
+  rows_count?: number;
+  timeframe?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  quality_score?: number;
+  registered: boolean;
+  analysis?: Record<string, any>;
+  error?: string;
+}
+
+export interface DatasetDiscoveryResponse {
+  success: boolean;
+  datasets: DatasetDiscoveryItem[];
+  total: number;
+  data_directory?: string;
+}
+
+export interface DatasetRegistrationResponse {
+  success: boolean;
+  registered: (number | string)[];
+  skipped: string[];
+  errors: { file_path: string; error: string }[];
+  datasets?: Dataset[];
+}
+
 export interface DatasetUpload {
   name: string;
   symbol: string;

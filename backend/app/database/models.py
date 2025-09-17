@@ -9,6 +9,8 @@ from datetime import datetime
 import json
 import os
 
+from backend.app.config import get_settings
+
 Base = declarative_base()
 
 
@@ -137,6 +139,10 @@ class Dataset(Base):
     @property
     def rows(self):  # type: ignore[override]
         return self.rows_count
+
+    @rows.setter
+    def rows(self, value):  # type: ignore[override]
+        self.rows_count = value
     columns = Column(JSON)  # List of column names
     timeframe = Column(String(20))  # 1min, 5min, etc.
     start_date = Column(DateTime)
@@ -210,17 +216,22 @@ class Backtest(Base):
 
 
 # Database configuration
-DATABASE_URL = "sqlite:///./backend/database/backtester.db"
+settings = get_settings()
+DATABASE_URL = settings.database_url
 
 def get_engine():
     """Get SQLAlchemy engine"""
-    # Ensure database directory exists
-    db_dir = os.path.dirname(DATABASE_URL.replace("sqlite:///", ""))
-    os.makedirs(db_dir, exist_ok=True)
-    
+    connect_args = {}
+    if DATABASE_URL.startswith("sqlite"):
+        db_path = DATABASE_URL.replace("sqlite:///", "", 1)
+        if db_path:
+            db_dir = os.path.dirname(os.path.abspath(db_path))
+            os.makedirs(db_dir, exist_ok=True)
+        connect_args = {"check_same_thread": False}
+
     engine = create_engine(
         DATABASE_URL,
-        connect_args={"check_same_thread": False}  # Needed for SQLite
+        connect_args=connect_args
     )
     return engine
 
