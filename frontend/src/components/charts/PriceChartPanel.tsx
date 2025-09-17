@@ -45,6 +45,7 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
   });
   const [chartParams, setChartParams] = useState<ChartQueryParams | null>(null);
   const [navigation, setNavigation] = useState<ChartNavigation | null>(null);
+  const currentRangeEnd = currentRange.end;
 
   const { data: firstCandleData } = useQuery({
     queryKey: ['chart-first-day', backtestId, defaultTz],
@@ -223,7 +224,7 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
         maxCandles: defaultMaxCandles,
       });
     }
-  }, [singleDay, chartParams, startDateInput, endDateInput, defaultTz, defaultMaxCandles]);
+  }, [singleDay, chartParams, startDateInput, endDateInput, defaultTz, defaultMaxCandles, currentRangeEnd]);
 
   return (
     <Card className="p-6">

@@ -22,6 +22,10 @@ const fetchTrades = async (
     params.append('filter_profitable', filterProfitable.toString());
   }
 
+  if (search && search.trim().length > 0) {
+    params.append('search', search.trim());
+  }
+
   const response = await fetch(
     `http://localhost:8000/api/v1/analytics/${backtestId}/trades?${params}`
   );

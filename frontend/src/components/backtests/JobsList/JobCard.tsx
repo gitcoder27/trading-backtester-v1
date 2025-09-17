@@ -2,7 +2,7 @@ import React from 'react';
 import Card from '../../ui/Card';
 import Badge from '../../ui/Badge';
 import JobActions from './JobActions';
-import type { JobCardProps, JobStatus } from './types';
+import type { JobCardProps } from './types';
 import { getStatusIcon, getStatusColor, getStatusVariant } from '../../../utils/status';
 
 const JobCard: React.FC<JobCardProps> = ({

@@ -11,17 +11,17 @@ const vi = {
   mocked: <T>(item: T): jest.MockedFunction<any> => item as any,
 };
 
-const describe = global.describe || ((name: string, fn: () => void) => fn());
-const it = global.it || ((name: string, fn: () => void) => fn());
+const describe = global.describe || ((_name: string, fn: () => void) => fn());
+const it = global.it || ((_name: string, fn: () => void) => fn());
 const expect = global.expect || ((value: any) => ({
   toBe: (expected: any) => value === expected,
   toEqual: (expected: any) => JSON.stringify(value) === JSON.stringify(expected),
   toBeInTheDocument: () => true,
-  toHaveClass: (className: string) => true,
-  toHaveBeenCalledWith: (...args: any[]) => true,
-  toHaveBeenCalledTimes: (times: number) => true,
+  toHaveClass: (_className: string) => true,
+  toHaveBeenCalledWith: (..._args: any[]) => true,
+  toHaveBeenCalledTimes: (_times: number) => true,
   rejects: {
-    toThrow: (message: string) => Promise.resolve(),
+    toThrow: (_message: string) => Promise.resolve(),
   }
 }));
 

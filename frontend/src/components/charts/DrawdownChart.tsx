@@ -59,7 +59,11 @@ const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, backtestId, classNa
       try {
         const fig = JSON.parse(chartStr);
         return { traces: fig.data || [], layout: fig.layout || {} };
-      } catch {}
+      } catch (error) {
+        if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+          console.warn('DrawdownChart: failed to parse chart payload', error);
+        }
+      }
     }
     return { traces: [], layout: {} };
   }, [data, apiData]);

@@ -47,7 +47,7 @@ const Backtests: React.FC = () => {
       // Clear the navigation state to prevent reopening modal on refresh
       window.history.replaceState({}, '', location.pathname);
     }
-  }, []); // Empty dependency array - only run once on mount
+  }, [location.pathname, location.state]);
 
   // Stats are computed via useBacktestStats
 

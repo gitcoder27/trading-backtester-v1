@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { JobService } from '../../../services/backtest';
 import { showToast } from '../../ui/Toast';
 import type { Job, JobStatus } from './types';
@@ -14,7 +14,7 @@ export const useJobManagement = (maxJobs?: number) => {
   const [totalPages, setTotalPages] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadJobs = async () => {
+  const loadJobs = useCallback(async () => {
     try {
       setLoading(true);
       const params = {
@@ -38,7 +38,7 @@ export const useJobManagement = (maxJobs?: number) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, maxJobs, sortBy, sortOrder, searchTerm, statusFilter]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -51,7 +51,7 @@ export const useJobManagement = (maxJobs?: number) => {
     setSearchTerm(value);
     if (value.length === 0 || value.length >= 3) {
       setPage(1);
-      loadJobs();
+      void loadJobs();
     }
   };
 
@@ -69,7 +69,7 @@ export const useJobManagement = (maxJobs?: number) => {
   const handleCancelJob = async (jobId: string) => {
     try {
       await JobService.cancelJob(jobId);
-      setJobs(jobs.map(job => 
+      setJobs(prev => prev.map(job => 
         job.id === jobId ? { ...job, status: 'cancelled' } : job
       ));
       showToast.warning('Job cancelled');
@@ -103,7 +103,7 @@ export const useJobManagement = (maxJobs?: number) => {
     
     try {
       await JobService.deleteJob(jobId);
-      setJobs(jobs.filter(job => job.id !== jobId));
+      setJobs(prev => prev.filter(job => job.id !== jobId));
       showToast.success('Job deleted successfully');
     } catch (error) {
       console.error('Failed to delete job:', error);
@@ -123,7 +123,7 @@ export const useJobManagement = (maxJobs?: number) => {
 
   useEffect(() => {
     loadJobs();
-  }, [page, sortBy, sortOrder, statusFilter]);
+  }, [loadJobs]);
 
   return {
     jobs: filteredJobs,

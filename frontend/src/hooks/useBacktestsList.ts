@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { BacktestService } from '../services/backtest';
-import { formatDuration, formatTradingSessionsDuration } from '../utils/formatters';
+import { formatTradingSessionsDuration } from '../utils/formatters';
 import type { BacktestDisplay } from '../types/backtest';
 
 const FALLBACK_DATASET_LABEL = 'NIFTY Aug 2025 (1min)';
@@ -104,7 +104,10 @@ export function useBacktestsList() {
           if ((res as any).results) rest.push(...(res as any).results);
           else if ((res as any).data) rest.push(...(res as any).data);
           else if ((res as any).items) rest.push(...(res as any).items);
-        } catch (e) {
+        } catch (error) {
+          if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+            console.warn('useBacktestsList: pagination fetch failed', error);
+          }
           // Stop pagination on first error
           break;
         }
@@ -118,8 +121,8 @@ export function useBacktestsList() {
         return b.createdAtTs - a.createdAtTs;
       });
       setBacktests(sorted);
-    } catch (e: any) {
-      setError(e instanceof Error ? e : new Error('Failed to load backtests'));
+    } catch (error: any) {
+      setError(error instanceof Error ? error : new Error('Failed to load backtests'));
       setBacktests([]);
     } finally {
       setLoading(false);

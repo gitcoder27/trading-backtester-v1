@@ -29,19 +29,20 @@ const FileUpload: React.FC<FileUploadProps> = ({
   className,
   children,
 }) => {
+  const isDevEnv = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
   const [isDragOver, setIsDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<UploadError | null>(null);
   const [isValidating, setIsValidating] = useState(false);
 
-  const formatFileSize = (bytes: number): string => {
+  const formatFileSize = useCallback((bytes: number): string => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     if (bytes === 0) return '0 Bytes';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
-  };
+  }, []);
 
-  const validateFile = async (file: File): Promise<UploadError | null> => {
+  const validateFile = useCallback(async (file: File): Promise<UploadError | null> => {
     // Check file size
     if (file.size > maxSize) {
       return {
@@ -92,6 +93,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
             resolve(null);
           } catch (error) {
+            if (isDevEnv) {
+              console.warn('FileUpload: failed CSV validation', error);
+            }
             resolve({
               type: 'validation',
               message: 'Invalid CSV format'
@@ -103,9 +107,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
     }
 
     return null;
-  };
+  }, [acceptedTypes, formatFileSize, maxSize]);
 
-  const handleFile = async (file: File) => {
+  const handleFile = useCallback(async (file: File) => {
     setError(null);
     setIsValidating(true);
 
@@ -119,7 +123,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
       setSelectedFile(file);
       onFileSelect(file);
-    } catch (err) {
+    } catch (error) {
+      if (isDevEnv) {
+        console.warn('FileUpload: validation threw unexpectedly', error);
+      }
       setError({
         type: 'validation',
         message: 'Failed to validate file'
@@ -127,7 +134,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
     } finally {
       setIsValidating(false);
     }
-  };
+  }, [onFileSelect, validateFile]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -154,7 +161,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
     if (files.length > 0) {
       handleFile(files[0]);
     }
-  }, [disabled]);
+  }, [disabled, handleFile]);
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;

@@ -1,10 +1,9 @@
 import React from 'react';
-import { AlertCircle, Download } from 'lucide-react';
-import Button from '../ui/Button';
+import { AlertCircle } from 'lucide-react';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
 import { JobService } from '../../services/backtest';
-import type { Job, JobStatus } from '../../types';
+import type { Job } from '../../types';
 import { showToast } from '../ui/Toast';
 import { getStatusIcon, getStatusColor, getStatusVariant } from '../../utils/status';
 import { formatDuration } from '../../utils/formatters';

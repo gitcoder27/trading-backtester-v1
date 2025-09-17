@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import type { ISeriesApi, ISeriesMarkersPluginApi, SeriesMarker, UTCTimestamp } from 'lightweight-charts';
 import { createSeriesMarkers } from 'lightweight-charts';
 
+const isDevEnv = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
+
 export function useSeriesMarkers(
   seriesRef: React.RefObject<ISeriesApi<'Candlestick'> | null>,
   markers: SeriesMarker<UTCTimestamp>[],
@@ -15,7 +17,9 @@ export function useSeriesMarkers(
         try {
           markersPluginRef.current.setMarkers([]);
           markersPluginRef.current.detach();
-        } catch {}
+        } catch (error) {
+          if (isDevEnv) console.warn('useSeriesMarkers: failed to detach marker plugin', error);
+        }
         markersPluginRef.current = null;
       }
       return;
@@ -26,7 +30,8 @@ export function useSeriesMarkers(
 
     try {
       markersPluginRef.current = createSeriesMarkers(series, []);
-    } catch {
+    } catch (error) {
+      if (isDevEnv) console.warn('useSeriesMarkers: failed to create marker plugin', error);
       markersPluginRef.current = null;
     }
 
@@ -34,7 +39,9 @@ export function useSeriesMarkers(
       if (markersPluginRef.current) {
         try {
           markersPluginRef.current.detach();
-        } catch {}
+        } catch (error) {
+          if (isDevEnv) console.warn('useSeriesMarkers: failed to detach marker plugin on cleanup', error);
+        }
         markersPluginRef.current = null;
       }
     };
@@ -46,6 +53,8 @@ export function useSeriesMarkers(
     if (!plugin) return;
     try {
       plugin.setMarkers(markers || []);
-    } catch {}
+    } catch (error) {
+      if (isDevEnv) console.warn('useSeriesMarkers: failed to set markers', error);
+    }
   }, [enabled, markers]);
 }
