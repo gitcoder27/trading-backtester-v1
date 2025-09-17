@@ -34,6 +34,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   dataBadge,
   timeZone
 }) => {
+  const isDevEnv = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const { chartRef, candleSeriesRef, ready } = useTradingViewChart(chartContainerRef, { height, theme, timeZone, isFullscreen, enabled: !loading, withCandles: true });
@@ -65,7 +66,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   // Separate pane for oscillators
   const paneContainerRef = useRef<HTMLDivElement>(null);
   const paneHeight = separateIndicators.length > 0 ? Math.max(160, Math.round(height * 0.28)) : 0;
-  const { chartRef: paneChartRef, candleSeriesRef: paneCandleSeriesRef, ready: paneReady } = useTradingViewChart(
+  const { chartRef: paneChartRef, ready: paneReady } = useTradingViewChart(
     paneContainerRef,
     { height: paneHeight, theme, timeZone, isFullscreen, enabled: !loading && separateIndicators.length > 0, withCandles: false }
   );
@@ -97,23 +98,39 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       const lr = top.timeScale().getVisibleLogicalRange();
       if (!lr) return;
       syncing = true;
-      try { bottom.timeScale().setVisibleLogicalRange(lr as any); } finally { syncing = false; }
+      try {
+        bottom.timeScale().setVisibleLogicalRange(lr as any);
+      } finally {
+        syncing = false;
+      }
     };
     const syncTopToBottom = () => {
       if (syncing) return;
       const lr = bottom.timeScale().getVisibleLogicalRange();
       if (!lr) return;
       syncing = true;
-      try { top.timeScale().setVisibleLogicalRange(lr as any); } finally { syncing = false; }
+      try {
+        top.timeScale().setVisibleLogicalRange(lr as any);
+      } finally {
+        syncing = false;
+      }
     };
 
     top.timeScale().subscribeVisibleLogicalRangeChange(syncBottomToTop);
     bottom.timeScale().subscribeVisibleLogicalRangeChange(syncTopToBottom);
     return () => {
-      try { top.timeScale().unsubscribeVisibleLogicalRangeChange(syncBottomToTop); } catch {}
-      try { bottom.timeScale().unsubscribeVisibleLogicalRangeChange(syncTopToBottom); } catch {}
+      try {
+        top.timeScale().unsubscribeVisibleLogicalRangeChange(syncBottomToTop);
+      } catch (error) {
+        if (isDevEnv) console.warn('TradingViewChart: failed to unsubscribe top range sync', error);
+      }
+      try {
+        bottom.timeScale().unsubscribeVisibleLogicalRangeChange(syncTopToBottom);
+      } catch (error) {
+        if (isDevEnv) console.warn('TradingViewChart: failed to unsubscribe bottom range sync', error);
+      }
     };
-  }, [ready, paneReady]);
+  }, [ready, paneReady, chartRef, paneChartRef]);
 
   // Re-apply size/options when fullscreen toggles
   useEffect(() => {
@@ -123,7 +140,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
       width: chartContainerRef.current.clientWidth,
       height: isFullscreen ? window.innerHeight - 100 : height,
     });
-  }, [isFullscreen, height, theme, timeZone]);
+  }, [isFullscreen, height, theme, timeZone, chartRef]);
 
   // Update candlestick data
   useEffect(() => {
@@ -148,7 +165,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
     } catch (error) {
       console.error('Error setting candlestick data:', error);
     }
-  }, [candleData, autoFit, ready]);
+  }, [candleData, autoFit, ready, candleSeriesRef, chartRef]);
 
   // Indicators handled in useIndicators; markers handled in useSeriesMarkers
 

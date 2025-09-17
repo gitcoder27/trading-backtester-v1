@@ -53,7 +53,11 @@ const ReturnsChart: React.FC<ReturnsChartProps> = ({ data, backtestId, className
       try {
         const fig = JSON.parse(chartStr);
         return { traces: fig.data || [], layout: fig.layout || {} };
-      } catch {}
+      } catch (error) {
+        if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+          console.warn('ReturnsChart: failed to parse chart payload', error);
+        }
+      }
     }
     return { traces: [], layout: {} };
   }, [data, apiData]);

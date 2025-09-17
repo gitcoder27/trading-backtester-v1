@@ -1,4 +1,4 @@
-﻿import React, { Suspense, useMemo, useState } from 'react';
+﻿import React, { Suspense, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, Activity, Table, Calendar, TrendingUp } from 'lucide-react';

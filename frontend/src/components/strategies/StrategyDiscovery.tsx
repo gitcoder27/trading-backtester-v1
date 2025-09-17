@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Search, RefreshCw, CheckCircle, AlertTriangle, Plus, FileText } from 'lucide-react';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
@@ -24,7 +24,7 @@ const StrategyDiscovery: React.FC<StrategyDiscoveryProps> = ({ onStrategiesRegis
     strategy.module_path.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const discoverStrategies = async () => {
+  const discoverStrategies = useCallback(async () => {
     setIsDiscovering(true);
     try {
       const strategies = await StrategyService.discoverStrategies();
@@ -37,7 +37,7 @@ const StrategyDiscovery: React.FC<StrategyDiscoveryProps> = ({ onStrategiesRegis
     } finally {
       setIsDiscovering(false);
     }
-  };
+  }, []);
 
   const registerSelectedStrategies = async () => {
     if (selectedStrategies.length === 0) {
@@ -93,11 +93,13 @@ const StrategyDiscovery: React.FC<StrategyDiscoveryProps> = ({ onStrategiesRegis
     setSelectedStrategies([]);
   };
 
+  const hasDiscovered = (discoveredStrategies || []).length > 0;
+
   useEffect(() => {
-    if (isOpen && (discoveredStrategies || []).length === 0) {
+    if (isOpen && !hasDiscovered) {
       discoverStrategies();
     }
-  }, [isOpen]);
+  }, [discoverStrategies, hasDiscovered, isOpen]);
 
   return (
     <>

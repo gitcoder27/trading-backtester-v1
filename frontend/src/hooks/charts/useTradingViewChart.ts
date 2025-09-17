@@ -48,7 +48,7 @@ export function useTradingViewChart(
       candleSeriesRef.current = null;
       setReady(false);
     };
-  }, [containerRef, params.height, params.theme, params.timeZone, params.isFullscreen, params.enabled]);
+  }, [containerRef, params.height, params.theme, params.timeZone, params.isFullscreen, params.enabled, params.withCandles]);
 
   return { chartRef, candleSeriesRef, ready } as const;
 }

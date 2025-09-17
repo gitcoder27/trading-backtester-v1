@@ -39,7 +39,7 @@ const StrategyParameterForm: React.FC<StrategyParameterFormProps> = ({
     const merged = { ...defaultParams, ...initialValues };
     setParameters(merged);
     onParametersChange(merged);
-  }, [schema, initialValues]);
+  }, [schema, initialValues, onParametersChange]);
 
   const validateField = (param: ParameterSchema, value: any): string | null => {
     if (param.required && (value === undefined || value === null || value === '')) {

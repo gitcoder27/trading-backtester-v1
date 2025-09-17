@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, Play, ToggleLeft, ToggleRight, CheckCircle, AlertCircle, TrendingUp, Calendar, Settings } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
@@ -28,11 +28,7 @@ const StrategyDetailView: React.FC<StrategyDetailViewProps> = ({
   const [currentParameters, setCurrentParameters] = useState<Record<string, any>>({});
   const [showBacktestModal, setShowBacktestModal] = useState(false);
 
-  useEffect(() => {
-    loadStrategyDetails();
-  }, [strategyId]);
-
-  const loadStrategyDetails = async () => {
+  const loadStrategyDetails = useCallback(async () => {
     setIsLoading(true);
     try {
       const [strategyData, schema] = await Promise.all([
@@ -57,7 +53,11 @@ const StrategyDetailView: React.FC<StrategyDetailViewProps> = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [strategyId]);
+
+  useEffect(() => {
+    loadStrategyDetails();
+  }, [loadStrategyDetails]);
 
   const handleToggleActive = async () => {
     if (!strategy) return;

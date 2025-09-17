@@ -19,7 +19,16 @@ const Tile: React.FC<{ label: string; value: string; accent?: 'pos' | 'neg' | 'm
 };
 
 const PerformanceRow: React.FC<PerformanceRowProps> = ({ backtestId }) => {
-  if (!backtestId) {
+  const hasBacktest = Boolean(backtestId);
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['dashboard-performance-row', backtestId],
+    queryFn: () => BacktestService.getBacktest(backtestId as string, { minimal: true }),
+    enabled: hasBacktest,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (!hasBacktest) {
     return (
       <Card className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Performance Snapshot</h3>
@@ -27,12 +36,6 @@ const PerformanceRow: React.FC<PerformanceRowProps> = ({ backtestId }) => {
       </Card>
     );
   }
-
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['dashboard-performance-row', backtestId],
-    queryFn: () => BacktestService.getBacktest(backtestId, { minimal: true }),
-    staleTime: 5 * 60 * 1000,
-  });
 
   if (isLoading) {
     return (

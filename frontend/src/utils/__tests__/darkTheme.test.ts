@@ -3,7 +3,8 @@ import theme, { combineClasses, getContrastText, getStatusColors, getPerformance
 
 describe('darkTheme utils', () => {
   it('combines classes', () => {
-    expect(combineClasses('a', false && 'b', 'c')).toBe('a c');
+    const shouldInclude = false;
+    expect(combineClasses('a', shouldInclude ? 'b' : undefined, 'c')).toBe('a c');
   });
 
   it('returns contrast text based on mode', () => {
@@ -30,4 +31,3 @@ describe('darkTheme utils', () => {
     expect(shadows.sm).toBe('shadow-sm');
   });
 });
-
