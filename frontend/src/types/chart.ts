@@ -8,14 +8,14 @@ export interface CandleData {
   close: number;
 }
 
-export interface TradeMarker extends SeriesMarker<UTCTimestamp> {
+export type TradeMarker = SeriesMarker<UTCTimestamp> & {
   time: UTCTimestamp;
   position: 'belowBar' | 'aboveBar';
   color: string;
   shape: 'arrowUp' | 'arrowDown' | 'circle' | 'square';
   text: string;
   size?: number;
-}
+};
 
 export interface IndicatorLine {
   name: string;

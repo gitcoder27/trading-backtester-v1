@@ -23,6 +23,16 @@ export interface PerformanceData {
       downside_deviation: number;
       sortino_ratio: number;
       calmar_ratio: number;
+      avg_win?: number;
+      avg_loss?: number;
+      largest_win?: number;
+      largest_loss?: number;
+      consecutive_wins?: number;
+      consecutive_losses?: number;
+      total_long_trades?: number;
+      total_short_trades?: number;
+      winning_long_trades?: number;
+      winning_short_trades?: number;
     };
     trade_analysis: {
       avg_win: number;

@@ -57,7 +57,7 @@ const StrategySection: React.FC<StrategySectionProps> = ({
         setSchema([]);
         return;
       }
-      const selected = strategies.find(s => s.id.toString() === config.strategy_id);
+      const selected = strategies.find(s => s.id.toString() === String(config.strategy_id));
       if (selected?.parameters_schema && selected.parameters_schema.length > 0) {
         setSchema(normalizeSchema(selected.parameters_schema));
         return;
@@ -100,7 +100,7 @@ const StrategySection: React.FC<StrategySectionProps> = ({
         </select>
         {config.strategy_id && (
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            {strategies.find(s => s.id.toString() === config.strategy_id)?.description || 'No description available'}
+          {strategies.find(s => s.id.toString() === String(config.strategy_id))?.description || 'No description available'}
           </div>
         )}
       </div>
@@ -126,7 +126,7 @@ const StrategySection: React.FC<StrategySectionProps> = ({
         {config.dataset_id && (
           <div className="text-sm text-gray-600 dark:text-gray-400">
             {(() => {
-              const dataset = datasets.find(d => d.id.toString() === config.dataset_id);
+              const dataset = datasets.find(d => d.id.toString() === String(config.dataset_id));
               if (!dataset) return '';
               const dr = (dataset as any).date_range;
               const start = dr?.start || (dataset as any).start_date || '';

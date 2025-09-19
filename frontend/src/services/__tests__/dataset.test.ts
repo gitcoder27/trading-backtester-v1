@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DatasetService } from '../dataset';
 import { apiClient } from '../api';
 import type { Dataset, DatasetPreview, ValidationResult, UploadResponse } from '../../types';
@@ -259,8 +259,8 @@ describe('DatasetService', () => {
       const result = await DatasetService.getDataQuality('invalid-dataset');
 
       expect(result.valid).toBe(false);
-      expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.quality_score).toBeLessThan(50);
+      expect(result.errors?.length ?? 0).toBeGreaterThan(0);
+      expect(result.quality_score ?? 0).toBeLessThan(50);
     });
   });
 

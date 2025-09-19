@@ -1,5 +1,11 @@
 import { apiClient } from './api';
-import type { Strategy, ParameterSchema } from '../types';
+import type {
+  Strategy,
+  ParameterSchema,
+  StrategySource,
+  StrategyCodeSaveResponse,
+  StrategyDeleteResponse,
+} from '../types';
 
 export interface StrategyDiscoveryResult {
   id: string;
@@ -62,21 +68,21 @@ export class StrategyService {
   /**
    * Get strategy details by ID
    */
-  static async getStrategy(id: string): Promise<Strategy> {
+  static async getStrategy(id: string | number): Promise<Strategy> {
     return apiClient.get<Strategy>(`/strategies/${id}`);
   }
 
   /**
    * Get strategy parameter schema
    */
-  static async getStrategySchema(id: string): Promise<ParameterSchema[]> {
+  static async getStrategySchema(id: string | number): Promise<ParameterSchema[]> {
     return apiClient.get<ParameterSchema[]>(`/strategies/${id}/schema`);
   }
 
   /**
    * Validate strategy with parameters
    */
-  static async validateStrategy(id: string, parameters?: Record<string, any>): Promise<StrategyValidationResult> {
+  static async validateStrategy(id: string | number, parameters?: Record<string, any>): Promise<StrategyValidationResult> {
     return apiClient.post<StrategyValidationResult>(`/strategies/${id}/validate`, {
       parameters: parameters || {}
     });
@@ -92,15 +98,15 @@ export class StrategyService {
   /**
    * Update strategy metadata
    */
-  static async updateStrategy(id: string, updates: Partial<Strategy>): Promise<Strategy> {
+  static async updateStrategy(id: string | number, updates: Partial<Strategy>): Promise<Strategy> {
     return apiClient.put<Strategy>(`/strategies/${id}`, updates);
   }
 
   /**
    * Soft delete strategy
    */
-  static async deleteStrategy(id: string): Promise<{ success: boolean }> {
-    return apiClient.delete<{ success: boolean }>(`/strategies/${id}`);
+  static async deleteStrategy(id: string | number): Promise<StrategyDeleteResponse> {
+    return apiClient.delete<StrategyDeleteResponse>(`/strategies/${id}`);
   }
 
   /**
@@ -113,7 +119,73 @@ export class StrategyService {
   /**
    * Toggle strategy active status
    */
-  static async toggleStrategy(id: string, isActive: boolean): Promise<Strategy> {
+  static async toggleStrategy(id: string | number, isActive: boolean): Promise<Strategy> {
     return apiClient.put<Strategy>(`/strategies/${id}`, { is_active: isActive });
+  }
+
+  /**
+   * Retrieve Python source code for a registered strategy
+   */
+  static async getStrategyCode(id: string): Promise<StrategySource> {
+    const response = await apiClient.get<{
+      success: boolean;
+      strategy_id: number;
+      module_path: string;
+      class_name?: string;
+      file_path: string;
+      content: string;
+    }>(`/strategies/${id}/code`);
+
+    return {
+      strategy_id: response.strategy_id,
+      module_path: response.module_path,
+      class_name: response.class_name,
+      file_path: response.file_path,
+      content: response.content
+    };
+  }
+
+  /**
+   * Persist updated strategy source code
+   */
+  static async updateStrategyCode(id: string, content: string): Promise<StrategyCodeSaveResponse> {
+    const response = await apiClient.put<{
+      success: boolean;
+      strategy_id: number;
+      module_path: string;
+      file_path: string;
+      updated: boolean;
+      registration?: StrategyCodeSaveResponse['registration'];
+    }>(`/strategies/${id}/code`, { content });
+
+    return {
+      strategy_id: response.strategy_id,
+      module_path: response.module_path,
+      file_path: response.file_path,
+      updated: response.updated,
+      registration: response.registration
+    };
+  }
+
+  /**
+   * Create a brand new strategy Python file
+   */
+  static async createStrategyFile(payload: { file_name: string; content: string; overwrite?: boolean }): Promise<StrategyCodeSaveResponse> {
+    const response = await apiClient.post<{
+      success: boolean;
+      file_path: string;
+      module_path: string;
+      created: boolean;
+      registration?: StrategyCodeSaveResponse['registration'];
+      registered_ids?: string[];
+    }>(`/strategies/code`, payload);
+
+    return {
+      module_path: response.module_path,
+      file_path: response.file_path,
+      created: response.created,
+      registration: response.registration,
+      registered_ids: response.registered_ids
+    };
   }
 }

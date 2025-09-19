@@ -1,5 +1,5 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import PlotlyChart from './PlotlyChart';
 import { AnalyticsService } from '../../services/analytics';
 
@@ -16,7 +16,7 @@ const TradeAnalysisChart: React.FC<TradeAnalysisChartProps> = ({ data, backtestI
     queryFn: async () => AnalyticsService.getTradesChart(backtestId as string),
     enabled: !!backtestId && !data,
     staleTime: 10 * 60 * 1000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });
 

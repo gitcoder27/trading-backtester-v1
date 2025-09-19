@@ -2,7 +2,7 @@ import React from 'react';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
-import { Target, CheckCircle, Clock, Edit3, Play, AlertTriangle, Plus } from 'lucide-react';
+import { Target, CheckCircle, Clock, Edit3, Play, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import StrategyDiscovery from './StrategyDiscovery';
 import type { Strategy } from '../../types';
 
@@ -10,13 +10,14 @@ interface Props {
   strategies: Strategy[];
   allCount: number;
   onClick: (id: string) => void;
-  onEdit: (id: string) => void;
+  onEdit: (strategy: Strategy) => void;
   onRunBacktest: (id: string) => void;
   onDiscoverClick?: (ids: string[]) => void;
   onCreate?: () => void;
+  onDelete: (strategy: Strategy) => void;
 }
 
-const StrategiesGrid: React.FC<Props> = ({ strategies, allCount, onClick, onEdit, onRunBacktest, onDiscoverClick, onCreate }) => {
+const StrategiesGrid: React.FC<Props> = ({ strategies, allCount, onClick, onEdit, onRunBacktest, onDiscoverClick, onCreate, onDelete }) => {
   if (!strategies || strategies.length === 0) {
     return (
       <Card className="text-center py-12">
@@ -117,7 +118,7 @@ const StrategiesGrid: React.FC<Props> = ({ strategies, allCount, onClick, onEdit
                 icon={Edit3}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onEdit(strategy.id);
+                  onEdit(strategy);
                 }}
                 className="flex-1"
               >
@@ -135,6 +136,18 @@ const StrategiesGrid: React.FC<Props> = ({ strategies, allCount, onClick, onEdit
                 disabled={!strategy.is_active}
               >
                 Run Backtest
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={Trash2}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(strategy);
+                }}
+                className="flex-1"
+              >
+                Delete
               </Button>
             </div>
           </div>

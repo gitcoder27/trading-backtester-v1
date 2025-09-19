@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import type { IChartApi, ISeriesApi } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi, LineWidth } from 'lightweight-charts';
 import { LineSeries } from 'lightweight-charts';
 import type { IndicatorLine } from '../../types/chart';
 
@@ -46,7 +46,7 @@ export function useIndicators(
       try {
         const series = chart.addSeries(LineSeries, {
           color: ind.color,
-          lineWidth: ind.lineWidth ?? 2,
+          lineWidth: (ind.lineWidth ?? 2) as LineWidth,
           priceLineVisible: false,
           lastValueVisible: true,
           crosshairMarkerVisible: true,

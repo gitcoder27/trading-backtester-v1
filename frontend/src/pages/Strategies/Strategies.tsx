@@ -9,7 +9,9 @@ import StrategyDetailView from '../../components/strategies/StrategyDetailView';
 import StrategyDiscovery from '../../components/strategies/StrategyDiscovery';
 import EnhancedBacktestModal from '../../components/modals/BacktestModal';
 import { JobService } from '../../services/backtest';
-import type { BacktestConfig } from '../../types';
+import { StrategyService } from '../../services/strategyService';
+import StrategyEditorModal from '../../components/strategies/StrategyEditorModal';
+import type { BacktestConfig, Strategy as StrategyType } from '../../types';
 import { useStrategiesData } from '../../hooks/useStrategiesData';
 import StrategiesToolbar from '../../components/strategies/StrategiesToolbar';
 import StrategiesGrid from '../../components/strategies/StrategiesGrid';
@@ -24,7 +26,9 @@ const Strategies: React.FC = () => {
   const { strategies, stats: strategyStats, loading: isLoading, refetch } = useStrategiesData();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<FilterType>('all');
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editorState, setEditorState] = useState<{ mode: 'edit' | 'create'; strategy?: StrategyType | null } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StrategyType | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   // Backtest modal state (open from Strategies without navigating)
   const [showBacktestModal, setShowBacktestModal] = useState(false);
   const [preselectedStrategyId, setPreselectedStrategyId] = useState<string | number | undefined>(undefined);
@@ -61,12 +65,50 @@ const Strategies: React.FC = () => {
   };
 
   const handleCreateStrategy = () => {
-    setShowCreateModal(false);
-    showToast.info('Strategy creation feature coming soon!');
+    setEditorState({ mode: 'create' });
   };
 
-  const handleEditStrategy = (id: string) => {
-    showToast.info(`Strategy editing feature coming soon for strategy ${id}`);
+  const handleEditStrategy = (strategy: StrategyType) => {
+    setEditorState({ mode: 'edit', strategy });
+  };
+
+  const handleRequestDelete = (strategy: StrategyType) => {
+    setDeleteTarget(strategy);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      setIsDeleting(true);
+      const result = await StrategyService.deleteStrategy(deleteTarget.id);
+
+      const archivePath = result.archive_path;
+      const baseMessage = result.file_removed
+        ? archivePath
+          ? `Strategy deleted. Archived at ${archivePath}`
+          : 'Strategy deleted and archived'
+        : 'Strategy record deleted';
+      showToast.success(baseMessage);
+
+      if (result.shared_module) {
+        showToast.warning('Strategy module is shared; source file left in place.');
+      } else if (!result.file_removed) {
+        showToast.warning('Strategy file missing; only database entry removed.');
+      }
+
+      if (selectedStrategyId === deleteTarget.id) {
+        handleBackToList();
+      }
+      setEditorState(null);
+      setDeleteTarget(null);
+      refetch();
+    } catch (error) {
+      console.error('Failed to delete strategy:', error);
+      const message = error instanceof Error ? error.message : 'Failed to delete strategy';
+      showToast.error(message);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleRunBacktest = (strategyId: string, parameters?: Record<string, any>) => {
@@ -133,7 +175,7 @@ const Strategies: React.FC = () => {
           <StrategyDiscovery onStrategiesRegistered={handleStrategiesRegistered} />
           <Button
             icon={Plus}
-            onClick={() => setShowCreateModal(true)}
+            onClick={handleCreateStrategy}
             className="shadow-sm"
           >
             Create New Strategy
@@ -231,33 +273,53 @@ const Strategies: React.FC = () => {
             onEdit={handleEditStrategy}
             onRunBacktest={handleRunBacktest}
             onDiscoverClick={handleStrategiesRegistered}
-            onCreate={() => setShowCreateModal(true)}
+            onCreate={handleCreateStrategy}
+            onDelete={handleRequestDelete}
           />
         </>
       )}
 
-      {/* Create Strategy Modal */}
+      <StrategyEditorModal
+        isOpen={!!editorState}
+        mode={editorState?.mode ?? 'create'}
+        strategy={editorState?.strategy ?? undefined}
+        onClose={() => setEditorState(null)}
+        onSaved={() => {
+          setEditorState(null);
+          refetch();
+        }}
+      />
+
       <Modal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        title="Create New Strategy"
-        size="md"
+        isOpen={!!deleteTarget}
+        onClose={() => {
+          if (!isDeleting) {
+            setDeleteTarget(null);
+          }
+        }}
+        title="Delete Strategy"
+        size="sm"
       >
         <div className="space-y-4">
-          <p className="text-gray-600 dark:text-gray-400">
-            This will open the strategy editor where you can create a new trading strategy.
-            Feature coming soon!
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Are you sure you want to delete{' '}
+            <span className="font-semibold text-gray-900 dark:text-gray-100">{deleteTarget?.name || 'this strategy'}</span>?
+            The strategy file will be moved to the archive and the database entry removed.
           </p>
-          <div className="flex justify-end space-x-3">
-            <Button variant="outline" onClick={() => setShowCreateModal(false)}>
+          <p className="text-xs text-gray-500 dark:text-gray-500">
+            Existing backtest results keep their historical data and references to the deleted strategy name.
+          </p>
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
               Cancel
             </Button>
-            <Button onClick={handleCreateStrategy}>
-              Continue to Editor
+            <Button variant="danger" onClick={handleConfirmDelete} loading={isDeleting}>
+              Delete Strategy
             </Button>
           </div>
         </div>
       </Modal>
+
       {/* Configure Backtest Modal (local) */}
       <EnhancedBacktestModal
         isOpen={showBacktestModal}

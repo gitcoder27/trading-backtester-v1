@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { CandlestickData, SeriesMarker, UTCTimestamp } from 'lightweight-charts';
+import type { CandlestickData, SeriesMarker, UTCTimestamp, Time } from 'lightweight-charts';
 import { useTradingViewChart } from '../../hooks/charts/useTradingViewChart';
 import { useSeriesMarkers } from '../../hooks/charts/useSeriesMarkers';
 import { useIndicators } from '../../hooks/charts/useIndicators';
@@ -59,7 +59,7 @@ const TradingViewChart: React.FC<TradingViewChartProps> = ({
   const { visibleIndicators: visibleOverlay, toggleIndicator: toggleOverlay } = useIndicators(chartRef, overlayIndicators, ready);
   useSeriesMarkers(
     candleSeriesRef,
-    (tradeMarkers || []).map(m => ({ ...m, size: (m as any).size || 1 })) as SeriesMarker<UTCTimestamp>[],
+    (tradeMarkers || []).map(m => ({ ...m, size: (m as any).size || 1 })) as SeriesMarker<Time>[],
     ready
   );
 

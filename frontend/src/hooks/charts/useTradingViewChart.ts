@@ -4,7 +4,7 @@ import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import { getChartOptions, getCandlestickOptions } from '../../utils/chartOptions';
 
 export function useTradingViewChart(
-  containerRef: React.RefObject<HTMLDivElement>,
+  containerRef: React.RefObject<HTMLDivElement | null>,
   params: { height: number; theme: 'light' | 'dark'; timeZone?: string; isFullscreen?: boolean; enabled?: boolean; withCandles?: boolean }
 ) {
   const chartRef = useRef<IChartApi | null>(null);

@@ -1,15 +1,15 @@
 import { useEffect, useRef } from 'react';
-import type { ISeriesApi, ISeriesMarkersPluginApi, SeriesMarker, UTCTimestamp } from 'lightweight-charts';
+import type { ISeriesApi, ISeriesMarkersPluginApi, SeriesMarker, Time } from 'lightweight-charts';
 import { createSeriesMarkers } from 'lightweight-charts';
 
 const isDevEnv = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 
 export function useSeriesMarkers(
   seriesRef: React.RefObject<ISeriesApi<'Candlestick'> | null>,
-  markers: SeriesMarker<UTCTimestamp>[],
+  markers: SeriesMarker<Time>[],
   enabled: boolean = true
 ) {
-  const markersPluginRef = useRef<ISeriesMarkersPluginApi<UTCTimestamp> | null>(null);
+  const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
 
   useEffect(() => {
     if (!enabled) {
