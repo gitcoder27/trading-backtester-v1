@@ -162,6 +162,17 @@ class JobRunner:
         return True
 
     def delete_job(self, job_id: str) -> bool:
+        """
+        Delete a job and its local runtime state, and remove it from persistent storage.
+        
+        Removes any in-memory cancellation event (and sets it to notify a running task) and clears the active job entry under a lock, then delegates actual deletion to the store.
+        
+        Parameters:
+            job_id (str): Identifier of the job to delete.
+        
+        Returns:
+            bool: True if the store reported the job was deleted, False otherwise.
+        """
         with self._lock:
             event = self._cancellations.pop(job_id, None)
             if event:
@@ -170,6 +181,15 @@ class JobRunner:
         return self._store.delete_job(job_id)
 
     def job_stats(self) -> Dict[str, Any]:
+        """
+        Return aggregated statistics about jobs tracked by the store.
+        
+        Delegates to the configured job store and returns its job-level metrics and counts
+        (e.g., totals by status, counts by type, and other aggregate statistics).
+        
+        Returns:
+            Dict[str, Any]: A mapping of statistic names to their values as provided by the store.
+        """
         return self._store.job_stats()
 
     def list_jobs(
@@ -180,6 +200,20 @@ class JobRunner:
         status: Optional[JobStatus | str] = None,
         offset: int = 0,
     ) -> list[Dict[str, Any]]:
+        """
+        Return a paginated list of jobs filtered by type and/or status.
+        
+        job_type and status may be passed as their enum values or as strings; they will be normalized to the internal enums before querying the store. Results are returned in a list of job dictionaries from the underlying store and respect the provided limit and offset for pagination.
+        
+        Parameters:
+            limit (int): Maximum number of jobs to return (default 50).
+            job_type (JobType|str|None): Job type filter (enum or string). If None, no type filtering is applied.
+            status (JobStatus|str|None): Job status filter (enum or string). If None, no status filtering is applied.
+            offset (int): Number of jobs to skip for pagination (default 0).
+        
+        Returns:
+            list[Dict[str, Any]]: List of job records matching the filters.
+        """
         normalized_type = (
             self._normalize_job_type(job_type) if job_type is not None else None
         )

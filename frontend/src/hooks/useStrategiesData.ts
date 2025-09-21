@@ -20,6 +20,17 @@ const EMPTY_STATS: StrategyStats = {
   avg_performance: 0,
 };
 
+/**
+ * Loads library strategies and aggregated strategy statistics, and exposes them with a combined loading state and a refetch function.
+ *
+ * Returns the fetched strategies (defaults to an empty array) and stats (defaults to EMPTY_STATS). The `loading` flag is true when either the strategies or stats query is loading or fetching. `refetch` concurrently re-runs both queries.
+ *
+ * @returns An object containing:
+ * - `strategies`: the array of `Strategy` items (defaults to `[]`)
+ * - `stats`: the `StrategyStats` summary (defaults to `EMPTY_STATS`)
+ * - `loading`: boolean set to `true` if either query is loading/fetching
+ * - `refetch`: a function that returns a `Promise<void>` and concurrently refetches both queries
+ */
 export function useStrategiesData() {
   const {
     data: strategies,

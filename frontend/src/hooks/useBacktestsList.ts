@@ -8,6 +8,16 @@ const FALLBACK_DATASET_LABEL = 'NIFTY Aug 2025 (1min)';
 const PAGE_SIZE = 100;
 const QUERY_KEY = ['backtests', { pageSize: PAGE_SIZE, compact: true }];
 
+/**
+ * Extracts a numeric identifier from a job ID string.
+ *
+ * Attempts to parse `jobId` as a number; if that fails, finds the last contiguous
+ * sequence of digits in the string and returns it as a number. If `jobId` is
+ * missing or no numeric sequence can be parsed, returns `-Infinity`.
+ *
+ * @param jobId - A job identifier that may be a plain number or contain numeric segments.
+ * @returns The numeric identifier parsed from `jobId`, or `-Infinity` when none can be determined.
+ */
 function extractJobIdNumber(jobId?: string): number {
   if (!jobId) return -Infinity;
   const asNum = Number(jobId);
@@ -89,6 +99,18 @@ const mapToDisplay = (bt: any): BacktestDisplay => {
   };
 };
 
+/**
+ * Loads and returns the list of backtests with React Query, exposing utilities to refetch and remove items locally.
+ *
+ * Fetches backtests (paginated) from BacktestService, normalizes them into BacktestDisplay objects, and returns a sorted list.
+ *
+ * The returned object contains:
+ * - `backtests`: the current array of BacktestDisplay items (never undefined).
+ * - `loading`: boolean indicating an active fetch (initial load or background refetch).
+ * - `error`: an Error instance if the query failed, otherwise `null`.
+ * - `refetch`: the React Query `refetch` function to manually reload data.
+ * - `removeBacktestLocally`: a function `(id: string) => void` that removes a backtest from the local cache by id without contacting the server.
+ */
 export function useBacktestsList() {
   const queryClient = useQueryClient();
 
