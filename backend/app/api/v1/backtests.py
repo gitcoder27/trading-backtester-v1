@@ -286,7 +286,28 @@ async def list_backtests(
     compact: bool = Query(False, description="If true, return minimal rows and skip heavy JSON parsing")
 ):
     """
-    List all stored backtest results from the database
+    List backtests with pagination.
+    
+    Returns a paginated list of backtest summaries. When `compact` is True the endpoint performs a lightweight query that extracts a small set of common metrics directly in SQL (avoiding loading full JSON result blobs) and returns minimal per-backtest fields (id, strategy_name, strategy_params, dataset info, timestamps, status, and a metrics dict). When `compact` is False the endpoint loads full Backtest records and attempts to parse the stored `results` JSON to populate a richer `metrics` dictionary and frontend-compatible aliases (for example `total_return_percent` and `max_drawdown_percent`).
+    
+    Parameters:
+        page (int): Page number, 1-based.
+        size (int): Number of items per page.
+        compact (bool): If true, return minimal rows and skip heavy JSON parsing.
+    
+    Returns:
+        dict: {
+            "total": int,        # total number of backtests available
+            "page": int,         # current page number
+            "size": int,         # page size
+            "results": list      # list of backtest summaries; each item contains keys such as
+                                #   id, job_id (when available), strategy_name, strategy_params,
+                                #   dataset_id, dataset_name (compact only), status,
+                                #   created_at (ISO string), completed_at (ISO string), metrics (dict)
+        }
+    
+    Raises:
+        HTTPException: with status_code=500 if an unexpected error occurs while retrieving or formatting results.
     """
     SessionLocal = get_session_factory()
     db = SessionLocal()
@@ -340,6 +361,12 @@ async def list_backtests(
             int_metric_labels = {'total_trades', 'trading_sessions_days', 'trading_days', 'total_trading_days'}
 
             def _coerce_float(value: Any) -> Optional[float]:
+                """
+                Coerce a value into a float when reasonably possible.
+                
+                Accepts ints, floats, and numeric strings and returns their float equivalent.
+                Returns None for None, non-numeric strings, or unsupported types (no exceptions raised).
+                """
                 if value is None:
                     return None
                 if isinstance(value, (int, float)):
@@ -352,6 +379,19 @@ async def list_backtests(
                 return None
 
             def _coerce_int(value: Any) -> Optional[int]:
+                """
+                Coerce a value to an integer when possible, returning None otherwise.
+                
+                Accepts ints, floats, numeric strings, and None. Behavior:
+                - None -> None
+                - int -> returned unchanged
+                - float -> truncated via int()
+                - str -> parsed as float then converted to int (e.g., "3.9" -> 3); non-numeric strings return None
+                - any other types -> None
+                
+                Returns:
+                    Optional[int]: The coerced integer or None if conversion is not possible.
+                """
                 if value is None:
                     return None
                 if isinstance(value, int):

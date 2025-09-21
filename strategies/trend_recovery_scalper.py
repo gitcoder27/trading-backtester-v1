@@ -41,6 +41,17 @@ class StrategyParams:
 
     @classmethod
     def from_dict(cls, raw: Dict[str, Any] | None) -> "StrategyParams":
+        """
+        Create a StrategyParams instance from a mapping of values, ignoring unknown keys.
+        
+        If `raw` is None or empty, returns an instance populated with default values. Only keys that match the dataclass fields are used; extra keys in `raw` are ignored.
+        
+        Parameters:
+            raw (Dict[str, Any] | None): Mapping of parameter names to values.
+        
+        Returns:
+            StrategyParams: A new instance initialized from the filtered mapping or defaults.
+        """
         if not raw:
             return cls()
         filtered = {field: raw[field] for field in cls.__dataclass_fields__ if field in raw}
@@ -49,16 +60,49 @@ class StrategyParams:
 
 class TrendRecoveryScalperStrategy(StrategyBase):
     def __init__(self, params: Dict[str, Any] | None = None):
+        """
+        Initialize the TrendRecoveryScalperStrategy.
+        
+        Creates the base StrategyBase with the provided configuration and constructs a StrategyParams instance from the given params dictionary. If `params` is None or missing fields, defaults from StrategyParams are used.
+         
+        Parameters:
+            params (dict | None): Optional configuration mapping for strategy parameters; keys correspond to StrategyParams fields. If omitted or incomplete, defaults are applied.
+        """
         super().__init__(params)
         self.params = StrategyParams.from_dict(params)
 
     # ---------------------------------------------------------------
     @staticmethod
     def _ema(series: pd.Series, period: int) -> pd.Series:
+        """
+        Compute the exponential moving average (EMA) of a pandas Series.
+        
+        Parameters:
+            series (pd.Series): Time-ordered numeric series (e.g., prices).
+            period (int): Lookback period used for the EMA (span).
+        
+        Returns:
+            pd.Series: EMA values aligned with the input series index; initial values use the EMA's internal initialization behavior.
+        """
         return series.ewm(span=period, adjust=False).mean()
 
     @staticmethod
     def _rsi(series: pd.Series, period: int) -> pd.Series:
+        """
+        Compute the Relative Strength Index (RSI) for a price series using an EMA-smoothed average of gains and losses.
+        
+        This implements the common RSI formula:
+          - delta = difference between consecutive values
+          - gains/losses separated and smoothed with an exponential moving average (alpha = 1/period)
+          - RSI = 100 - 100 / (1 + RS), where RS = avg_gain / avg_loss
+        
+        Parameters:
+            series (pd.Series): Input price or value series; NaNs in the input will propagate.
+            period (int): Lookback period for the EMA smoothing (typical value: 14).
+        
+        Returns:
+            pd.Series: RSI values (0-100) aligned with the input series index. A tiny epsilon is added to the denominator to avoid division-by-zero.
+        """
         delta = series.diff()
         gains = delta.clip(lower=0)
         losses = -delta.clip(upper=0)
@@ -69,6 +113,26 @@ class TrendRecoveryScalperStrategy(StrategyBase):
 
     # ---------------------------------------------------------------
     def generate_signals(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Generate entry signals (long=1, short=-1, flat=0) for the Trend Recovery Scalper.
+        
+        Processes the provided minute-resolution price DataFrame and appends indicator columns and a 'signal' column.
+        Signals are produced only during the configured session window and subject to the per-day trade limit.
+        Trend detection uses medium and slow EMAs and a slope lookback; pullback/pullup ranges against the fast EMA plus RSI thresholds determine readiness and trigger entries:
+        - Long: uptrend, a valid pullback, RSI falls to `long_reset` (sets readiness), then RSI rises to `long_entry` while price > ema_fast and price > open → signal = 1.
+        - Short: downtrend, a valid pullup, RSI rises to `short_reset` (sets readiness), then RSI falls to `short_entry` while price < ema_fast and price < open → signal = -1.
+        
+        Expected input:
+        - data: pd.DataFrame with OHLC columns ('open', 'high', 'low', 'close') and either a 'timestamp' column parseable by pandas or a DatetimeIndex.
+        
+        Output:
+        - DataFrame copy with added columns: 'timestamp', 'ema_fast', 'ema_med', 'ema_slow', 'ema_med_slope', 'rsi', and 'signal' (0/1/-1).
+        
+        Notes:
+        - Rows outside session_start/session_end are ignored.
+        - NaN indicator rows are skipped.
+        - Per-day trade counters reset at day boundaries; readiness flags persist until consumed or reset.
+        """
         df = data.copy()
         df['timestamp'] = pd.to_datetime(df['timestamp']) if 'timestamp' in df.columns else pd.to_datetime(df.index)
 
@@ -133,6 +197,20 @@ class TrendRecoveryScalperStrategy(StrategyBase):
 
     # ---------------------------------------------------------------
     def should_exit(self, position: str, row: pd.Series, entry_price: float):
+        """
+        Decide whether an open position should be closed and provide the exit reason.
+        
+        Checks price-based targets and stops, EMA breaks, RSI neutralization thresholds, and a session cutoff time to determine exits for 'long' or 'short' positions.
+        
+        Parameters:
+            position (str): 'long' or 'short'.
+            row (pd.Series): Current market row; must provide 'close'. May include 'ema_fast', 'rsi', and 'timestamp'.
+            entry_price (float): Entry price of the open position.
+        
+        Returns:
+            (bool, str): Tuple where the first element is True if the position should be exited, and the second is the reason.
+                         Possible reasons: 'target', 'stop', 'ema_break', 'rsi_neutral', 'session_close', or '' (no exit).
+        """
         price = float(row['close'])
         ema_fast = row.get('ema_fast')
 

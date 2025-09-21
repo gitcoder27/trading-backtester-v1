@@ -26,13 +26,27 @@ except ModuleNotFoundError:
 class _Obj:
     """Simple namespace builder for stub backtest objects."""
     def __init__(self, **kw):
+        """
+        Initialize the object by setting each provided keyword argument as an instance attribute.
+        
+        Each key in `kw` becomes an attribute on the instance with the corresponding value.
+        For example, `_Obj(a=1, name='x')` will produce an object with attributes `a == 1` and `name == 'x'`.
+        """
         for k, v in kw.items():
             setattr(self, k, v)
 
 def _make_session_mock(first_result):
     """
-    Build a SQLAlchemy-like session mock:
-      session.query(Backtest).filter(Backtest.id == id).first() -> first_result
+    Create a MagicMock-based SQLAlchemy-like session and query where
+    session.query(...).filter(...).first() returns the provided value.
+    
+    Parameters:
+        first_result: The value that query.first() should return (can be any object or None).
+    
+    Returns:
+        tuple: (session, query) where `session` is a MagicMock with `query()` returning `query`,
+        and `query` is a MagicMock whose `filter()` is chainable (returns itself) and whose
+        `first()` returns `first_result`.
     """
     session = MagicMock(name="Session")
     query = MagicMock(name="Query")

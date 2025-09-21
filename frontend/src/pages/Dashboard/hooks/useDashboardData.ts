@@ -31,6 +31,16 @@ const DASHBOARD_BACKTEST_FETCH_SIZE = 10;
 const DASHBOARD_JOBS_FETCH_LIMIT = 50;
 const DASHBOARD_RECENT_JOBS_LIMIT = 5;
 
+/**
+ * Normalize various backtest response shapes into an array of items.
+ *
+ * Accepts a payload that may be an array or an object containing an array under
+ * `results`, `items`, or `data`. Returns the first found array or an empty
+ * array if none are present.
+ *
+ * @param payload - The response payload to normalize (array or object)
+ * @returns An array of backtest items (possibly empty)
+ */
 function selectBacktestItems(payload: any): any[] {
   if (!payload) return [];
   if (Array.isArray(payload.results)) return payload.results;
@@ -39,6 +49,16 @@ function selectBacktestItems(payload: any): any[] {
   return Array.isArray(payload) ? payload : [];
 }
 
+/**
+ * Normalize a raw dataset-summary payload into a DatasetSummary object or null.
+ *
+ * If `raw` has a `summary` property, that value is returned (cast to DatasetSummary).
+ * If `raw` itself is an object and contains the summary fields, `raw` is returned.
+ * Returns `null` for falsy inputs or when the resolved value is not an object.
+ *
+ * @param raw - Response or payload from the dataset summary endpoint (may be the summary object itself or an envelope with a `summary` field)
+ * @returns The normalized DatasetSummary or `null` when unavailable or invalid
+ */
 function deriveDatasetSummary(raw: any): DatasetSummary | null {
   if (!raw) return null;
   const summary = raw.summary ?? raw;

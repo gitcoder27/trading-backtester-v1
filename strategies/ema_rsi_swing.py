@@ -39,6 +39,17 @@ class StrategyParams:
 
     @classmethod
     def from_dict(cls, raw: Dict[str, Any] | None) -> "StrategyParams":
+        """
+        Create a StrategyParams instance from a plain dictionary, using defaults for missing or empty input.
+        
+        If `raw` is None or empty, returns a default-initialized StrategyParams. Otherwise, only keys matching the dataclass fields are extracted and passed to the constructor (extra keys in `raw` are ignored).
+        
+        Parameters:
+            raw (dict | None): Mapping of parameter names to values.
+        
+        Returns:
+            StrategyParams: A new instance populated from the provided values or defaults.
+        """
         if not raw:
             return cls()
         data = {field: raw[field] for field in cls.__dataclass_fields__ if field in raw}
@@ -47,12 +58,37 @@ class StrategyParams:
 
 class EMARsiSwingStrategy(StrategyBase):
     def __init__(self, params: Dict[str, Any] | None = None):
+        """
+        Initialize the EMARsiSwingStrategy.
+        
+        Parameters:
+            params (dict | None): Optional configuration dictionary for strategy parameters.
+                Keys map to fields of StrategyParams; if None or missing keys, defaults from
+                StrategyParams are used. The base StrategyBase initializer is also invoked.
+        """
         super().__init__(params)
         self.params = StrategyParams.from_dict(params)
 
     # ---------------------------------------------------------------
     @staticmethod
     def _atr(df: pd.DataFrame, period: int) -> pd.Series:
+        """
+        Compute the Average True Range (ATR) using an exponential moving average of the True Range.
+        
+        Calculates True Range per row as the maximum of:
+        - high - low
+        - |high - previous close|
+        - |low - previous close|
+        
+        Then returns the exponentially weighted moving average of the True Range with alpha = 1/period (adjust=False), aligned to the input DataFrame's index.
+        
+        Parameters:
+            df (pd.DataFrame): DataFrame containing 'high', 'low', and 'close' columns.
+            period (int): Lookback period used to compute the EMA smoothing (must be > 0).
+        
+        Returns:
+            pd.Series: ATR values indexed the same as `df`.
+        """
         high_low = df['high'] - df['low']
         high_close = (df['high'] - df['close'].shift()).abs()
         low_close = (df['low'] - df['close'].shift()).abs()
@@ -62,10 +98,38 @@ class EMARsiSwingStrategy(StrategyBase):
     # ---------------------------------------------------------------
     @staticmethod
     def _ema(series: pd.Series, period: int) -> pd.Series:
+        """
+        Compute the exponential moving average (EMA) of a numeric pandas Series.
+        
+        Uses pandas' EWM with the given period as the span (alpha equivalent) and adjust=False
+        for recursive-style weighting. The returned Series is aligned with the input index
+        and has the same length.
+        
+        Parameters:
+            series (pd.Series): Input numeric series (e.g., prices).
+            period (int): EMA period (span) to use.
+        
+        Returns:
+            pd.Series: EMA-smoothed series.
+        """
         return series.ewm(span=period, adjust=False).mean()
 
     @staticmethod
     def _rsi(series: pd.Series, period: int) -> pd.Series:
+        """
+        Compute the Relative Strength Index (RSI) for a price series.
+        
+        Generates an RSI time series with values in the range [0, 100] using exponential smoothing
+        (Wilder-style) over `period` bars.
+        
+        Parameters:
+            series (pd.Series): Price series (typically closing prices).
+            period (int): Lookback period for RSI smoothing.
+        
+        Returns:
+            pd.Series: RSI values aligned with the input index (float). Initial values may be NaN
+            until enough data is available.
+        """
         delta = series.diff()
         gains = delta.clip(lower=0)
         losses = -delta.clip(upper=0)
@@ -76,6 +140,23 @@ class EMARsiSwingStrategy(StrategyBase):
 
     # ---------------------------------------------------------------
     def generate_signals(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Generate trading signals for the EMA/RSI Trend Recovery Scalper.
+        
+        Produces a copy of `data` augmented with indicator columns and a `signal` column (1 = long entry, 0 = no entry). The method computes ATR, fast/slow EMAs, EMA slope, and RSI using the instance parameters, then scans bars within the configured session window to identify pullback entries during an uptrend. Entries are generated when:
+        - fast EMA > slow EMA and EMA slope is positive,
+        - RSI crosses from below `rsi_reset` to at-or-above `rsi_entry`,
+        - the low represents a small pullback relative to the fast EMA (<= `pullback_pct` and > 0),
+        - the close is above the fast EMA and above the bar's open.
+        
+        Per-day trade counts are enforced by `max_trades_per_day`. After the configured `force_entry_time`, if no trade occurred for a date and the trend persists (fast EMA > slow EMA), a single forced signal may be placed for that date.
+        
+        Inputs:
+        - data (pd.DataFrame): price bars indexed by timestamp or containing a `timestamp` column. Expected columns: `open`, `high`, `low`, `close` (and optionally `timestamp`).
+        
+        Returns:
+        - pd.DataFrame: a copy of the input with added columns `atr`, `ema_fast`, `ema_slow`, `ema_slope`, `rsi`, and `signal`. A temporary `date` column is created and removed before returning.
+        """
         df = data.copy()
         df['timestamp'] = pd.to_datetime(df['timestamp']) if 'timestamp' in df.columns else pd.to_datetime(df.index)
 
@@ -145,6 +226,28 @@ class EMARsiSwingStrategy(StrategyBase):
 
     # ---------------------------------------------------------------
     def should_exit(self, position: str, row: pd.Series, entry_price: float):
+        """
+        Determine whether a long position should be exited based on price targets, stops, EMA breaks, or session timing.
+        
+        Checks, in order:
+        - Profit target: exit if current close >= entry_price + target, where target = max(params.target_points, params.target_atr * ATR).
+        - Stop loss: exit if current close <= entry_price - stop, where stop = max(params.stop_points, params.stop_atr * ATR).
+        - EMA break: exit if price drops below the fast EMA (row['ema_fast']).
+        - Session close: if row['timestamp'] is present and at-or-after params.exit_time, exit.
+        
+        Parameters:
+            position (str): Position direction; only 'long' is evaluated. Other values return (False, '').
+            row (pd.Series): Market row containing at minimum 'close'. May also contain 'atr', 'ema_fast', and 'timestamp'.
+            entry_price (float): Entry price of the long position.
+        
+        Returns:
+            tuple[bool, str]: (should_exit, reason). `should_exit` is True when an exit condition is met.
+            `reason` is one of: 'target', 'stop', 'ema_break', 'session_close', or '' when no exit is triggered.
+        
+        Notes:
+        - ATR, EMA, and timestamp fields are read from `row` if present; missing ATR/EMA fields are treated as 0 or ignored.
+        - Malformed timestamps are ignored (no exception raised) and will not trigger the session-close exit.
+        """
         if position != 'long':
             return False, ''
 

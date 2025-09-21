@@ -21,6 +21,14 @@ except ImportError:
 
 class DummyBacktest:
     def __init__(self, id, strategy_name="Strategy", results=None):
+        """
+        Initialize a simple backtest container used in tests.
+        
+        Parameters:
+            id (int | str): Identifier for the backtest.
+            strategy_name (str, optional): Human-readable name of the strategy. Defaults to "Strategy".
+            results (dict, optional): Dictionary holding backtest outputs (e.g., 'equity_curve', 'trades', 'trade_log', metrics). If omitted or None, an empty dict is used.
+        """
         self.id = id
         self.strategy_name = strategy_name
         self.results = results or {}

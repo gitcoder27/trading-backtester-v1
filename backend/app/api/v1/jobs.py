@@ -21,9 +21,14 @@ init_db()
 @router.get("/stats", response_model=Dict[str, Any])
 async def get_job_stats(job_runner: JobRunner = Depends(get_job_runner_dependency)):
     """
-    Get statistics about job execution.
-    Note: Declared before dynamic `/{job_id}` routes to avoid shadowing
-    that can lead to 422 errors when requesting `/stats`.
+    Return aggregated job execution statistics produced by the JobRunner.
+    
+    Retrieves pre-aggregated statistics from the JobRunner and returns a payload with a success flag and a stats mapping. The stats mapping contains:
+    - total_jobs (int): total number of jobs observed.
+    - pending (int), running (int), completed (int), failed (int), cancelled (int): per-status counts.
+    - average_completion_time_seconds (float | None): average time to complete jobs in seconds, or None if unavailable.
+    
+    Note: This endpoint is declared before dynamic `/ {job_id}` routes to avoid route-shadowing that can cause 422 errors when requesting `/stats`.
     """
     raw_stats = job_runner.job_stats()
     status_counts = raw_stats.get("status_counts", {}) if isinstance(raw_stats, dict) else {}
@@ -47,8 +52,24 @@ async def submit_backtest_job(
     dataset_service: DatasetService = Depends(get_dataset_service),
 ):
     """
-    Submit a backtest job for background execution
-    Returns immediately with job ID for status tracking
+    Submit a backtest job for asynchronous/background execution and return an initial job descriptor.
+    
+    Converts the BacktestRequest into the fields required by the job runner, resolves a dataset_path when only a dataset ID is provided, maps legacy engine option names (e.g., `daily_profit_target` -> `daily_target`), and resolves numeric strategy IDs to their module.class path via the strategy registry before submitting the job.
+    
+    Parameters:
+        request: BacktestRequest containing strategy, optional dataset or dataset_path, strategy_params, and engine_options.
+    
+    Returns:
+        dict: A JSON-serializable payload with keys:
+            - success (bool): True if submission was accepted.
+            - job_id (str|int): Identifier assigned to the created background job.
+            - status (JobStatus): Initial status (PENDING).
+            - message (str): Human-readable confirmation.
+    
+    Errors/HTTP responses:
+        - 400 Bad Request: when required inputs are missing or invalid (e.g., no dataset/dataset_path, ValueError from validation).
+        - 404 Not Found: when a referenced dataset or strategy ID cannot be resolved.
+        - 500 Internal Server Error: for unexpected failures during submission.
     """
     try:
         # Convert Pydantic model to dict for service
@@ -283,7 +304,31 @@ async def list_jobs(
     job_runner: JobRunner = Depends(get_job_runner_dependency),
 ):
     """
-    List recent background jobs with their status
+    Return a paginated list of recent background jobs and related metadata.
+    
+    Retrieves up to `effective_limit` recent jobs from the JobRunner and overall job statistics.
+    The effective limit is derived from `limit` or `size` (whichever is provided) with a default of 50,
+    and is clamped to the inclusive range [1, 100]. The response includes the list of jobs, the number
+    of jobs returned, a `total` job count taken from JobRunner.job_stats(), and pagination/sort metadata.
+    
+    Parameters:
+        limit (Optional[int]): Preferred maximum number of jobs to return (used if `size` is not set).
+        page (Optional[int]): Current page number for the response (defaults to 1 when not provided).
+        size (Optional[int]): Alternative way to specify the page size; if set, it overrides `limit`.
+        sort (Optional[str]): Sort field requested by the client (passed through in the response; actual sorting depends on JobRunner).
+        order (Optional[str]): Sort order requested by the client (e.g., "asc" or "desc"; passed through in the response).
+    
+    Returns:
+        dict: A JSON-serializable payload with keys:
+            - success (bool): True on success.
+            - jobs (list): List of job records returned by JobRunner.list_jobs.
+            - count (int): Number of jobs in `jobs`.
+            - total (int): Total number of jobs (from JobRunner.job_stats()).
+            - limit (int): The effective limit applied.
+            - page (int): Page number returned.
+            - size (int): Effective page size (same as `limit`).
+            - sort (Optional[str]): Echo of the requested sort field.
+            - order (Optional[str]): Echo of the requested sort order.
     """
     effective_limit = limit or size or 50
     effective_limit = max(1, min(100, effective_limit))
