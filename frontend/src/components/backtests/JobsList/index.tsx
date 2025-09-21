@@ -12,10 +12,12 @@ const JobsList: React.FC<JobsListProps> = ({
   onJobComplete,
   onJobClick,
   compact = false,
-  maxJobs
+  maxJobs,
+  fetchLimit,
 }) => {
   const {
     jobs,
+    totalCount,
     loading,
     isRefreshing,
     searchTerm,
@@ -32,7 +34,7 @@ const JobsList: React.FC<JobsListProps> = ({
     handleDownloadResults,
     handleDeleteJob,
     setPage
-  } = useJobManagement(maxJobs);
+  } = useJobManagement(maxJobs, fetchLimit);
 
   if (loading) {
     return (
@@ -85,7 +87,7 @@ const JobsList: React.FC<JobsListProps> = ({
             Background Jobs
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {jobs.length} jobs found
+            {totalCount} jobs found
           </p>
         </div>
         <Button

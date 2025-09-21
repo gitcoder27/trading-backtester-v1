@@ -175,8 +175,37 @@ export class JobService {
     return apiClient.post<void>(`/jobs/${id}/cancel`);
   }
 
-  static async listJobs(params?: PaginationParams): Promise<PaginatedResponse<Job>> {
-    return apiClient.get<PaginatedResponse<Job>>('/jobs', params);
+  static async listJobs(params?: PaginationParams & { limit?: number }): Promise<PaginatedResponse<Job>> {
+    const { page, size, limit, ...rest } = params || {};
+    const effectiveLimit = limit ?? size ?? rest?.pageSize ?? 20;
+    const queryParams: Record<string, any> = {
+      limit: effectiveLimit,
+      ...rest,
+    };
+
+    const response = await apiClient.get<Record<string, any>>('/jobs', queryParams);
+
+    const jobs: Job[] = Array.isArray(response?.jobs)
+      ? (response.jobs as Job[])
+      : Array.isArray(response?.items)
+      ? (response.items as Job[])
+      : [];
+
+    const total = typeof response?.total === 'number'
+      ? response.total
+      : typeof response?.count === 'number'
+      ? response.count
+      : jobs.length;
+
+    const pages = Math.max(1, Math.ceil(total / effectiveLimit));
+
+    return {
+      items: jobs,
+      total,
+      page: 1,
+      limit: effectiveLimit,
+      pages,
+    };
   }
 
   static async deleteJob(id: string): Promise<void> {

@@ -29,7 +29,8 @@ const Backtests: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'completed' | 'running' | 'failed'>('all');
   const { backtests, loading, refetch, removeBacktestLocally } = useBacktestsList();
   const stats = useBacktestStats(backtests);
-  const { recentJobs, refetch: refetchRecentJobs } = useRecentJobs(5);
+  const JOBS_QUERY_LIMIT = 50;
+  const { recentJobs, refetch: refetchRecentJobs } = useRecentJobs(3, JOBS_QUERY_LIMIT);
   const [submittingBacktest, setSubmittingBacktest] = useState(false);
   const [notifiedJobs, setNotifiedJobs] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
@@ -251,9 +252,10 @@ const Backtests: React.FC = () => {
               View All
             </Button>
           </div>
-          <JobsList 
-            compact={true} 
-            maxJobs={3} 
+          <JobsList
+            compact
+            maxJobs={3}
+            fetchLimit={JOBS_QUERY_LIMIT}
             onJobComplete={handleJobComplete}
             onJobClick={handleJobClick}
           />
@@ -331,7 +333,11 @@ const Backtests: React.FC = () => {
         size="xl"
       >
         <div className="max-h-[70vh] overflow-auto">
-          <JobsList onJobComplete={handleJobComplete} onJobClick={handleJobClick} />
+          <JobsList
+            fetchLimit={JOBS_QUERY_LIMIT}
+            onJobComplete={handleJobComplete}
+            onJobClick={handleJobClick}
+          />
         </div>
       </Modal>
     </div>

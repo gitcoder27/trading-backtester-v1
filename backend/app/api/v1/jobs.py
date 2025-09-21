@@ -25,22 +25,20 @@ async def get_job_stats(job_runner: JobRunner = Depends(get_job_runner_dependenc
     Note: Declared before dynamic `/{job_id}` routes to avoid shadowing
     that can lead to 422 errors when requesting `/stats`.
     """
-    jobs = job_runner.list_jobs(limit=100)
-    
-    # Calculate stats
+    raw_stats = job_runner.job_stats()
+    status_counts = raw_stats.get("status_counts", {}) if isinstance(raw_stats, dict) else {}
+
     stats = {
-        "total_jobs": len(jobs),
-        "pending": len([j for j in jobs if j["status"] == JobStatus.PENDING]),
-        "running": len([j for j in jobs if j["status"] == JobStatus.RUNNING]),
-        "completed": len([j for j in jobs if j["status"] == JobStatus.COMPLETED]),
-        "failed": len([j for j in jobs if j["status"] == JobStatus.FAILED]),
-        "cancelled": len([j for j in jobs if j["status"] == JobStatus.CANCELLED])
+        "total_jobs": raw_stats.get("total_jobs", 0) if isinstance(raw_stats, dict) else 0,
+        "pending": status_counts.get(JobStatus.PENDING.value, 0),
+        "running": status_counts.get(JobStatus.RUNNING.value, 0),
+        "completed": status_counts.get(JobStatus.COMPLETED.value, 0),
+        "failed": status_counts.get(JobStatus.FAILED.value, 0),
+        "cancelled": status_counts.get(JobStatus.CANCELLED.value, 0),
+        "average_completion_time_seconds": raw_stats.get("average_completion_time_seconds") if isinstance(raw_stats, dict) else None,
     }
-    
-    return {
-        "success": True,
-        "stats": stats
-    }
+
+    return {"success": True, "stats": stats}
 
 @router.post("/", response_model=Dict[str, Any])
 async def submit_backtest_job(
@@ -277,21 +275,32 @@ async def cancel_job(
 
 @router.get("/", response_model=JobListResponse)
 async def list_jobs(
-    limit: int = 50,
+    limit: Optional[int] = 50,
+    page: Optional[int] = None,
+    size: Optional[int] = None,
+    sort: Optional[str] = None,
+    order: Optional[str] = None,
     job_runner: JobRunner = Depends(get_job_runner_dependency),
 ):
     """
     List recent background jobs with their status
     """
-    if limit > 100:
-        limit = 100  # Limit maximum to prevent abuse
-    
-    jobs = job_runner.list_jobs(limit=limit)
-    
+    effective_limit = limit or size or 50
+    effective_limit = max(1, min(100, effective_limit))
+
+    jobs = job_runner.list_jobs(limit=effective_limit)
+    stats = job_runner.job_stats()
+
     return {
         "success": True,
         "jobs": jobs,
-        "count": len(jobs)
+        "count": len(jobs),
+        "total": stats.get("total_jobs", len(jobs)),
+        "limit": effective_limit,
+        "page": page or 1,
+        "size": effective_limit,
+        "sort": sort,
+        "order": order,
     }
 
 # Alias without trailing slash for clients that call /api/v1/jobs

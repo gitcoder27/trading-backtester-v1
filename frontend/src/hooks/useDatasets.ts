@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { DatasetService } from '../services/dataset';
 import type { Dataset, PaginatedResponse } from '../types';
 
@@ -12,28 +12,24 @@ function normalizeDatasets(res: PaginatedResponse<Dataset> | any): any[] {
 }
 
 export function useDatasets() {
-  const [datasets, setDatasets] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  const fetchDatasets = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data,
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+  } = useQuery<any[]>({
+    queryKey: ['datasets', { page: 1, size: 100 }],
+    queryFn: async () => {
       const res = await DatasetService.listDatasets({ page: 1, size: 100 });
-      setDatasets(normalizeDatasets(res));
-    } catch (e: any) {
-      setError(e instanceof Error ? e : new Error('Failed to load datasets'));
-      setDatasets([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      return normalizeDatasets(res);
+    },
+    refetchOnMount: false,
+  });
 
-  useEffect(() => {
-    fetchDatasets();
-  }, [fetchDatasets]);
+  const datasets = data ?? [];
+  const loading = isLoading || isFetching;
+  const normalizedError = error instanceof Error ? error : null;
 
-  return { datasets, loading, error, refetch: fetchDatasets };
+  return { datasets, loading, error: normalizedError, refetch };
 }
-

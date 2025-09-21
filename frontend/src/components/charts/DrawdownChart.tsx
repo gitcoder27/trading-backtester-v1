@@ -1,4 +1,25 @@
 import React from 'react';
+
+interface DrawdownChartProps {
+  data?: Array<{ timestamp: string; equity: number }>;
+  backtestId?: string;
+  className?: string;
+  maxPoints?: number;
+}
+
+const DrawdownChart: React.FC<DrawdownChartProps> = ({
+  data: _data,
+  backtestId: _backtestId,
+  className = '',
+  maxPoints: _maxPoints = 1000,
+}) => (
+  <div className={`w-full h-full min-h-[200px] ${className}`} />
+);
+
+export default DrawdownChart;
+
+/* Original chart implementation retained for future reference:
+import React from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import PlotlyChart from './PlotlyChart';
 import { AnalyticsService } from '../../services/analytics';
@@ -83,3 +104,4 @@ const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, backtestId, classNa
 };
 
 export default DrawdownChart;
+*/
