@@ -1,4 +1,23 @@
 import React from 'react';
+
+interface ReturnsChartProps {
+  data?: Array<{ timestamp: string; equity: number }>;
+  backtestId?: string;
+  className?: string;
+}
+
+const ReturnsChart: React.FC<ReturnsChartProps> = ({
+  data: _data,
+  backtestId: _backtestId,
+  className = '',
+}) => (
+  <div className={`w-full h-full min-h-[200px] ${className}`} />
+);
+
+export default ReturnsChart;
+
+/* Original chart implementation retained for future reference:
+import React from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import PlotlyChart from './PlotlyChart';
 import { AnalyticsService } from '../../services/analytics';
@@ -76,3 +95,4 @@ const ReturnsChart: React.FC<ReturnsChartProps> = ({ data, backtestId, className
 };
 
 export default ReturnsChart;
+*/

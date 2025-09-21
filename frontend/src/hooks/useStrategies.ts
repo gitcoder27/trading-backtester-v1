@@ -1,31 +1,27 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { StrategyService } from '../services/strategyService';
 import type { Strategy } from '../types';
 
 export function useStrategies(options: { activeOnly?: boolean } = {}) {
   const { activeOnly = true } = options;
-  const [strategies, setStrategies] = useState<Strategy[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  const fetchStrategies = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const {
+    data,
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+  } = useQuery<Strategy[]>({
+    queryKey: ['strategies', { activeOnly }],
+    queryFn: async () => {
       const list = await StrategyService.getStrategies();
-      setStrategies(activeOnly ? list.filter(s => s.is_active) : list);
-    } catch (e: any) {
-      setError(e instanceof Error ? e : new Error('Failed to load strategies'));
-      setStrategies([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeOnly]);
+      return activeOnly ? list.filter(s => s.is_active) : list;
+    },
+    refetchOnMount: false,
+  });
 
-  useEffect(() => {
-    fetchStrategies();
-  }, [fetchStrategies]);
+  const strategies = data ?? [];
+  const loading = isLoading || isFetching;
+  const normalizedError = error instanceof Error ? error : null;
 
-  return { strategies, loading, error, refetch: fetchStrategies };
+  return { strategies, loading, error: normalizedError, refetch };
 }
-

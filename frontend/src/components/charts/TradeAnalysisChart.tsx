@@ -1,4 +1,23 @@
 import React from 'react';
+
+interface TradeAnalysisChartProps {
+  data?: Array<unknown>;
+  backtestId?: string;
+  className?: string;
+}
+
+const TradeAnalysisChart: React.FC<TradeAnalysisChartProps> = ({
+  data: _data,
+  backtestId: _backtestId,
+  className = '',
+}) => (
+  <div className={`w-full h-full min-h-[200px] ${className}`} />
+);
+
+export default TradeAnalysisChart;
+
+/* Original chart implementation retained for future reference:
+import React from 'react';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import PlotlyChart from './PlotlyChart';
 import { AnalyticsService } from '../../services/analytics';
@@ -95,3 +114,4 @@ const TradeAnalysisChart: React.FC<TradeAnalysisChartProps> = ({ data, backtestI
 };
 
 export default TradeAnalysisChart;
+*/

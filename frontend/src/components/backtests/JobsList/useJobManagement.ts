@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { JobService } from '../../../services/backtest';
 import { showToast } from '../../ui/Toast';
 import type { Job, JobStatus } from './types';
+import { useJobsQuery } from '../../../hooks/useJobsQuery';
 
-export const useJobManagement = (maxJobs?: number) => {
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
+export const useJobManagement = (maxJobs?: number, fetchLimit?: number) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<JobStatus | 'all'>('all');
   const [sortBy, setSortBy] = useState<'created_at' | 'status' | 'type'>('created_at');
@@ -14,45 +13,84 @@ export const useJobManagement = (maxJobs?: number) => {
   const [totalPages, setTotalPages] = useState(1);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadJobs = useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = {
-        page,
-        size: maxJobs || 20,
-        sort: sortBy,
-        order: sortOrder,
-        search: searchTerm || undefined,
-        ...(statusFilter !== 'all' && { status: statusFilter })
-      };
+  const pageSize = maxJobs ?? 20;
+  const queryLimit = fetchLimit ? Math.max(fetchLimit, pageSize) : pageSize;
 
-      const response = await JobService.listJobs(params);
-      // The API returns { success: true, jobs: [...], total: 14 }
-      // but we expect { items: [...], total: 14 }
-      const jobs = (response as any).jobs || response.items || [];
-      setJobs(jobs);
-      setTotalPages((response as any).total ? Math.ceil((response as any).total / (maxJobs || 20)) : 1);
-    } catch (error) {
-      console.error('Failed to load jobs:', error);
+  const jobsQuery = useJobsQuery(queryLimit);
+
+  useEffect(() => {
+    if (jobsQuery.isError && jobsQuery.error) {
+      console.error('Failed to load jobs:', jobsQuery.error);
       showToast.error('Failed to load jobs');
-    } finally {
-      setLoading(false);
     }
-  }, [page, maxJobs, sortBy, sortOrder, searchTerm, statusFilter]);
+  }, [jobsQuery.isError, jobsQuery.error]);
 
-  const handleRefresh = async () => {
+  const allJobs = useMemo<Job[]>(() => {
+    if (!jobsQuery.data) return [];
+    return jobsQuery.data.jobs;
+  }, [jobsQuery.data]);
+
+  const sortedJobs = useMemo(() => {
+    const copy = [...allJobs];
+    copy.sort((a, b) => {
+      const direction = sortOrder === 'asc' ? 1 : -1;
+      if (sortBy === 'status') {
+        return a.status.localeCompare(b.status) * direction;
+      }
+      if (sortBy === 'type') {
+        const typeA = (a.type ?? 'backtest').toString();
+        const typeB = (b.type ?? 'backtest').toString();
+        return typeA.localeCompare(typeB) * direction;
+      }
+      const aDate = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bDate = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return (aDate - bDate) * direction;
+    });
+    return copy;
+  }, [allJobs, sortBy, sortOrder]);
+
+  const filteredJobs = useMemo(() => {
+    return sortedJobs.filter(job => {
+      const matchesSearch = searchTerm.length === 0 ||
+        job.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (job.type ?? '').toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [sortedJobs, searchTerm, statusFilter]);
+
+  const paginatedJobs = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    const end = start + pageSize;
+    return filteredJobs.slice(start, end);
+  }, [filteredJobs, page, pageSize]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(filteredJobs.length / pageSize));
+    setTotalPages(maxPage);
+    if (page > maxPage) {
+      setPage(maxPage);
+    }
+  }, [filteredJobs.length, pageSize, page]);
+
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await loadJobs();
-    setIsRefreshing(false);
-    showToast.success('Jobs refreshed');
-  };
+    try {
+      await jobsQuery.refetch({ cancelRefetch: false });
+      showToast.success('Jobs refreshed');
+    } catch (error) {
+      console.error('Failed to refresh jobs:', error);
+      showToast.error('Failed to refresh jobs');
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [jobsQuery]);
 
   const handleSearch = (value: string) => {
     setSearchTerm(value);
-    if (value.length === 0 || value.length >= 3) {
-      setPage(1);
-      void loadJobs();
-    }
+    setPage(1);
   };
 
   const handleStatusFilterChange = (status: JobStatus | 'all') => {
@@ -69,9 +107,7 @@ export const useJobManagement = (maxJobs?: number) => {
   const handleCancelJob = async (jobId: string) => {
     try {
       await JobService.cancelJob(jobId);
-      setJobs(prev => prev.map(job => 
-        job.id === jobId ? { ...job, status: 'cancelled' } : job
-      ));
+      await jobsQuery.refetch({ cancelRefetch: false });
       showToast.warning('Job cancelled');
     } catch (error) {
       console.error('Failed to cancel job:', error);
@@ -103,7 +139,7 @@ export const useJobManagement = (maxJobs?: number) => {
     
     try {
       await JobService.deleteJob(jobId);
-      setJobs(prev => prev.filter(job => job.id !== jobId));
+      await jobsQuery.refetch({ cancelRefetch: false });
       showToast.success('Job deleted successfully');
     } catch (error) {
       console.error('Failed to delete job:', error);
@@ -111,24 +147,11 @@ export const useJobManagement = (maxJobs?: number) => {
     }
   };
 
-  const filteredJobs = jobs.filter(job => {
-    const matchesSearch = searchTerm.length === 0 || 
-      job.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.type.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || job.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
-
-  useEffect(() => {
-    loadJobs();
-  }, [loadJobs]);
-
   return {
-    jobs: filteredJobs,
-    loading,
-    isRefreshing,
+    jobs: paginatedJobs,
+    totalCount: filteredJobs.length,
+    loading: jobsQuery.isLoading,
+    isRefreshing: isRefreshing || jobsQuery.isFetching,
     searchTerm,
     statusFilter,
     sortBy,

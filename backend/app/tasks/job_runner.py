@@ -169,6 +169,9 @@ class JobRunner:
             self._active_jobs.pop(job_id, None)
         return self._store.delete_job(job_id)
 
+    def job_stats(self) -> Dict[str, Any]:
+        return self._store.job_stats()
+
     def list_jobs(
         self,
         limit: int = 50,

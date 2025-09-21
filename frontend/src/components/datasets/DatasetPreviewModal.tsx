@@ -40,6 +40,28 @@ const DatasetPreviewModal: React.FC<Props> = ({ dataset, isOpen, onClose }) => {
     };
   }, [dataset?.id, isOpen]);
 
+  const columns = React.useMemo(() => {
+    if (!preview) return [] as string[];
+    if (Array.isArray(preview.columns) && preview.columns.length > 0) {
+      return preview.columns;
+    }
+    if (Array.isArray(preview.data) && preview.data.length > 0) {
+      const firstRow = preview.data[0];
+      if (firstRow && typeof firstRow === 'object') {
+        return Object.keys(firstRow as Record<string, unknown>);
+      }
+    }
+    return [] as string[];
+  }, [preview]);
+
+  const rows = React.useMemo(() => {
+    if (!preview) return [] as Array<Record<string, unknown>>;
+    if (Array.isArray(preview.data)) {
+      return preview.data as Array<Record<string, unknown>>;
+    }
+    return [] as Array<Record<string, unknown>>;
+  }, [preview]);
+
   if (!dataset) return null;
 
   return (
@@ -78,12 +100,14 @@ const DatasetPreviewModal: React.FC<Props> = ({ dataset, isOpen, onClose }) => {
           <h4 className="font-medium text-gray-900 dark:text-gray-100">Data Preview</h4>
           {!preview ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">{loading ? 'Loading preview...' : 'No preview available'}</p>
+          ) : columns.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">No preview columns detected</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-800">
                   <tr>
-                    {preview.columns.map((col) => (
+                    {columns.map((col) => (
                       <th key={col} className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         {col}
                       </th>
@@ -91,15 +115,23 @@ const DatasetPreviewModal: React.FC<Props> = ({ dataset, isOpen, onClose }) => {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                  {preview.data.map((row, i) => (
-                    <tr key={i}>
-                      {preview.columns.map((col) => (
-                        <td key={col} className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                          {String(row[col])}
-                        </td>
-                      ))}
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td colSpan={columns.length} className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                        No preview rows available
+                      </td>
                     </tr>
-                  ))}
+                  ) : (
+                    rows.map((row, i) => (
+                      <tr key={i}>
+                        {columns.map((col) => (
+                          <td key={col} className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                            {String((row as Record<string, unknown>)[col] ?? '')}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -111,4 +143,3 @@ const DatasetPreviewModal: React.FC<Props> = ({ dataset, isOpen, onClose }) => {
 };
 
 export default DatasetPreviewModal;
-

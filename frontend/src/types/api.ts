@@ -271,6 +271,7 @@ export interface PaginationParams {
   sort?: string;
   order?: 'asc' | 'desc';
   search?: string;
+  compact?: boolean;
 }
 
 export interface UploadResponse {
