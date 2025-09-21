@@ -3,7 +3,7 @@ import pandas as pd
 
 class AwesomeScalperStrategy(StrategyBase):
     """
-    A scalping strategy that combines Bollinger Bands and RSI for entry signals. test
+    A scalping strategy that combines Bollinger Bands and RSI for entry signals. aayyaann
     """
     
     @classmethod

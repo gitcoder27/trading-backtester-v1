@@ -34,7 +34,7 @@ export function getChartOptions(theme: 'light' | 'dark', timeZone?: string): Dee
     },
     localization: {
       locale: 'en-IN',
-      timeFormatter: (t) => formatTimeInZone(t, timeZone),
+      timeFormatter: (t: Time) => formatTimeInZone(t, timeZone),
       priceFormatter: (p: number) => (Math.abs(p) < 1 ? p.toFixed(4) : p.toFixed(2)),
       dateFormat: 'dd MMM yyyy'
     },

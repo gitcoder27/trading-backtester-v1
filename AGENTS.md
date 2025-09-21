@@ -90,6 +90,31 @@
 - **Optimization Utilities**: `backtester/optimization_utils.py` fast indicators (EMA/SMA/RSI/Bollinger via numba), vectorized signal helpers, and performance suggestions.
 - **Performance Tools**: `backtester/performance_monitor.py` timing/memory monitors and Streamlit display hooks.
 
+## Coding Standards & Best Practices
+
+### Code Quality & Maintainability
+- **Single Responsibility**: Each function/class should have one clear purpose
+- **DRY Principle**: Don't repeat yourself; extract common logic into reusable functions
+- **Clear Naming**: Use descriptive names that explain intent (e.g., `calculate_sharpe_ratio` not `calc_sr`)
+- **Small Functions**: Keep functions under 20-30 lines; break down complex logic
+- **Type Hints**: Always use type hints in Python; explicit types in TypeScript
+- **Error Handling**: Use specific exceptions, handle edge cases gracefully
+- **Documentation**: Docstrings for public APIs, inline comments for complex logic
+- **Consistent Formatting**: Follow existing code style; use linters/formatters
+
+### Performance & Efficiency
+- **Early Returns**: Use guard clauses to reduce nesting
+- **Lazy Loading**: Load data only when needed
+- **Efficient Data Structures**: Choose appropriate collections (dict vs list vs set)
+- **Vectorization**: Prefer vectorized operations over loops when possible
+- **Memory Management**: Clean up resources, avoid memory leaks
+
+### Testing & Reliability
+- **Test Coverage**: Aim for 90%+ coverage in critical paths
+- **Edge Cases**: Test boundary conditions and error scenarios
+- **Mocking**: Mock external dependencies in tests
+- **Deterministic**: Tests should be repeatable and isolated
+
 ## CRITICAL: Use ripgrep, not grep
 
 NEVER use grep for project-wide searches (slow, ignores .gitignore). ALWAYS use rg.

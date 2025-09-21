@@ -77,27 +77,29 @@ const PriceChartWithTrades: React.FC<PriceChartWithTradesProps> = ({
   }, [data, onNavigationChange]);
 
   const candleData = useMemo(() => {
-    const candles = Array.isArray(data?.candlestick_data) ? data!.candlestick_data : [];
-    return (candles
-      .map((candle: any) => {
+    const candles = Array.isArray(data?.candlestick_data) ? (data!.candlestick_data as Array<Record<string, unknown>>) : [];
+    const normalized = candles
+      .map((candle) => {
         const timeValue = Number(candle.time);
         if (!Number.isFinite(timeValue)) return null;
 
-        return {
+        const result: CandleData = {
           time: timeValue as UTCTimestamp,
           open: Number(candle.open ?? 0),
           high: Number(candle.high ?? 0),
           low: Number(candle.low ?? 0),
           close: Number(candle.close ?? 0),
         };
+        return result;
       })
-      .filter((candle): candle is CandleData => Boolean(candle))) as CandleData[];
+      .filter((candle): candle is CandleData => candle !== null);
+    return normalized;
   }, [data]);
 
   const tradeMarkers = useMemo(() => {
     if (!Array.isArray(data?.trade_markers)) return [] as TradeMarker[];
 
-    return (data!.trade_markers as any[])
+    return (data!.trade_markers as Array<Record<string, unknown>>)
       .map((marker) => {
         const timeValue = Number(marker.time);
         if (!Number.isFinite(timeValue)) {
@@ -105,20 +107,25 @@ const PriceChartWithTrades: React.FC<PriceChartWithTradesProps> = ({
         }
 
         const priceValue = Number(marker.price);
+        const allowedShapes: TradeMarker['shape'][] = ['arrowUp', 'arrowDown', 'circle', 'square'];
+        const shapeValue = typeof marker.shape === 'string' && allowedShapes.includes(marker.shape as TradeMarker['shape'])
+          ? (marker.shape as TradeMarker['shape'])
+          : 'circle';
+
         const normalized: TradeMarker = {
           time: timeValue as UTCTimestamp,
-        position: marker.position === 'aboveBar' ? 'aboveBar' : 'belowBar',
-        color: typeof marker.color === 'string' ? marker.color : '#ff9800',
-        shape: (marker.shape as any) || 'circle',
-        text: typeof marker.text === 'string' ? marker.text : '',
-        size: Number.isFinite(Number(marker.size)) ? Number(marker.size) : 1,
-      };
+          position: marker.position === 'aboveBar' ? 'aboveBar' : 'belowBar',
+          color: typeof marker.color === 'string' ? marker.color : '#ff9800',
+          shape: shapeValue,
+          text: typeof marker.text === 'string' ? marker.text : '',
+          size: Number.isFinite(Number(marker.size)) ? Number(marker.size) : 1,
+        };
 
-      if (Number.isFinite(priceValue)) {
-        normalized.price = priceValue;
-      }
+        if (Number.isFinite(priceValue)) {
+          normalized.price = priceValue;
+        }
 
-      return normalized;
+        return normalized;
       })
       .filter((marker): marker is TradeMarker => Boolean(marker));
   }, [data]);

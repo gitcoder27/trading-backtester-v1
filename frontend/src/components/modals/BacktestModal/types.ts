@@ -1,4 +1,4 @@
-import type { BacktestConfig as BaseBacktestConfig } from '../../../types';
+import type { BacktestConfig as BaseBacktestConfig, ParameterSchema } from '../../../types';
 
 export interface Dataset {
   id: number;
@@ -16,6 +16,7 @@ export interface Strategy {
   id: number;
   name: string;
   description: string;
+  parameters_schema?: ParameterSchema[];
 }
 
 // Enhanced config that extends the base with Streamlit-like features

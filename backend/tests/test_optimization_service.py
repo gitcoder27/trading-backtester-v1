@@ -54,8 +54,10 @@ def sample_dataset():
     try:
         dataset = Dataset(
             name="test_dataset",
+            filename=os.path.basename(temp_file.name),
             file_path=temp_file.name,
-            rows=len(df),
+            file_size=os.path.getsize(temp_file.name),
+            rows_count=len(df),
             columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'],
             created_at=datetime.utcnow()
         )

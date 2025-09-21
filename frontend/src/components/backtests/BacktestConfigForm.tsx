@@ -60,7 +60,6 @@ const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
       const preselectedStrategy = strategies.find(s => s.id === preselectedStrategyId);
       if (preselectedStrategy) {
         setSelectedStrategy(preselectedStrategy);
-        setStrategySearchTerm(preselectedStrategy.name);
         setConfig(prev => ({ ...prev, strategy_id: preselectedStrategy.id }));
         
         // Set preselected parameters if provided

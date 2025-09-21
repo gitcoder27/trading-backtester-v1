@@ -1,5 +1,5 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import PlotlyChart from './PlotlyChart';
 import { AnalyticsService } from '../../services/analytics';
 import { useInView } from '../../hooks/useInView';
@@ -19,7 +19,7 @@ const EquityChart: React.FC<EquityChartProps> = ({ data, backtestId, className =
     queryFn: async () => AnalyticsService.getEquityChart(backtestId as string, { maxPoints }),
     enabled: !!backtestId && !data && inView,
     staleTime: 10 * 60 * 1000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });
 
