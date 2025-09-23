@@ -1,5 +1,26 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+
+interface DrawdownChartProps {
+  data?: Array<{ timestamp: string; equity: number }>;
+  backtestId?: string;
+  className?: string;
+  maxPoints?: number;
+}
+
+const DrawdownChart: React.FC<DrawdownChartProps> = ({
+  data: _data,
+  backtestId: _backtestId,
+  className = '',
+  maxPoints: _maxPoints = 1000,
+}) => (
+  <div className={`w-full h-full min-h-[200px] ${className}`} />
+);
+
+export default DrawdownChart;
+
+/* Original chart implementation retained for future reference:
+import React from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import PlotlyChart from './PlotlyChart';
 import { AnalyticsService } from '../../services/analytics';
 import { useInView } from '../../hooks/useInView';
@@ -18,7 +39,7 @@ const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, backtestId, classNa
     queryFn: async () => AnalyticsService.getDrawdownChart(backtestId as string, { maxPoints }),
     enabled: !!backtestId && !data && inView,
     staleTime: 10 * 60 * 1000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });
 
@@ -59,7 +80,11 @@ const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, backtestId, classNa
       try {
         const fig = JSON.parse(chartStr);
         return { traces: fig.data || [], layout: fig.layout || {} };
-      } catch {}
+      } catch (error) {
+        if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+          console.warn('DrawdownChart: failed to parse chart payload', error);
+        }
+      }
     }
     return { traces: [], layout: {} };
   }, [data, apiData]);
@@ -79,3 +104,4 @@ const DrawdownChart: React.FC<DrawdownChartProps> = ({ data, backtestId, classNa
 };
 
 export default DrawdownChart;
+*/

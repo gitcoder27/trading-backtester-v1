@@ -1,5 +1,24 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+
+interface TradeAnalysisChartProps {
+  data?: Array<unknown>;
+  backtestId?: string;
+  className?: string;
+}
+
+const TradeAnalysisChart: React.FC<TradeAnalysisChartProps> = ({
+  data: _data,
+  backtestId: _backtestId,
+  className = '',
+}) => (
+  <div className={`w-full h-full min-h-[200px] ${className}`} />
+);
+
+export default TradeAnalysisChart;
+
+/* Original chart implementation retained for future reference:
+import React from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import PlotlyChart from './PlotlyChart';
 import { AnalyticsService } from '../../services/analytics';
 
@@ -16,7 +35,7 @@ const TradeAnalysisChart: React.FC<TradeAnalysisChartProps> = ({ data, backtestI
     queryFn: async () => AnalyticsService.getTradesChart(backtestId as string),
     enabled: !!backtestId && !data,
     staleTime: 10 * 60 * 1000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });
 
@@ -72,7 +91,11 @@ const TradeAnalysisChart: React.FC<TradeAnalysisChartProps> = ({ data, backtestI
       try {
         const fig = JSON.parse(chartStr);
         return { traces: fig.data || [], layout: fig.layout || {} };
-      } catch {}
+      } catch (error) {
+        if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+          console.warn('TradeAnalysisChart: failed to parse chart payload', error);
+        }
+      }
     }
     return { traces: [], layout: {} };
   }, [data, apiData]);
@@ -91,3 +114,4 @@ const TradeAnalysisChart: React.FC<TradeAnalysisChartProps> = ({ data, backtestI
 };
 
 export default TradeAnalysisChart;
+*/

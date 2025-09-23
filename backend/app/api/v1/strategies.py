@@ -42,6 +42,16 @@ from pydantic import BaseModel
 class StrategyRegistrationRequest(BaseModel):
     strategy_ids: Optional[List[str]] = None
 
+
+class StrategyCodeUpdateRequest(BaseModel):
+    content: str
+
+
+class StrategyCodeCreateRequest(BaseModel):
+    file_name: str
+    content: str
+    overwrite: bool = False
+
 @router.post("/register")
 async def register_strategies(request: StrategyRegistrationRequest = None):
     """
@@ -125,6 +135,72 @@ async def get_strategy(strategy_id: int):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get strategy: {str(e)}")
+
+
+@router.get("/{strategy_id}/code")
+async def get_strategy_code(strategy_id: int):
+    """Return Python source code for a registered strategy."""
+    registry = StrategyRegistry()
+    try:
+        source = registry.get_strategy_source(strategy_id)
+        return {
+            'success': True,
+            'strategy_id': source['strategy_id'],
+            'module_path': source['module_path'],
+            'class_name': source['class_name'],
+            'file_path': source['file_path'],
+            'content': source['content']
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load strategy code: {str(e)}")
+
+
+@router.put("/{strategy_id}/code")
+async def update_strategy_code(strategy_id: int, request: StrategyCodeUpdateRequest):
+    """Persist edits to a strategy source file."""
+    registry = StrategyRegistry()
+    try:
+        result = registry.update_strategy_source(strategy_id, request.content)
+        return {
+            'success': True,
+            'strategy_id': result['strategy_id'],
+            'module_path': result['module_path'],
+            'file_path': result['file_path'],
+            'updated': True,
+            'registration': result.get('registration')
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update strategy code: {str(e)}")
+
+
+@router.post("/code")
+async def create_strategy_code(request: StrategyCodeCreateRequest):
+    """Create a new strategy Python file under the strategies directory."""
+    registry = StrategyRegistry()
+    try:
+        result = registry.create_strategy_source(request.file_name, request.content, request.overwrite)
+        return {
+            'success': True,
+            'file_path': result['file_path'],
+            'module_path': result['module_path'],
+            'created': result['created'],
+            'registration': result.get('registration'),
+            'registered_ids': result.get('registered_ids', [])
+        }
+    except FileExistsError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create strategy file: {str(e)}")
 
 
 @router.post("/{strategy_id}/validate")
@@ -319,38 +395,21 @@ async def update_strategy(
 
 @router.delete("/{strategy_id}")
 async def delete_strategy(strategy_id: int):
-    """
-    Soft delete a strategy (mark as inactive)
-    
-    Args:
-        strategy_id: ID of the strategy to delete
-        
-    Returns:
-        Deletion confirmation
-    """
+    """Delete a strategy, archive its file, and remove metadata."""
+    registry = StrategyRegistry()
     try:
-        from backend.app.database.models import get_session_factory, Strategy
-        
-        SessionLocal = get_session_factory()
-        db = SessionLocal()
-        
-        try:
-            strategy = db.query(Strategy).filter(Strategy.id == strategy_id).first()
-            if not strategy:
-                raise HTTPException(status_code=404, detail="Strategy not found")
-            
-            # Soft delete by marking inactive
-            strategy.is_active = False
-            db.commit()
-            
-            return {
-                'success': True,
-                'message': f"Strategy {strategy_id} marked as inactive"
-            }
-            
-        finally:
-            db.close()
-        
+        result = registry.delete_strategy(strategy_id)
+        return {
+            'success': True,
+            'strategy_id': result['strategy_id'],
+            'file_removed': result['file_removed'],
+            'archive_path': result['archive_path'],
+            'module_path': result['module_path'],
+            'class_name': result['class_name'],
+            'shared_module': result['shared_module'],
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete strategy: {str(e)}")
 

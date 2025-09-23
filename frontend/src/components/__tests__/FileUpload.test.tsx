@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import FileUpload from '../ui/FileUpload';
 
@@ -14,14 +14,12 @@ class MockFileReader {
 }
 
 describe('FileUpload', () => {
-  const orig = global.FileReader;
+  const orig = globalThis.FileReader;
   beforeEach(() => {
-    // @ts-expect-error override
-    global.FileReader = MockFileReader as any;
+    globalThis.FileReader = MockFileReader as unknown as typeof FileReader;
   });
   afterAll(() => {
-    // @ts-expect-error restore
-    global.FileReader = orig as any;
+    globalThis.FileReader = orig as typeof FileReader;
   });
 
   it('validates and selects CSV file', async () => {
@@ -50,4 +48,3 @@ describe('FileUpload', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 });
-

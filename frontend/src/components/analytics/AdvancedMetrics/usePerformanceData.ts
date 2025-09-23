@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import type { PerformanceData } from './types';
 import { AnalyticsService } from '../../../services/analytics';
 
@@ -20,7 +20,7 @@ export const usePerformanceData = (
     queryFn: () => AnalyticsService.getPerformanceSummary(backtestId, sections),
     enabled: !!backtestId && (options?.enabled ?? true),
     staleTime: 10 * 60 * 1000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
     retry: 1,
   });

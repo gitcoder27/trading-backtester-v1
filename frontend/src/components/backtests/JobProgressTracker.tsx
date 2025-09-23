@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Clock, CheckCircle, XCircle, AlertCircle, Play, Square, RotateCcw, Download } from 'lucide-react';
-import Button from '../ui/Button';
+import React from 'react';
+import { AlertCircle } from 'lucide-react';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
 import { JobService } from '../../services/backtest';
-import type { Job, JobStatus } from '../../types';
+import type { Job } from '../../types';
 import { showToast } from '../ui/Toast';
+import { getStatusIcon, getStatusColor, getStatusVariant } from '../../utils/status';
+import { formatDuration } from '../../utils/formatters';
+import { useJobPolling } from '../../hooks/useJobPolling';
+import JobProgressBar from './JobProgressBar';
+import JobActionsBar from './JobActionsBar';
 
 interface JobProgressTrackerProps {
   job: Job;
@@ -22,96 +26,11 @@ const JobProgressTracker: React.FC<JobProgressTrackerProps> = ({
   showActions = true,
   compact = false
 }) => {
-  const [job, setJob] = useState<Job>(initialJob);
-  const [isPolling, setIsPolling] = useState(false);
-  const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<string>('');
-  const [hasNotifiedCompletion, setHasNotifiedCompletion] = useState(
-    // If job is already completed when component mounts, mark as already notified
-    initialJob.status === 'completed' || initialJob.status === 'failed' || initialJob.status === 'cancelled'
-  );
-  const intervalRef = useRef<number | null>(null);
-  const startTimeRef = useRef<Date>(new Date());
-
-  useEffect(() => {
-    // Only start polling for jobs that are actually running or pending
-    // Don't poll for completed, failed, or cancelled jobs
-    if ((job.status === 'running' || job.status === 'pending') && !hasNotifiedCompletion) {
-      startPolling();
-    } else {
-      stopPolling();
-    }
-
-    return () => {
-      stopPolling();
-    };
-  }, [job.status, hasNotifiedCompletion]);
-
-  useEffect(() => {
-    if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
-      if (job.status === 'completed' && onJobComplete && !hasNotifiedCompletion) {
-        setHasNotifiedCompletion(true);
-        onJobComplete(job);
-      }
-      stopPolling();
-    }
-  }, [job.status, onJobComplete, hasNotifiedCompletion]);
-
-  const startPolling = () => {
-    if (intervalRef.current) return;
-    
-    setIsPolling(true);
-    intervalRef.current = setInterval(async () => {
-      try {
-        const updatedJob = await JobService.getJobStatus(job.id);
-        setJob(prev => ({
-          ...prev,
-          status: updatedJob.status,
-          progress: updatedJob.progress || 0,
-          error: updatedJob.error,
-          completed_at: updatedJob.completed_at
-        }));
-
-        // Update estimated time remaining
-        updateEstimatedTime(updatedJob.progress || 0);
-      } catch (error) {
-        console.error('Failed to fetch job status:', error);
-        // Continue polling even if there's an error
-      }
-    }, 2000); // Poll every 2 seconds
-  };
-
-  const stopPolling = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setIsPolling(false);
-  };
-
-  const updateEstimatedTime = (progress: number) => {
-    if (progress <= 0) {
-      setEstimatedTimeRemaining('Calculating...');
-      return;
-    }
-
-    const elapsed = Date.now() - startTimeRef.current.getTime();
-    const totalEstimated = elapsed / (progress / 100);
-    const remaining = totalEstimated - elapsed;
-
-    if (remaining <= 0) {
-      setEstimatedTimeRemaining('Completing...');
-      return;
-    }
-
-    const minutes = Math.floor(remaining / 60000);
-    const seconds = Math.floor((remaining % 60000) / 1000);
-
-    if (minutes > 0) {
-      setEstimatedTimeRemaining(`~${minutes}m ${seconds}s remaining`);
-    } else {
-      setEstimatedTimeRemaining(`~${seconds}s remaining`);
-    }
-  };
+  const { job, setJob, isPolling, estimatedTimeRemaining } = useJobPolling(initialJob, {
+    onComplete: onJobComplete,
+    pollIntervalMs: 2000,
+    autoStart: true,
+  });
 
   const handleCancel = async () => {
     try {
@@ -147,66 +66,7 @@ const JobProgressTracker: React.FC<JobProgressTrackerProps> = ({
     }
   };
 
-  const getStatusIcon = (status: JobStatus) => {
-    switch (status) {
-      case 'completed':
-        return CheckCircle;
-      case 'running':
-        return Play;
-      case 'failed':
-        return XCircle;
-      case 'cancelled':
-        return Square;
-      case 'pending':
-      default:
-        return Clock;
-    }
-  };
-
-  const getStatusColor = (status: JobStatus) => {
-    switch (status) {
-      case 'completed':
-        return 'text-green-500';
-      case 'running':
-        return 'text-blue-500';
-      case 'failed':
-        return 'text-red-500';
-      case 'cancelled':
-        return 'text-gray-500';
-      case 'pending':
-      default:
-        return 'text-yellow-500';
-    }
-  };
-
-  const getStatusVariant = (status: JobStatus): 'success' | 'primary' | 'danger' | 'warning' => {
-    switch (status) {
-      case 'completed':
-        return 'success';
-      case 'running':
-        return 'primary';
-      case 'failed':
-        return 'danger';
-      case 'cancelled':
-      case 'pending':
-      default:
-        return 'warning';
-    }
-  };
-
-  const formatDuration = (startTime: string, endTime?: string) => {
-    const start = new Date(startTime);
-    const end = endTime ? new Date(endTime) : new Date();
-    const duration = end.getTime() - start.getTime();
-    
-    const minutes = Math.floor(duration / 60000);
-    const seconds = Math.floor((duration % 60000) / 1000);
-    
-    if (minutes > 0) {
-      return `${minutes}m ${seconds}s`;
-    }
-    return `${seconds}s`;
-  };
+  // status helpers and formatters are centralized in utils
 
   const StatusIcon = getStatusIcon(job.status);
 
@@ -222,14 +82,7 @@ const JobProgressTracker: React.FC<JobProgressTrackerProps> = ({
             {job.status === 'running' ? `${job.progress || 0}% complete` : job.status}
           </div>
         </div>
-        {job.status === 'running' && (
-          <div className="w-16 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-blue-500 transition-all duration-300"
-              style={{ width: `${job.progress || 0}%` }}
-            />
-          </div>
-        )}
+        <JobProgressBar status={job.status} progress={job.progress || 0} size="sm" />
         <Badge variant={getStatusVariant(job.status)} size="sm">
           {job.status}
         </Badge>
@@ -259,27 +112,7 @@ const JobProgressTracker: React.FC<JobProgressTrackerProps> = ({
         </div>
 
         {/* Progress Bar */}
-        {(job.status === 'running' || job.status === 'pending') && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400">Progress</span>
-              <span className="font-medium text-gray-900 dark:text-gray-100">
-                {job.progress || 0}%
-              </span>
-            </div>
-            <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500 ease-out"
-                style={{ width: `${job.progress || 0}%` }}
-              />
-            </div>
-            {estimatedTimeRemaining && (
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                {estimatedTimeRemaining}
-              </p>
-            )}
-          </div>
-        )}
+        <JobProgressBar status={job.status} progress={job.progress || 0} estimatedTime={estimatedTimeRemaining} size="md" />
 
         {/* Job Details */}
         <div className="grid grid-cols-2 gap-4 text-sm">
@@ -292,7 +125,7 @@ const JobProgressTracker: React.FC<JobProgressTrackerProps> = ({
           <div>
             <span className="text-gray-500 dark:text-gray-400">Duration:</span>
             <span className="ml-2 font-medium text-gray-900 dark:text-gray-100">
-              {formatDuration(job.created_at, job.completed_at)}
+              {formatDuration(job.created_at, job.completed_at || new Date().toISOString())}
             </span>
           </div>
         </div>
@@ -316,38 +149,12 @@ const JobProgressTracker: React.FC<JobProgressTrackerProps> = ({
 
         {/* Actions */}
         {showActions && (
-          <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center space-x-2">
-              {isPolling && (
-                <div className="flex items-center space-x-1 text-xs text-gray-500 dark:text-gray-400">
-                  <RotateCcw className="w-3 h-3 animate-spin" />
-                  <span>Live updates</span>
-                </div>
-              )}
-            </div>
-            <div className="flex items-center space-x-2">
-              {job.status === 'completed' && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={Download}
-                  onClick={handleDownloadResults}
-                >
-                  Download Results
-                </Button>
-              )}
-              {(job.status === 'running' || job.status === 'pending') && (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  icon={Square}
-                  onClick={handleCancel}
-                >
-                  Cancel
-                </Button>
-              )}
-            </div>
-          </div>
+          <JobActionsBar
+            status={job.status}
+            isPolling={isPolling}
+            onCancel={handleCancel}
+            onDownload={handleDownloadResults}
+          />
         )}
       </div>
     </Card>

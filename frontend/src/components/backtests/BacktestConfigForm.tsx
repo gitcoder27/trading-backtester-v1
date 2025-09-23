@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AlertCircle, Settings, Calendar, DollarSign } from 'lucide-react';
+import { Settings, Calendar, DollarSign } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import type { BacktestConfig, Strategy, ParameterSchema } from '../../types';
@@ -60,7 +60,6 @@ const BacktestConfigForm: React.FC<BacktestConfigFormProps> = ({
       const preselectedStrategy = strategies.find(s => s.id === preselectedStrategyId);
       if (preselectedStrategy) {
         setSelectedStrategy(preselectedStrategy);
-        setStrategySearchTerm(preselectedStrategy.name);
         setConfig(prev => ({ ...prev, strategy_id: preselectedStrategy.id }));
         
         // Set preselected parameters if provided

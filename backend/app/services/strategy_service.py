@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Type
 import traceback
 import tempfile
+import shutil
+from datetime import datetime
 import pandas as pd
 import numpy as np
 
@@ -25,6 +27,228 @@ class StrategyRegistry:
         self.strategies_dir = Path(strategies_dir)
         self.SessionLocal = get_session_factory()
         self._strategy_cache = {}
+
+    # ------------------------------------------------------------------
+    # File helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_module_to_path(self, module_path: str) -> Path:
+        """Return absolute path to module inside the strategies directory."""
+        if not module_path:
+            raise ValueError("Module path is required")
+
+        module_parts = module_path.split('.')
+        # Trim leading package reference (commonly 'strategies')
+        if module_parts and module_parts[0] == self.strategies_dir.name:
+            module_parts = module_parts[1:]
+
+        if not module_parts:
+            raise ValueError(f"Invalid module path: {module_path}")
+
+        relative_path = Path(*module_parts).with_suffix('.py')
+        return self._ensure_within_strategies_dir(self.strategies_dir / relative_path)
+
+    def _ensure_within_strategies_dir(self, path: Path) -> Path:
+        """Ensure target path stays within the strategies directory."""
+        strategies_root = self.strategies_dir.resolve()
+        target = path.resolve()
+        try:
+            target.relative_to(strategies_root)
+        except ValueError as exc:
+            raise ValueError("Path must be inside strategies directory") from exc
+        return target
+
+    def _invalidate_module_cache(self, module_path: str) -> None:
+        """Invalidate Python import cache for a strategy module."""
+        importlib.invalidate_caches()
+        if module_path in sys.modules:
+            del sys.modules[module_path]
+
+    def _resolve_strategy_id(self, strategy_id: int) -> Strategy:
+        db = self.SessionLocal()
+        try:
+            strategy = db.query(Strategy).filter(Strategy.id == strategy_id).first()
+            if not strategy:
+                raise ValueError(f"Strategy {strategy_id} not found")
+            return strategy
+        finally:
+            db.close()
+
+    def _relative_to_strategies(self, path: Path) -> str:
+        """Return strategy file path relative to strategies directory."""
+        try:
+            return str(path.resolve().relative_to(self.strategies_dir.resolve()))
+        except ValueError:
+            return str(path)
+
+    def _get_archive_dir(self) -> Path:
+        """Return directory where deleted strategy files are archived."""
+        archive_root = Path("archive/strategies")
+        archive_root.mkdir(parents=True, exist_ok=True)
+        return archive_root
+
+    # ------------------------------------------------------------------
+    # File accessors
+    # ------------------------------------------------------------------
+
+    def get_strategy_source(self, strategy_id: int) -> Dict[str, Any]:
+        """Load strategy source file content for editing."""
+        strategy = self._resolve_strategy_id(strategy_id)
+        file_path = self._resolve_module_to_path(strategy.module_path)
+
+        if not file_path.exists():
+            raise FileNotFoundError(f"Strategy file not found at {file_path}")
+
+        content = file_path.read_text(encoding='utf-8')
+        return {
+            'strategy_id': strategy.id,
+            'module_path': strategy.module_path,
+            'class_name': strategy.class_name,
+            'file_path': self._relative_to_strategies(file_path),
+            'content': content,
+        }
+
+    def update_strategy_source(self, strategy_id: int, content: str) -> Dict[str, Any]:
+        """Persist new content to an existing strategy source file."""
+        if content is None:
+            raise ValueError("Content is required to update strategy source")
+
+        strategy = self._resolve_strategy_id(strategy_id)
+        file_path = self._resolve_module_to_path(strategy.module_path)
+        if not file_path.exists():
+            raise FileNotFoundError(f"Strategy file not found at {file_path}")
+
+        file_path.write_text(content, encoding='utf-8')
+        self._invalidate_module_cache(strategy.module_path)
+
+        registration: Optional[Dict[str, Any]] = None
+        try:
+            strategy_id_str = f"{strategy.module_path}.{strategy.class_name}"
+            registration = self.register_strategies(strategy_ids=[strategy_id_str])
+        except Exception as exc:  # pragma: no cover - defensive
+            registration = {
+                'success': False,
+                'error': str(exc),
+                'registered': 0,
+                'updated': 0,
+                'errors': [str(exc)]
+            }
+
+        return {
+            'strategy_id': strategy.id,
+            'file_path': self._relative_to_strategies(file_path),
+            'module_path': strategy.module_path,
+            'registration': registration,
+        }
+
+    def create_strategy_source(self, file_name: str, content: str, overwrite: bool = False) -> Dict[str, Any]:
+        """Create a new strategy Python file inside the strategies directory."""
+        if not file_name:
+            raise ValueError("File name is required")
+        if content is None:
+            raise ValueError("Content is required")
+
+        sanitized = file_name.strip()
+        if not sanitized:
+            raise ValueError("File name cannot be empty")
+
+        # Disallow path traversal
+        if any(sep in sanitized for sep in ('/', '\\')):
+            raise ValueError("File name must not include directories")
+
+        if not sanitized.endswith('.py'):
+            sanitized = f"{sanitized}.py"
+
+        target_path = self._ensure_within_strategies_dir(self.strategies_dir / sanitized)
+        self.strategies_dir.mkdir(parents=True, exist_ok=True)
+
+        if target_path.exists() and not overwrite:
+            raise FileExistsError(f"Strategy file {sanitized} already exists")
+
+        target_path.write_text(content, encoding='utf-8')
+
+        module_path = f"{self.strategies_dir.name}.{Path(sanitized).stem}"
+        self._invalidate_module_cache(module_path)
+
+        registration: Optional[Dict[str, Any]] = None
+        registered_ids: List[str] = []
+
+        try:
+            analyzed = self._analyze_strategy_file(target_path)
+            candidate_ids = [info['id'] for info in analyzed if info.get('is_valid')]
+            if candidate_ids:
+                registration = self.register_strategies(strategy_ids=candidate_ids)
+                if registration.get('success'):
+                    registered_ids = candidate_ids
+        except Exception as exc:  # pragma: no cover - defensive
+            registration = {
+                'success': False,
+                'error': str(exc),
+                'registered': 0,
+                'updated': 0,
+                'errors': [str(exc)]
+            }
+
+        return {
+            'file_path': self._relative_to_strategies(target_path),
+            'module_path': module_path,
+            'created': True,
+            'registration': registration,
+            'registered_ids': registered_ids,
+        }
+
+    def delete_strategy(self, strategy_id: int) -> Dict[str, Any]:
+        """Delete a registered strategy, archive its file, and remove metadata."""
+        db = self.SessionLocal()
+        archive_path: Optional[Path] = None
+        file_removed = False
+        try:
+            strategy = db.query(Strategy).filter(Strategy.id == strategy_id).first()
+            if not strategy:
+                raise ValueError(f"Strategy {strategy_id} not found")
+
+            module_path = strategy.module_path
+            file_path: Optional[Path] = None
+            try:
+                file_path = self._resolve_module_to_path(module_path)
+            except ValueError:
+                file_path = None
+
+            shared_count = db.query(Strategy).filter(
+                Strategy.module_path == module_path,
+                Strategy.id != strategy_id
+            ).count()
+
+            if file_path and file_path.exists() and shared_count == 0:
+                archive_dir = self._get_archive_dir()
+                timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+                archive_name = f"{file_path.stem}_{timestamp}{file_path.suffix}"
+                archive_path = archive_dir / archive_name
+                shutil.move(str(file_path), archive_path)
+                file_removed = True
+            elif file_path and file_path.exists():
+                archive_path = None
+                file_removed = False
+
+            self._invalidate_module_cache(module_path)
+
+            db.delete(strategy)
+            db.commit()
+
+            return {
+                'success': True,
+                'strategy_id': strategy_id,
+                'file_removed': file_removed,
+                'archive_path': str(archive_path) if archive_path else None,
+                'module_path': module_path,
+                'class_name': strategy.class_name,
+                'shared_module': shared_count > 0
+            }
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
     
     def discover_strategies(self) -> List[Dict[str, Any]]:
         """
@@ -49,11 +273,14 @@ class StrategyRegistry:
             try:
                 strategy_info = self._analyze_strategy_file(py_file)
                 if strategy_info:
+                    relative = self._relative_to_strategies(py_file)
+                    for info in strategy_info:
+                        info.setdefault('file_path', relative)
                     strategies.extend(strategy_info)
             except Exception as e:
                 print(f"Error analyzing {py_file}: {e}")
                 continue
-        
+
         return strategies
     
     def register_strategies(self, strategy_ids: List[str] = None) -> Dict[str, Any]:
@@ -234,9 +461,10 @@ class StrategyRegistry:
                 'parameters_schema': {},
                 'default_parameters': {},
                 'is_valid': False,
-                'error': str(e)
+                'error': str(e),
+                'file_path': self._relative_to_strategies(py_file)
             })
-        
+
         return strategies
     
     def _extract_strategy_metadata(self, strategy_class: Type, module_path: str, class_name: str) -> Dict[str, Any]:
@@ -465,6 +693,7 @@ class StrategyRegistry:
             'name': strategy.name,
             'module_path': strategy.module_path,
             'class_name': strategy.class_name,
+            'file_path': self._relative_to_strategies(self._resolve_module_to_path(strategy.module_path)),
             'description': strategy.description,
             'total_backtests': strategy.total_backtests,
             'avg_performance': strategy.avg_performance,

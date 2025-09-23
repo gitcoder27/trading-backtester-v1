@@ -2,9 +2,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { UserPreferences } from '../types';
 
+type PreferencesUpdate = Partial<Omit<UserPreferences, 'chart_preferences' | 'table_preferences'>> & {
+  chart_preferences?: Partial<UserPreferences['chart_preferences']>;
+  table_preferences?: Partial<UserPreferences['table_preferences']>;
+};
+
 interface SettingsState extends UserPreferences {
   // Actions
-  updatePreferences: (preferences: Partial<UserPreferences>) => void;
+  updatePreferences: (preferences: PreferencesUpdate) => void;
   resetToDefaults: () => void;
 }
 

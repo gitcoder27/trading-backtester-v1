@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { useQuery } from '@tanstack/react-query';
 import { BacktestService } from '../../services/backtest';
 import PriceChartWithTrades from './PriceChartWithTrades';
+import type { ChartQueryParams } from './PriceChartWithTrades';
 
 interface PriceChartPanelProps {
   backtestId: string;
@@ -13,6 +14,19 @@ interface PriceChartPanelProps {
   defaultTz?: string;
   singleDayDefault?: boolean;
 }
+
+type ChartNavigation = {
+  available_dates?: string[];
+  resolved_dates?: string[];
+  previous_date?: string | null;
+  next_date?: string | null;
+  requested_start?: string | null;
+  requested_end?: string | null;
+  resolved_start?: string | null;
+  resolved_end?: string | null;
+  has_data?: boolean;
+  requested_cursor?: string | null;
+};
 
 const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
   backtestId,
@@ -25,8 +39,13 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
   const [singleDay, setSingleDay] = useState<boolean>(singleDayDefault);
   const [startDateInput, setStartDateInput] = useState<string | null>(null);
   const [endDateInput, setEndDateInput] = useState<string | null>(null);
-  const [appliedStart, setAppliedStart] = useState<string | null>(null);
-  const [appliedEnd, setAppliedEnd] = useState<string | null>(null);
+  const [currentRange, setCurrentRange] = useState<{ start: string | null; end: string | null }>({
+    start: null,
+    end: null,
+  });
+  const [chartParams, setChartParams] = useState<ChartQueryParams | null>(null);
+  const [navigation, setNavigation] = useState<ChartNavigation | null>(null);
+  const currentRangeEnd = currentRange.end;
 
   const { data: firstCandleData } = useQuery({
     queryKey: ['chart-first-day', backtestId, defaultTz],
@@ -42,17 +61,48 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
   });
 
   useEffect(() => {
-    const ts = (firstCandleData as any)?.date_range?.start;
-    if (!ts) return;
-    const d = new Date((ts as number) * 1000);
-    const yyyyMmDd = d.toISOString().slice(0, 10);
-    if (!startDateInput) setStartDateInput(yyyyMmDd);
-    if (!endDateInput) setEndDateInput(yyyyMmDd);
-    if (!appliedStart || !appliedEnd) {
-      setAppliedStart(yyyyMmDd);
-      setAppliedEnd(yyyyMmDd);
+    if (!firstCandleData) return;
+
+    const nav = (firstCandleData as any)?.navigation;
+
+    let resolvedStart: string | null = nav?.resolved_start ?? nav?.resolved_dates?.[0] ?? null;
+    let resolvedEnd: string | null = nav?.resolved_end ?? nav?.resolved_dates?.slice(-1)?.[0] ?? null;
+
+    if (!resolvedStart) {
+      const ts = (firstCandleData as any)?.date_range?.start;
+      if (typeof ts === 'number') {
+        const d = new Date(ts * 1000);
+        resolvedStart = d.toISOString().slice(0, 10);
+      }
     }
-  }, [firstCandleData]);
+
+    if (!resolvedEnd) {
+      resolvedEnd = resolvedStart;
+    }
+
+    if (!resolvedStart) return;
+
+    if (!startDateInput) {
+      setStartDateInput(resolvedStart);
+    }
+    if (!endDateInput) {
+      setEndDateInput(singleDay ? resolvedStart : resolvedEnd);
+    }
+    if (!currentRange.start) {
+      setCurrentRange({ start: resolvedStart, end: resolvedEnd });
+    }
+    if (!chartParams) {
+      setChartParams({
+        start: resolvedStart,
+        end: singleDay ? resolvedStart : resolvedEnd,
+        cursor: resolvedStart,
+        navigate: singleDay ? 'current' : undefined,
+        singleDay,
+        tz: defaultTz,
+        maxCandles: defaultMaxCandles,
+      });
+    }
+  }, [firstCandleData, singleDay, startDateInput, endDateInput, currentRange.start, currentRange.end, chartParams, defaultTz, defaultMaxCandles]);
 
   useEffect(() => {
     if (singleDay && startDateInput) setEndDateInput(startDateInput);
@@ -61,21 +111,120 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
   const canApply = useMemo(() => Boolean(startDateInput && endDateInput), [startDateInput, endDateInput]);
 
   const handleApply = () => {
-    if (!canApply) return;
-    setAppliedStart(startDateInput);
-    setAppliedEnd(endDateInput);
+    if (!canApply || !startDateInput) return;
+    const startValue = startDateInput;
+    const endValue = singleDay ? startValue : endDateInput;
+
+    setChartParams({
+      start: startValue,
+      end: endValue ?? startValue,
+      cursor: startValue,
+      navigate: singleDay ? 'current' : undefined,
+      singleDay,
+      tz: defaultTz,
+      maxCandles: defaultMaxCandles,
+    });
   };
 
   const stepDay = (delta: number) => {
-    if (!appliedStart) return;
-    const base = new Date(appliedStart);
-    base.setDate(base.getDate() + delta);
-    const yyyyMmDd = base.toISOString().slice(0, 10);
-    setStartDateInput(yyyyMmDd);
-    setEndDateInput(yyyyMmDd);
-    setAppliedStart(yyyyMmDd);
-    setAppliedEnd(yyyyMmDd);
+    if (!navigation) return;
+    const direction = delta > 0 ? 'next' : 'previous';
+    const cursorCandidate =
+      direction === 'next'
+        ? navigation.resolved_end || navigation.resolved_start || currentRange.end || currentRange.start
+        : navigation.resolved_start || navigation.resolved_end || currentRange.start || currentRange.end;
+
+    if (!cursorCandidate) return;
+
+    setStartDateInput(cursorCandidate);
+    if (singleDay) {
+      setEndDateInput(cursorCandidate);
+    }
+
+    setChartParams({
+      cursor: cursorCandidate,
+      navigate: direction,
+      singleDay: true,
+      tz: defaultTz,
+      maxCandles: defaultMaxCandles,
+    });
   };
+
+  const handleNavigationChange = useCallback((nav: Record<string, any> | null) => {
+    if (!nav) {
+      setNavigation(null);
+      return;
+    }
+    setNavigation(nav as ChartNavigation);
+  }, []);
+
+  useEffect(() => {
+    if (!navigation) return;
+
+    const resolvedStartRaw = navigation.resolved_start ?? navigation.resolved_dates?.[0] ?? currentRange.start;
+    const resolvedEndRaw = navigation.resolved_end ?? navigation.resolved_dates?.slice(-1)?.[0] ?? resolvedStartRaw;
+
+    const normalizedStart = resolvedStartRaw ?? null;
+    const normalizedEnd = resolvedEndRaw ?? normalizedStart ?? null;
+
+    if (!normalizedStart && !normalizedEnd) {
+      return;
+    }
+
+    const rangeChanged = Boolean(normalizedStart) && (
+      currentRange.start !== normalizedStart || currentRange.end !== normalizedEnd
+    );
+
+    if (rangeChanged) {
+      setCurrentRange({ start: normalizedStart, end: normalizedEnd });
+    }
+
+    const shouldSyncStart = rangeChanged || startDateInput === null;
+    if (shouldSyncStart && normalizedStart && startDateInput !== normalizedStart) {
+      setStartDateInput(normalizedStart);
+    }
+
+    const shouldSyncEnd = rangeChanged || endDateInput === null;
+    if (singleDay) {
+      if (shouldSyncEnd && normalizedStart && endDateInput !== normalizedStart) {
+        setEndDateInput(normalizedStart);
+      }
+    } else if (normalizedEnd && shouldSyncEnd && endDateInput !== normalizedEnd) {
+      setEndDateInput(normalizedEnd);
+    }
+  }, [navigation, singleDay, currentRange.start, currentRange.end, startDateInput, endDateInput]);
+
+  useEffect(() => {
+    if (!chartParams) return;
+    if (!startDateInput) return;
+
+    if (singleDay && chartParams.singleDay !== true) {
+      setChartParams({
+        start: startDateInput,
+        end: startDateInput,
+        cursor: startDateInput,
+        navigate: 'current',
+        singleDay: true,
+        tz: defaultTz,
+        maxCandles: defaultMaxCandles,
+      });
+      return;
+    }
+
+    if (!singleDay && chartParams.singleDay !== false) {
+      const targetEnd = endDateInput ?? currentRange.end ?? startDateInput;
+      if (!targetEnd) return;
+      setChartParams({
+        start: startDateInput,
+        end: targetEnd,
+        cursor: startDateInput,
+        navigate: undefined,
+        singleDay: false,
+        tz: defaultTz,
+        maxCandles: defaultMaxCandles,
+      });
+    }
+  }, [singleDay, chartParams, startDateInput, endDateInput, defaultTz, defaultMaxCandles, currentRangeEnd]);
 
   return (
     <Card className="p-6">
@@ -90,10 +239,20 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
           </label>
           {singleDay && (
             <>
-              <Button variant="nav" size="sm" onClick={() => stepDay(-1)}>
+              <Button
+                variant="nav"
+                size="sm"
+                onClick={() => stepDay(-1)}
+                disabled={!navigation?.previous_date}
+              >
                 Prev Day
               </Button>
-              <Button variant="nav" size="sm" onClick={() => stepDay(1)}>
+              <Button
+                variant="nav"
+                size="sm"
+                onClick={() => stepDay(1)}
+                disabled={!navigation?.next_date}
+              >
                 Next Day
               </Button>
             </>
@@ -126,15 +285,13 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
         </Button>
       </div>
       <div className="h-[600px]">
-        {appliedStart && appliedEnd ? (
+        {chartParams ? (
           <PriceChartWithTrades
             backtestId={backtestId}
             height={height}
-            start={appliedStart}
-            end={appliedEnd}
-            maxCandles={defaultMaxCandles}
-            tz={defaultTz}
             title={title}
+            queryParams={chartParams}
+            onNavigationChange={handleNavigationChange}
           />
         ) : (
           <div className="flex items-center justify-center h-full">
@@ -150,4 +307,3 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
 };
 
 export default PriceChartPanel;
-

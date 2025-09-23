@@ -52,7 +52,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from backend.app.database.models import get_session_factory, Dataset
+from backend.app.database.models import get_session_factory, Dataset, init_db
 from backend.app.utils.path_utils import resolve_dataset_path
 
 
@@ -87,6 +87,9 @@ def main(argv: List[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true", help="Skip interactive confirmation prompt")
 
     args = parser.parse_args(argv)
+
+    # Ensure database and tables exist before querying
+    init_db()
 
     SessionLocal = get_session_factory()
     db = SessionLocal()

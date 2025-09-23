@@ -355,40 +355,52 @@ describe('JobService', () => {
   describe('listJobs', () => {
     it('should list jobs without parameters', async () => {
       const mockResponse = {
-        items: [
+        jobs: [
           { id: 'job-1', type: 'backtest', status: 'completed' },
           { id: 'job-2', type: 'optimization', status: 'running' }
         ],
         total: 2,
+        limit: 20,
         page: 1,
-        page_size: 20,
-        total_pages: 1
+        pages: 1
       };
 
       mockApiClient.get.mockResolvedValue(mockResponse);
 
       const result = await JobService.listJobs();
 
-      expect(mockApiClient.get).toHaveBeenCalledWith('/jobs', undefined);
-      expect(result).toEqual(mockResponse);
+      expect(mockApiClient.get).toHaveBeenCalledWith('/jobs', { limit: 20 });
+      expect(result).toEqual({
+        items: mockResponse.jobs,
+        total: 2,
+        page: 1,
+        limit: 20,
+        pages: 1
+      });
     });
 
     it('should list jobs with parameters', async () => {
-      const params = { page: 1, page_size: 10, status: 'completed' };
+      const params = { page: 1, size: 10, status: 'completed' } as any;
       const mockResponse = {
-        items: [{ id: 'job-1', status: 'completed' }],
+        jobs: [{ id: 'job-1', status: 'completed' }],
         total: 1,
+        limit: 10,
         page: 1,
-        page_size: 10,
-        total_pages: 1
+        pages: 1
       };
 
       mockApiClient.get.mockResolvedValue(mockResponse);
 
       const result = await JobService.listJobs(params);
 
-      expect(mockApiClient.get).toHaveBeenCalledWith('/jobs', params);
-      expect(result).toEqual(mockResponse);
+      expect(mockApiClient.get).toHaveBeenCalledWith('/jobs', { limit: 10, status: 'completed' });
+      expect(result).toEqual({
+        items: mockResponse.jobs,
+        total: 1,
+        page: 1,
+        limit: 10,
+        pages: 1
+      });
     });
   });
 });

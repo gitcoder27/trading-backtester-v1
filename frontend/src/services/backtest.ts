@@ -7,20 +7,33 @@ import type {
   PaginationParams 
 } from '../types/index';
 
+interface EngineOptions {
+  initial_cash: number;
+  lots: number;
+  fee_per_trade: number;
+  slippage: number;
+  intraday?: boolean;
+  daily_target?: number;
+  daily_profit_target?: number;
+  option_delta?: number;
+  option_price_per_unit?: number;
+}
+
 export class BacktestService {
   static async runBacktest(config: BacktestConfig): Promise<BacktestResult> {
     // Map to BacktestRequest schema: strategy, strategy_params, dataset, engine_options
-    const engineOptions: any = {
+    const p = config.parameters || {};
+    const engineOptions: EngineOptions = {
       initial_cash: config.initial_capital,
       lots: config.position_size,
       fee_per_trade: config.commission,
       slippage: config.slippage,
       // Map enhanced params if present
-      intraday: (config.parameters as any)?.intraday_mode ?? true,
-      daily_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
-      daily_profit_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
-      option_delta: (config.parameters as any)?.option_delta ?? 0.5,
-      option_price_per_unit: (config.parameters as any)?.option_price_per_unit ?? 1.0,
+      intraday: (p as any).intraday_mode ?? true,
+      daily_target: (p as any).daily_profit_target ?? 30.0,
+      daily_profit_target: (p as any).daily_profit_target ?? 30.0,
+      option_delta: (p as any).option_delta ?? 0.5,
+      option_price_per_unit: (p as any).option_price_per_unit ?? 1.0,
     };
 
     const backtestRequest = {
@@ -52,16 +65,17 @@ export class BacktestService {
     const formData = new FormData();
     formData.append('file', file);
     
-    const engineOptions: any = {
-      initial_cash: config.initial_capital,
-      lots: config.position_size,
-      fee_per_trade: config.commission,
-      slippage: config.slippage,
-      intraday: (config.parameters as any)?.intraday_mode ?? true,
-      daily_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
-      daily_profit_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
-      option_delta: (config.parameters as any)?.option_delta ?? 0.5,
-      option_price_per_unit: (config.parameters as any)?.option_price_per_unit ?? 1.0,
+    const p = config.parameters || {};
+    const engineOptions: EngineOptions = {
+      initial_cash: config.initial_capital!,
+      lots: config.position_size!,
+      fee_per_trade: config.commission || 0,
+      slippage: config.slippage || 0,
+      intraday: (p as any).intraday_mode ?? true,
+      daily_target: (p as any).daily_profit_target ?? 30.0,
+      daily_profit_target: (p as any).daily_profit_target ?? 30.0,
+      option_delta: (p as any).option_delta ?? 0.5,
+      option_price_per_unit: (p as any).option_price_per_unit ?? 1.0,
     };
 
     formData.append('strategy', String(config.strategy_id ?? ''));
@@ -82,8 +96,11 @@ export class BacktestService {
       includeIndicators?: boolean;
       maxCandles?: number;
       tz?: string;
-      start?: string; // ISO datetime or YYYY-MM-DD
-      end?: string;   // ISO datetime or YYYY-MM-DD
+      start?: string | null;
+      end?: string | null;
+      singleDay?: boolean | null;
+      cursor?: string | null;
+      navigate?: 'next' | 'previous' | 'current' | null;
     }
   ): Promise<any> {
     const params = new URLSearchParams();
@@ -105,7 +122,16 @@ export class BacktestService {
     if (options?.tz) {
       params.append('tz', options.tz);
     }
-    
+    if (options?.singleDay !== undefined && options.singleDay !== null) {
+      params.append('single_day', options.singleDay ? 'true' : 'false');
+    }
+    if (options?.cursor) {
+      params.append('cursor', options.cursor);
+    }
+    if (options?.navigate) {
+      params.append('navigate', options.navigate);
+    }
+
     const queryString = params.toString();
     const url = `/analytics/chart-data/${id}${queryString ? `?${queryString}` : ''}`;
     return apiClient.get<any>(url);
@@ -149,8 +175,37 @@ export class JobService {
     return apiClient.post<void>(`/jobs/${id}/cancel`);
   }
 
-  static async listJobs(params?: PaginationParams): Promise<PaginatedResponse<Job>> {
-    return apiClient.get<PaginatedResponse<Job>>('/jobs', params);
+  static async listJobs(params?: PaginationParams & { limit?: number }): Promise<PaginatedResponse<Job>> {
+    const { page, size, limit, ...rest } = params || {};
+    const effectiveLimit = limit ?? size ?? rest?.pageSize ?? 20;
+    const queryParams: Record<string, any> = {
+      limit: effectiveLimit,
+      ...rest,
+    };
+
+    const response = await apiClient.get<Record<string, any>>('/jobs', queryParams);
+
+    const jobs: Job[] = Array.isArray(response?.jobs)
+      ? (response.jobs as Job[])
+      : Array.isArray(response?.items)
+      ? (response.items as Job[])
+      : [];
+
+    const total = typeof response?.total === 'number'
+      ? response.total
+      : typeof response?.count === 'number'
+      ? response.count
+      : jobs.length;
+
+    const pages = Math.max(1, Math.ceil(total / effectiveLimit));
+
+    return {
+      items: jobs,
+      total,
+      page: 1,
+      limit: effectiveLimit,
+      pages,
+    };
   }
 
   static async deleteJob(id: string): Promise<void> {

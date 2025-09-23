@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Play, Activity } from 'lucide-react';
 import Card from '../../components/ui/Card';
@@ -28,9 +29,11 @@ const Backtests: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'completed' | 'running' | 'failed'>('all');
   const { backtests, loading, refetch, removeBacktestLocally } = useBacktestsList();
   const stats = useBacktestStats(backtests);
-  const { recentJobs, refetch: refetchRecentJobs } = useRecentJobs(5);
+  const JOBS_QUERY_LIMIT = 50;
+  const { recentJobs, refetch: refetchRecentJobs } = useRecentJobs(3, JOBS_QUERY_LIMIT);
   const [submittingBacktest, setSubmittingBacktest] = useState(false);
   const [notifiedJobs, setNotifiedJobs] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
   
   useEffect(() => {
     // Load data only once when component mounts
@@ -45,7 +48,7 @@ const Backtests: React.FC = () => {
       // Clear the navigation state to prevent reopening modal on refresh
       window.history.replaceState({}, '', location.pathname);
     }
-  }, []); // Empty dependency array - only run once on mount
+  }, [location.pathname, location.state]);
 
   // Stats are computed via useBacktestStats
 
@@ -96,6 +99,23 @@ const Backtests: React.FC = () => {
     } catch (err) {
       console.error('Failed to open backtest from job:', err);
       showToast.error('Failed to load backtest details for this job');
+    }
+  };
+
+  const handleRefresh = async () => {
+    const toastId = showToast.loading('Refreshing...');
+    try {
+      await Promise.all([
+        refetch(),
+        refetchRecentJobs(),
+        queryClient.invalidateQueries({ queryKey: ['jobs-stats'] }),
+      ]);
+      showToast.success('Refreshed');
+    } catch (e) {
+      console.error('Failed to refresh:', e);
+      showToast.error('Refresh failed');
+    } finally {
+      showToast.dismiss(toastId as any);
     }
   };
 
@@ -191,13 +211,7 @@ const Backtests: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center space-x-3">
-          <Button
-            variant="outline"
-            onClick={() => loadData()}
-            size="sm"
-          >
-            Refresh
-          </Button>
+          <Button variant="outline" onClick={handleRefresh} size="sm">Refresh</Button>
           <Button
             variant="secondary"
             icon={Activity}
@@ -238,9 +252,10 @@ const Backtests: React.FC = () => {
               View All
             </Button>
           </div>
-          <JobsList 
-            compact={true} 
-            maxJobs={3} 
+          <JobsList
+            compact
+            maxJobs={3}
+            fetchLimit={JOBS_QUERY_LIMIT}
             onJobComplete={handleJobComplete}
             onJobClick={handleJobClick}
           />
@@ -318,7 +333,11 @@ const Backtests: React.FC = () => {
         size="xl"
       >
         <div className="max-h-[70vh] overflow-auto">
-          <JobsList onJobComplete={handleJobComplete} onJobClick={handleJobClick} />
+          <JobsList
+            fetchLimit={JOBS_QUERY_LIMIT}
+            onJobComplete={handleJobComplete}
+            onJobClick={handleJobClick}
+          />
         </div>
       </Modal>
     </div>

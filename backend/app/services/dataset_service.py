@@ -1,566 +1,380 @@
-"""
-Dataset management service for upload, validation, and quality analysis
-"""
+"""Dataset management orchestration using modular helpers."""
 
-import os
-import pandas as pd
-import numpy as np
-from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, Tuple
+from __future__ import annotations
+
+import math
 from pathlib import Path
-import hashlib
+from typing import Any, Dict, List, Optional
 
-from backend.app.database.models import get_session_factory, Dataset
-from backend.app.utils.path_utils import resolve_dataset_path
+import pandas as pd
+
+from backend.app.config import get_settings
+from backend.app.services.datasets import (
+    DatasetAnalysis,
+    DatasetAnalyzer,
+    DatasetRepository,
+    DatasetStorage,
+)
+from backend.app.utils.path_utils import normalize_path
 
 
 class DatasetService:
-    """Service for managing dataset uploads and quality analysis"""
-    
-    def __init__(self, data_dir: str = "data/market_data"):
-        self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.SessionLocal = get_session_factory()
-    
+    """High level service coordinating dataset storage and analysis."""
+
+    def __init__(
+        self,
+        data_dir: Optional[Path | str] = None,
+        *,
+        storage: Optional[DatasetStorage] = None,
+        analyzer: Optional[DatasetAnalyzer] = None,
+        repository: Optional[DatasetRepository] = None,
+    ) -> None:
+        settings = get_settings()
+        base_dir = Path(data_dir) if data_dir else Path(settings.data_dir)
+        self.storage = storage or DatasetStorage(base_dir)
+        self.analyzer = analyzer or DatasetAnalyzer()
+        self.repository = repository or DatasetRepository()
+        self._project_root = Path.cwd().resolve()
+
+    @property
+    def data_dir(self) -> Path:
+        return self.storage.data_dir
+
     def upload_dataset(
         self,
+        *,
         file_name: str,
         file_content: bytes,
         name: Optional[str] = None,
         symbol: Optional[str] = None,
         exchange: Optional[str] = None,
-        data_source: Optional[str] = None
+        data_source: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """
-        Upload and process a new dataset
-        
-        Args:
-            file_name: Original filename
-            file_content: Raw CSV file content
-            name: Human-readable name for the dataset
-            symbol: Trading symbol (e.g., 'NIFTY')
-            exchange: Exchange name (e.g., 'NSE')
-            data_source: Source of the data (e.g., 'Yahoo Finance')
-            
-        Returns:
-            Dict with dataset metadata and quality analysis
-        """
-        # Generate unique filename to avoid conflicts
-        file_hash = hashlib.md5(file_content).hexdigest()[:8]
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        safe_filename = f"{timestamp}_{file_hash}_{file_name}"
-        file_path = self.data_dir / safe_filename
-        
-        # Save file to disk
-        with open(file_path, 'wb') as f:
-            f.write(file_content)
-        
-        # Analyze the dataset
+        file_path = self.storage.save(file_name, file_content)
         try:
-            analysis = self._analyze_dataset(file_path)
-            
-            # Create database record
-            db = self.SessionLocal()
-            try:
-                dataset = Dataset(
-                    name=name or file_name,
-                    filename=file_name,
-                    file_path=str(file_path),
-                    file_size=len(file_content),
-                    rows_count=analysis['rows_count'],
-                    columns=analysis['columns'],
-                    timeframe=analysis['timeframe'],
-                    start_date=analysis['start_date'],
-                    end_date=analysis['end_date'],
-                    missing_data_pct=analysis['missing_data_pct'],
-                    data_quality_score=analysis['quality_score'],
-                    has_gaps=analysis['has_gaps'],
-                    timezone=analysis['timezone'],
-                    symbol=symbol,
-                    exchange=exchange,
-                    data_source=data_source,
-                    quality_checks=analysis['quality_checks']
-                )
-                
-                db.add(dataset)
-                db.commit()
-                db.refresh(dataset)
-                
-                return {
-                    'success': True,
-                    'dataset_id': dataset.id,
-                    'dataset': self._dataset_to_dict(dataset),
-                    'analysis': analysis
-                }
-                
-            finally:
-                db.close()
-                
-        except Exception as e:
-            # Clean up file if analysis fails
-            if file_path.exists():
-                file_path.unlink()
-            raise ValueError(f"Failed to analyze dataset: {str(e)}")
-    
+            analysis = self.analyzer.analyze(file_path)
+        except Exception:
+            self.storage.delete(file_path)
+            raise
+        dataset = self.repository.create_dataset(
+            file_path=file_path,
+            file_name=file_name,
+            file_size=len(file_content),
+            analysis=analysis,
+            name=name,
+            symbol=symbol,
+            exchange=exchange,
+            data_source=data_source,
+        )
+        return {
+            "success": True,
+            "dataset_id": dataset.id,
+            "dataset": self.repository.to_dict(dataset),
+            "analysis": self._serialize_analysis(analysis),
+        }
+
     def get_dataset_quality(self, dataset_id: int) -> Dict[str, Any]:
-        """Get quality analysis for a dataset"""
-        db = self.SessionLocal()
-        try:
-            dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-            if not dataset:
-                raise ValueError(f"Dataset {dataset_id} not found")
-            
-            # Update last accessed
-            dataset.last_accessed = datetime.utcnow()
-            db.commit()
-            
-            # Re-run quality analysis if needed
-            if not dataset.quality_checks:
-                analysis = self._analyze_dataset(Path(dataset.file_path))
-                dataset.quality_checks = analysis['quality_checks']
-                dataset.data_quality_score = analysis['quality_score']
-                db.commit()
-            
-            return {
-                'success': True,
-                'dataset_id': dataset.id,
-                'dataset': self._dataset_to_dict(dataset),
-                'quality_analysis': dataset.quality_checks
-            }
-            
-        finally:
-            db.close()
-    
+        dataset = self.repository.get(dataset_id)
+        if not dataset:
+            raise ValueError(f"Dataset {dataset_id} not found")
+        self.repository.touch_last_accessed(dataset)
+        analysis_dict: Dict[str, Any]
+        if dataset.quality_checks:
+            analysis_dict = dataset.quality_checks
+        else:
+            analysis = self.analyzer.analyze(Path(dataset.file_path))
+            dataset = self.repository.update_quality_checks(dataset, analysis)
+            analysis_dict = self._serialize_analysis(analysis)
+        return {
+            "success": True,
+            "dataset_id": dataset.id,
+            "dataset": self.repository.to_dict(dataset),
+            "quality_analysis": analysis_dict,
+        }
+
     def list_datasets(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """List all datasets with basic metadata"""
-        db = self.SessionLocal()
-        try:
-            datasets = db.query(Dataset).order_by(Dataset.created_at.desc()).limit(limit).all()
-            return [self._dataset_to_dict(dataset, include_quality=False) for dataset in datasets]
-        finally:
-            db.close()
-    
+        datasets = self.repository.list(limit=limit)
+        return [
+            self.repository.to_dict(dataset, include_quality=False)
+            for dataset in datasets
+        ]
+
     def delete_dataset(self, dataset_id: int) -> Dict[str, Any]:
-        """Delete a dataset and its file"""
-        db = self.SessionLocal()
-        try:
-            dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-            if not dataset:
-                raise ValueError(f"Dataset {dataset_id} not found")
-            
-            # Delete file
-            file_path = Path(dataset.file_path)
-            if file_path.exists():
-                file_path.unlink()
-            
-            # Delete database record
-            db.delete(dataset)
-            db.commit()
-            
+        dataset = self.repository.delete(dataset_id)
+        if not dataset:
+            raise ValueError(f"Dataset {dataset_id} not found")
+        self.storage.delete(dataset.file_path)
+        return {
+            "success": True,
+            "message": f"Dataset {dataset_id} deleted successfully",
+        }
+
+    def get_dataset_data(
+        self,
+        dataset_id: int,
+        *,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        dataset = self.repository.get(dataset_id)
+        if not dataset:
+            return {"success": False, "error": "Dataset not found"}
+        resolved = self.storage.resolve(dataset.file_path)
+        if not resolved.exists():
             return {
-                'success': True,
-                'message': f"Dataset {dataset_id} deleted successfully"
+                "success": False,
+                "error": f"Dataset file not found on disk: {dataset.file_path}",
             }
-            
-        finally:
-            db.close()
-    
-    def _analyze_dataset(self, file_path: Path) -> Dict[str, Any]:
-        """Perform comprehensive analysis of a dataset"""
-        try:
-            # Read the CSV file
-            df = pd.read_csv(file_path)
-            
-            # Basic info
-            rows_count = len(df)
-            columns = list(df.columns)
-            
-            # Detect timestamp column
-            timestamp_col = self._detect_timestamp_column(df)
-            if timestamp_col:
-                df[timestamp_col] = pd.to_datetime(df[timestamp_col])
-                df = df.sort_values(timestamp_col)
-                start_date = df[timestamp_col].min()
-                end_date = df[timestamp_col].max()
-                timeframe = self._detect_timeframe(df[timestamp_col])
-                timezone_info = self._detect_timezone(df[timestamp_col])
-            else:
-                start_date = end_date = None
-                timeframe = "unknown"
-                timezone_info = "unknown"
-            
-            # Quality checks
-            quality_checks = {
-                'has_timestamp': timestamp_col is not None,
-                'required_columns': self._check_required_columns(df),
-                'missing_data': self._check_missing_data(df),
-                'data_types': self._check_data_types(df),
-                'timestamp_gaps': self._check_timestamp_gaps(df, timestamp_col) if timestamp_col else {},
-                'outliers': self._check_outliers(df),
-                'duplicates': self._check_duplicates(df, timestamp_col)
+        df = pd.read_csv(resolved)
+        timestamp_col = self._detect_timestamp_column(df)
+        if timestamp_col:
+            df[timestamp_col] = pd.to_datetime(df[timestamp_col])
+            if start_date:
+                df = df[df[timestamp_col] >= pd.to_datetime(start_date)]
+            if end_date:
+                df = df[df[timestamp_col] <= pd.to_datetime(end_date)]
+            df = df.sort_values(timestamp_col).reset_index(drop=True)
+        data_records = df.to_dict("records")
+        self.repository.touch_last_accessed(dataset)
+        date_range = None
+        if timestamp_col and not df.empty:
+            date_range = {
+                "start": df[timestamp_col].min().isoformat(),
+                "end": df[timestamp_col].max().isoformat(),
             }
-            
-            # Calculate overall quality score
-            quality_score = self._calculate_quality_score(quality_checks)
-            
-            # Check for gaps
-            has_gaps = quality_checks['timestamp_gaps'].get('has_gaps', False)
-            
-            # Missing data percentage
-            missing_data_pct = (df.isnull().sum().sum() / (len(df) * len(df.columns))) * 100
-            
-            # Make everything JSON serializable
-            analysis = {
-                'rows_count': rows_count,
-                'columns': columns,
-                'timeframe': timeframe,
-                'start_date': start_date,
-                'end_date': end_date,
-                'missing_data_pct': float(missing_data_pct),
-                'quality_score': quality_score,
-                'has_gaps': bool(has_gaps),
-                'timezone': timezone_info,
-                'quality_checks': self._make_json_serializable(quality_checks)
-            }
-            
-            return analysis
-            
-        except Exception as e:
-            raise ValueError(f"Failed to analyze dataset: {str(e)}")
-    
-    def _detect_timestamp_column(self, df: pd.DataFrame) -> Optional[str]:
-        """Detect the timestamp column in the dataframe"""
-        # Common timestamp column names
-        timestamp_candidates = ['timestamp', 'time', 'date', 'datetime', 'Date', 'Time', 'DateTime']
-        
-        # Check if index is datetime
-        if pd.api.types.is_datetime64_any_dtype(df.index):
-            return df.index.name or 'index'
-        
-        # Check columns
-        for col in timestamp_candidates:
-            if col in df.columns:
-                try:
-                    pd.to_datetime(df[col].head(10))  # Test conversion
-                    return col
-                except:
-                    continue
-        
-        # Try to find any column that looks like datetime
-        for col in df.columns:
-            if df[col].dtype == 'object':
-                try:
-                    sample = df[col].dropna().head(10)
-                    if len(sample) > 0:
-                        pd.to_datetime(sample)
-                        return col
-                except:
-                    continue
-        
-        return None
-    
-    def _detect_timeframe(self, timestamp_series: pd.Series) -> str:
-        """Detect the timeframe of the data"""
-        if len(timestamp_series) < 2:
-            return "unknown"
-        
-        # Calculate time differences
-        time_diffs = timestamp_series.diff().dropna()
-        mode_diff = time_diffs.mode()
-        
-        if len(mode_diff) == 0:
-            return "unknown"
-        
-        diff_seconds = mode_diff.iloc[0].total_seconds()
-        
-        if diff_seconds == 60:
-            return "1min"
-        elif diff_seconds == 300:
-            return "5min"
-        elif diff_seconds == 900:
-            return "15min"
-        elif diff_seconds == 3600:
-            return "1h"
-        elif diff_seconds == 86400:
-            return "1d"
-        else:
-            return f"{int(diff_seconds)}s"
-    
-    def _detect_timezone(self, timestamp_series: pd.Series) -> str:
-        """Detect timezone information"""
-        if hasattr(timestamp_series.dtype, 'tz') and timestamp_series.dtype.tz:
-            return str(timestamp_series.dtype.tz)
-        return "naive"
-    
-    def _check_required_columns(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Check for required OHLCV columns"""
-        required_cols = ['open', 'high', 'low', 'close']
-        optional_cols = ['volume']
-        
-        missing_required = [col for col in required_cols if col not in df.columns]
-        missing_optional = [col for col in optional_cols if col not in df.columns]
-        
         return {
-            'has_all_required': len(missing_required) == 0,
-            'missing_required': missing_required,
-            'missing_optional': missing_optional,
-            'available_columns': list(df.columns)
+            "success": True,
+            "dataset_id": dataset_id,
+            "data": data_records,
+            "rows_count": len(data_records),
+            "columns": list(df.columns),
+            "date_range": date_range,
+            "metadata": self.repository.to_dict(dataset, include_quality=False),
         }
-    
-    def _check_missing_data(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Check for missing data patterns"""
-        missing_by_column = df.isnull().sum().to_dict()
-        total_missing = sum(missing_by_column.values())
-        total_cells = len(df) * len(df.columns)
-        missing_pct = (total_missing / total_cells) * 100
-        
-        return {
-            'total_missing': total_missing,
-            'missing_percentage': missing_pct,
-            'missing_by_column': missing_by_column,
-            'has_missing': total_missing > 0
-        }
-    
-    def _check_data_types(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Check data types for numeric columns"""
-        numeric_cols = ['open', 'high', 'low', 'close', 'volume']
-        type_issues = {}
-        
-        for col in numeric_cols:
-            if col in df.columns:
-                if not pd.api.types.is_numeric_dtype(df[col]):
-                    type_issues[col] = str(df[col].dtype)
-        
-        return {
-            'numeric_columns_correct': len(type_issues) == 0,
-            'type_issues': type_issues,
-            'column_types': {col: str(df[col].dtype) for col in df.columns}
-        }
-    
-    def _check_timestamp_gaps(self, df: pd.DataFrame, timestamp_col: str) -> Dict[str, Any]:
-        """Check for gaps in timestamp data"""
-        if not timestamp_col or timestamp_col not in df.columns:
-            return {'has_gaps': False, 'gap_count': 0}
-        
-        timestamps = pd.to_datetime(df[timestamp_col]).sort_values()
-        if len(timestamps) < 2:
-            return {'has_gaps': False, 'gap_count': 0}
-        
-        # Calculate expected frequency
-        time_diffs = timestamps.diff().dropna()
-        expected_freq = time_diffs.mode().iloc[0] if len(time_diffs.mode()) > 0 else None
-        
-        if not expected_freq:
-            return {'has_gaps': False, 'gap_count': 0}
-        
-        # Find gaps larger than expected
-        large_gaps = time_diffs[time_diffs > expected_freq * 1.5]
-        
-        return {
-            'has_gaps': len(large_gaps) > 0,
-            'gap_count': len(large_gaps),
-            'largest_gap': large_gaps.max() if len(large_gaps) > 0 else None,
-            'expected_frequency': str(expected_freq)
-        }
-    
-    def _check_outliers(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """Check for price outliers"""
-        numeric_cols = ['open', 'high', 'low', 'close', 'volume']
-        outliers = {}
-        
-        for col in numeric_cols:
-            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
-                Q1 = df[col].quantile(0.25)
-                Q3 = df[col].quantile(0.75)
-                IQR = Q3 - Q1
-                lower_bound = Q1 - 1.5 * IQR
-                upper_bound = Q3 + 1.5 * IQR
-                
-                outlier_count = ((df[col] < lower_bound) | (df[col] > upper_bound)).sum()
-                outliers[col] = {
-                    'count': outlier_count,
-                    'percentage': (outlier_count / len(df)) * 100
-                }
-        
-        total_outliers = sum(data['count'] for data in outliers.values())
-        
-        return {
-            'has_outliers': total_outliers > 0,
-            'total_outliers': total_outliers,
-            'by_column': outliers
-        }
-    
-    def _check_duplicates(self, df: pd.DataFrame, timestamp_col: str) -> Dict[str, Any]:
-        """Check for duplicate timestamps"""
-        if not timestamp_col or timestamp_col not in df.columns:
-            return {'has_duplicates': False, 'duplicate_count': 0}
-        
-        duplicate_count = df[timestamp_col].duplicated().sum()
-        
-        return {
-            'has_duplicates': duplicate_count > 0,
-            'duplicate_count': duplicate_count,
-            'unique_timestamps': df[timestamp_col].nunique(),
-            'total_rows': len(df)
-        }
-    
-    def _calculate_quality_score(self, quality_checks: Dict[str, Any]) -> float:
-        """Calculate overall quality score (0-100)"""
-        score = 100.0
-        
-        # Deduct for missing required columns
-        if not quality_checks['required_columns']['has_all_required']:
-            score -= 30
-        
-        # Deduct for missing data
-        missing_pct = quality_checks['missing_data']['missing_percentage']
-        score -= min(missing_pct * 2, 20)  # Max 20 points deduction
-        
-        # Deduct for wrong data types
-        if not quality_checks['data_types']['numeric_columns_correct']:
-            score -= 15
-        
-        # Deduct for timestamp gaps
-        if quality_checks['timestamp_gaps']['has_gaps']:
-            gap_count = quality_checks['timestamp_gaps']['gap_count']
-            score -= min(gap_count * 2, 15)  # Max 15 points deduction
-        
-        # Deduct for outliers
-        if quality_checks['outliers']['has_outliers']:
-            outlier_pct = sum(data['percentage'] for data in quality_checks['outliers']['by_column'].values())
-            score -= min(outlier_pct / 10, 10)  # Max 10 points deduction
-        
-        # Deduct for duplicates
-        if quality_checks['duplicates']['has_duplicates']:
-            dup_pct = (quality_checks['duplicates']['duplicate_count'] / quality_checks['duplicates']['total_rows']) * 100
-            score -= min(dup_pct, 10)  # Max 10 points deduction
-        
-        return max(0.0, round(score, 1))
-    
-    def _make_json_serializable(self, obj):
-        """Convert numpy types and other non-serializable types to JSON-compatible types"""
-        if isinstance(obj, dict):
-            return {k: self._make_json_serializable(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [self._make_json_serializable(item) for item in obj]
-        elif isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, np.bool_):
-            return bool(obj)
-        elif isinstance(obj, pd.Timestamp):
-            return obj.isoformat()
-        elif isinstance(obj, pd.Timedelta):
-            return str(obj)
-        elif obj is None or isinstance(obj, (bool, int, float, str)):
-            return obj
-        else:
-            return str(obj)  # Convert anything else to string
-    
-    def _dataset_to_dict(self, dataset: Dataset, include_quality: bool = True) -> Dict[str, Any]:
-        """Convert dataset model to dictionary"""
-        result = {
-            'id': dataset.id,
-            'name': dataset.name,
-            'filename': dataset.filename or os.path.basename(dataset.file_path) if dataset.file_path else None,
-            'file_path': dataset.file_path,
-            'file_size': dataset.file_size,
-            'rows_count': dataset.rows_count or dataset.rows,
-            'columns': dataset.columns,
-            'timeframe': dataset.timeframe,
-            'start_date': dataset.start_date.isoformat() if dataset.start_date else None,
-            'end_date': dataset.end_date.isoformat() if dataset.end_date else None,
-            'missing_data_pct': dataset.missing_data_pct,
-            'data_quality_score': dataset.data_quality_score,
-            'has_gaps': dataset.has_gaps,
-            'timezone': dataset.timezone,
-            'symbol': dataset.symbol,
-            'exchange': dataset.exchange,
-            'data_source': dataset.data_source,
-            'backtest_count': dataset.backtest_count,
-            'created_at': dataset.created_at.isoformat() if dataset.created_at else None,
-            'last_accessed': dataset.last_accessed.isoformat() if dataset.last_accessed else None
-        }
-        
-        if include_quality and dataset.quality_checks:
-            result['quality_checks'] = dataset.quality_checks
-        
-        return result
 
-    def get_dataset_data(self, dataset_id: int, start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Load actual data from a dataset file
-        
-        Args:
-            dataset_id: ID of the dataset to load
-            start_date: Optional start date filter (YYYY-MM-DD)
-            end_date: Optional end date filter (YYYY-MM-DD)
-            
-        Returns:
-            Dict containing the dataset data and metadata
-        """
-        db = self.SessionLocal()
-        try:
-            dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-            
-            if not dataset:
-                return {'success': False, 'error': 'Dataset not found'}
-            
-            file_path = resolve_dataset_path(dataset.file_path)
-            if not os.path.exists(file_path):
-                return {'success': False, 'error': f'Dataset file not found on disk: {dataset.file_path}'}
-            
-            # Load the data
+    def preview_dataset(self, dataset_id: int, rows: int = 10) -> Dict[str, Any]:
+        dataset = self.repository.get(dataset_id)
+        if not dataset:
+            raise ValueError("Dataset not found")
+        resolved = self.storage.resolve(dataset.file_path)
+        if not resolved.exists():
+            raise ValueError("Dataset file not found")
+        preview_df = self.storage.load_dataframe(dataset.file_path, nrows=rows)
+        numeric_columns = preview_df.select_dtypes(include=["number"]).columns
+        stats = self._compute_statistics(resolved, list(numeric_columns))
+        total_rows = dataset.rows_count or dataset.rows
+        if not total_rows:
+            total_rows = self._count_rows(resolved)
+        self.repository.touch_last_accessed(dataset)
+        return {
+            "success": True,
+            "dataset_id": dataset_id,
+            "dataset_info": self.repository.to_dict(dataset),
+            "preview": preview_df.to_dict(orient="records"),
+            "statistics": stats,
+            "total_rows": int(total_rows) if total_rows else 0,
+            "columns": list(preview_df.columns),
+        }
+
+    def discover_local_datasets(self) -> List[Dict[str, Any]]:
+        discovered: List[Dict[str, Any]] = []
+        data_dir = self.storage.data_dir
+        if not data_dir.exists():
+            return discovered
+        for path in sorted(data_dir.rglob("*.csv")):
             try:
-                df = pd.read_csv(file_path)
-                
-                # Try to identify timestamp column
-                timestamp_col = None
-                for col in ['timestamp', 'time', 'datetime', 'date', 'Timestamp', 'DateTime', 'Date']:
-                    if col in df.columns:
-                        timestamp_col = col
-                        break
-                
-                if timestamp_col:
-                    df[timestamp_col] = pd.to_datetime(df[timestamp_col])
-                    
-                    # Apply date filters if provided
-                    if start_date:
-                        start_dt = pd.to_datetime(start_date)
-                        df = df[df[timestamp_col] >= start_dt]
-                    
-                    if end_date:
-                        end_dt = pd.to_datetime(end_date)
-                        df = df[df[timestamp_col] <= end_dt]
-                    
-                    # Sort by timestamp
-                    df = df.sort_values(timestamp_col).reset_index(drop=True)
-                
-                # Convert DataFrame to records (list of dicts)
-                data_records = df.to_dict('records')
-                
-                # Update last accessed time
-                dataset.last_accessed = datetime.now(timezone.utc)
-                db.commit()
-                
-                return {
-                    'success': True,
-                    'dataset_id': dataset_id,
-                    'data': data_records,
-                    'rows_count': len(data_records),
-                    'columns': list(df.columns),
-                    'date_range': {
-                        'start': df[timestamp_col].min().isoformat() if timestamp_col and not df.empty else None,
-                        'end': df[timestamp_col].max().isoformat() if timestamp_col and not df.empty else None,
-                    } if timestamp_col else None,
-                    'metadata': self._dataset_to_dict(dataset, include_quality=False)
+                resolved = path if path.is_absolute() else (self._project_root / path).resolve()
+            except Exception:
+                resolved = Path(path)
+            if not resolved.exists():
+                continue
+            storage_path = self._to_storage_path(resolved)
+            existing = self.repository.get_by_file_path(storage_path)
+            if existing:
+                entry = self.repository.to_dict(existing)
+                entry["registered"] = True
+                entry["dataset_id"] = existing.id
+                entry["file_path"] = storage_path
+                discovered.append(entry)
+                continue
+            try:
+                analysis = self.analyzer.analyze(resolved)
+                display_name = self._derive_dataset_name(resolved)
+                entry = {
+                    "registered": False,
+                    "dataset_id": None,
+                    "file_path": storage_path,
+                    "name": display_name,
+                    "file_size": resolved.stat().st_size,
+                    "rows_count": analysis.rows_count,
+                    "timeframe": analysis.timeframe,
+                    "start_date": analysis.start_date.isoformat() if analysis.start_date else None,
+                    "end_date": analysis.end_date.isoformat() if analysis.end_date else None,
+                    "quality_score": analysis.quality_score,
+                    "analysis": self._serialize_analysis(analysis),
                 }
-                
-            except Exception as e:
-                return {'success': False, 'error': f'Error loading dataset: {str(e)}'}
-                
-        finally:
-            db.close()
+                discovered.append(entry)
+            except Exception as exc:
+                discovered.append(
+                    {
+                        "registered": False,
+                        "dataset_id": None,
+                        "file_path": storage_path,
+                        "name": resolved.stem,
+                        "error": str(exc),
+                    }
+                )
+        return discovered
 
-    # path helpers provided by backend.app.utils.path_utils
+    def register_local_datasets(self, file_paths: Optional[List[str]] = None) -> Dict[str, Any]:
+        discovered = {item["file_path"]: item for item in self.discover_local_datasets()}
+        targets = file_paths or list(discovered.keys())
+        registered_ids: List[int] = []
+        skipped: List[str] = []
+        errors: List[Dict[str, str]] = []
+        registered_datasets: List[Dict[str, Any]] = []
+
+        for file_path in targets:
+            info = discovered.get(file_path)
+            if not info:
+                errors.append({"file_path": file_path, "error": "Dataset file not found in data directory"})
+                continue
+            if info.get("registered"):
+                skipped.append(file_path)
+                continue
+            try:
+                resolved = self._resolve_local_path(file_path)
+                analysis = self.analyzer.analyze(resolved)
+                dataset = self.repository.create_dataset(
+                    file_path=self._to_storage_path(resolved),
+                    file_name=resolved.name,
+                    file_size=resolved.stat().st_size,
+                    analysis=analysis,
+                    name=info.get("name") or self._derive_dataset_name(resolved),
+                )
+                registered_ids.append(dataset.id)
+                registered_datasets.append(self.repository.to_dict(dataset))
+            except Exception as exc:
+                errors.append({"file_path": file_path, "error": str(exc)})
+
+        return {
+            "success": True,
+            "registered": registered_ids,
+            "skipped": skipped,
+            "errors": errors,
+            "datasets": registered_datasets,
+        }
+
+    @staticmethod
+    def _serialize_analysis(analysis: DatasetAnalysis) -> Dict[str, Any]:
+        payload = analysis.to_dict()
+        payload["start_date"] = (
+            analysis.start_date.isoformat() if analysis.start_date else None
+        )
+        payload["end_date"] = (
+            analysis.end_date.isoformat() if analysis.end_date else None
+        )
+        return payload
+
+    @staticmethod
+    def _detect_timestamp_column(df: pd.DataFrame) -> Optional[str]:
+        for candidate in [
+            "timestamp",
+            "time",
+            "datetime",
+            "date",
+            "Timestamp",
+            "DateTime",
+            "Date",
+        ]:
+            if candidate in df.columns:
+                return candidate
+        return None
+
+    def _compute_statistics(
+        self, file_path: Path, numeric_columns: List[str]
+    ) -> Dict[str, Dict[str, Optional[float]]]:
+        if not numeric_columns:
+            return {}
+        aggregates: Dict[str, Dict[str, float]] = {
+            col: {
+                "count": 0.0,
+                "sum": 0.0,
+                "sumsq": 0.0,
+                "min": math.inf,
+                "max": -math.inf,
+            }
+            for col in numeric_columns
+        }
+        for chunk in self.storage.iter_chunks(file_path, chunk_size=50000, usecols=numeric_columns):
+            for col in numeric_columns:
+                series = chunk[col].dropna()
+                if series.empty:
+                    continue
+                data = aggregates[col]
+                data["count"] += float(series.count())
+                data["sum"] += float(series.sum())
+                data["sumsq"] += float((series ** 2).sum())
+                data["min"] = min(data["min"], float(series.min()))
+                data["max"] = max(data["max"], float(series.max()))
+        stats: Dict[str, Dict[str, Optional[float]]] = {}
+        for col, data in aggregates.items():
+            count = int(data["count"])
+            if count == 0:
+                stats[col] = {
+                    "mean": None,
+                    "std": None,
+                    "min": None,
+                    "max": None,
+                    "count": 0,
+                }
+                continue
+            mean = data["sum"] / data["count"]
+            variance = (
+                (data["sumsq"] - (data["sum"] ** 2) / data["count"])
+                / (data["count"] - 1)
+                if data["count"] > 1
+                else 0.0
+            )
+            std = math.sqrt(max(variance, 0.0))
+            stats[col] = {
+                "mean": mean,
+                "std": std,
+                "min": data["min"],
+                "max": data["max"],
+                "count": count,
+            }
+        return stats
+
+    def _count_rows(self, file_path: Path) -> int:
+        count = 0
+        for chunk in self.storage.iter_chunks(file_path, chunk_size=50000):
+            count += len(chunk)
+        return count
+
+    def _to_storage_path(self, path: Path) -> str:
+        try:
+            relative = path.relative_to(self._project_root)
+            return normalize_path(str(relative))
+        except ValueError:
+            return normalize_path(str(path))
+
+    def _resolve_local_path(self, file_path: str) -> Path:
+        candidate = Path(file_path)
+        if candidate.exists():
+            return candidate.resolve()
+        root_candidate = (self._project_root / file_path).resolve()
+        if root_candidate.exists():
+            return root_candidate
+        resolved = self.storage.resolve(file_path)
+        if resolved.exists():
+            return resolved
+        raise FileNotFoundError(f"Dataset file not found: {file_path}")
+
+    @staticmethod
+    def _derive_dataset_name(path: Path) -> str:
+        filename = path.name
+        parts = filename.split("_", 2)
+        if len(parts) == 3 and parts[0].isdigit() and len(parts[1]) == 8:
+            return parts[2]
+        return filename

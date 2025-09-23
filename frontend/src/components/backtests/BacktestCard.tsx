@@ -3,7 +3,7 @@ import Card from '../ui/Card';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import { Eye, Download, Trash2 } from 'lucide-react';
-import { getStatusIcon, getStatusVariant } from '../../utils/status';
+import { getStatusIcon, getStatusVariant, getStatusColor } from '../../utils/status';
 import { getReturnColor } from '../../utils/formatters';
 import type { BacktestDisplay } from '../../types/backtest';
 
@@ -20,17 +20,7 @@ const BacktestCard: React.FC<Props> = ({ backtest, onView, onDownload, onDelete 
     <Card className="p-6 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <StatusIcon
-            className={`w-6 h-6 ${
-              backtest.status === 'completed'
-                ? 'text-green-500'
-                : backtest.status === 'running'
-                ? 'text-blue-500'
-                : backtest.status === 'failed'
-                ? 'text-red-500'
-                : 'text-yellow-500'
-            }`}
-          />
+          <StatusIcon className={`w-6 h-6 ${getStatusColor(backtest.status)}`} />
           <div>
             <div className="flex items-center space-x-3">
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
@@ -102,4 +92,3 @@ const BacktestCard: React.FC<Props> = ({ backtest, onView, onDownload, onDelete 
 };
 
 export default BacktestCard;
-

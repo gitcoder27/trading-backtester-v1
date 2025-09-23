@@ -5,6 +5,7 @@ export interface JobsListProps {
   onJobClick?: (job: Job) => void;
   compact?: boolean;
   maxJobs?: number;
+  fetchLimit?: number;
 }
 
 export interface JobCardProps {

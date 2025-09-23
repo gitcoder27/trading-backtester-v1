@@ -16,6 +16,36 @@ export interface Dataset {
   metadata?: Record<string, any>;
 }
 
+export interface DatasetDiscoveryItem {
+  dataset_id?: number | string | null;
+  file_path: string;
+  name?: string;
+  file_size?: number;
+  rows_count?: number;
+  timeframe?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  quality_score?: number;
+  registered: boolean;
+  analysis?: Record<string, any>;
+  error?: string;
+}
+
+export interface DatasetDiscoveryResponse {
+  success: boolean;
+  datasets: DatasetDiscoveryItem[];
+  total: number;
+  data_directory?: string;
+}
+
+export interface DatasetRegistrationResponse {
+  success: boolean;
+  registered: (number | string)[];
+  skipped: string[];
+  errors: { file_path: string; error: string }[];
+  datasets?: Dataset[];
+}
+
 export interface DatasetUpload {
   name: string;
   symbol: string;
@@ -45,8 +75,8 @@ export interface DatasetPreview {
 }
 
 export interface BacktestConfig {
-  strategy_id: string;
-  dataset_id: string;
+  strategy_id: string | number;
+  dataset_id: string | number;
   initial_capital: number;
   position_size: number;
   commission: number;
@@ -58,13 +88,13 @@ export interface BacktestConfig {
 
 export interface BacktestResult {
   id: string;
-  strategy_id: string;
-  dataset_id: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  strategy_id?: string;
+  dataset_id?: string;
+  status: JobStatus;
   created_at: string;
   completed_at?: string;
   error?: string;
-  config: BacktestConfig;
+  config?: BacktestConfig;
   results?: {
     total_return: number;
     annualized_return: number;
@@ -83,6 +113,16 @@ export interface BacktestResult {
     consecutive_wins: number;
     consecutive_losses: number;
   };
+  metrics?: {
+    total_return?: number;
+    annual_return?: number;
+    volatility?: number;
+    sharpe_ratio?: number;
+    max_drawdown?: number;
+    win_rate?: number;
+    profit_factor?: number;
+    total_trades?: number;
+  } & Record<string, number | undefined>;
 }
 
 export interface Trade {
@@ -113,7 +153,7 @@ export interface Job {
   metadata?: Record<string, any>;
 }
 
-export type JobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type JobStatus = 'queued' | 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface Strategy {
   id: string;
@@ -124,12 +164,48 @@ export interface Strategy {
   is_active: boolean;
   parameters_schema?: ParameterSchema[];
   last_backtest_at?: string;
+  total_backtests?: number;
+  avg_performance?: number;
   performance_summary?: {
     total_backtests: number;
     avg_return: number;
     best_return: number;
     worst_return: number;
   };
+}
+
+export interface StrategySource {
+  strategy_id?: number;
+  module_path: string;
+  class_name?: string;
+  file_path: string;
+  content: string;
+}
+
+export interface StrategyCodeSaveResponse {
+  strategy_id?: number;
+  file_path: string;
+  module_path: string;
+  updated?: boolean;
+  created?: boolean;
+  registration?: {
+    success: boolean;
+    registered: number;
+    updated: number;
+    errors?: string[];
+    error?: string;
+  };
+  registered_ids?: string[];
+}
+
+export interface StrategyDeleteResponse {
+  success: boolean;
+  strategy_id: number;
+  file_removed: boolean;
+  archive_path?: string | null;
+  module_path?: string;
+  class_name?: string;
+  shared_module?: boolean;
 }
 
 export interface ParameterSchema {
@@ -195,18 +271,30 @@ export interface PaginationParams {
   sort?: string;
   order?: 'asc' | 'desc';
   search?: string;
+  compact?: boolean;
 }
 
 export interface UploadResponse {
   id: string;
   message: string;
   dataset?: Dataset;
+  validation_passed?: boolean;
+  warnings?: string[];
+  errors?: string[];
 }
 
 export interface ValidationResult {
   valid: boolean;
   errors?: string[];
   warnings?: string[];
+  statistics?: {
+    total_records?: number;
+    missing_values?: number;
+    duplicate_timestamps?: number;
+    data_gaps?: number;
+    anomalies?: number;
+  };
+  quality_score?: number;
 }
 
 export interface SystemHealth {

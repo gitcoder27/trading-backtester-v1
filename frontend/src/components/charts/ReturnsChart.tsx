@@ -1,5 +1,24 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+
+interface ReturnsChartProps {
+  data?: Array<{ timestamp: string; equity: number }>;
+  backtestId?: string;
+  className?: string;
+}
+
+const ReturnsChart: React.FC<ReturnsChartProps> = ({
+  data: _data,
+  backtestId: _backtestId,
+  className = '',
+}) => (
+  <div className={`w-full h-full min-h-[200px] ${className}`} />
+);
+
+export default ReturnsChart;
+
+/* Original chart implementation retained for future reference:
+import React from 'react';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import PlotlyChart from './PlotlyChart';
 import { AnalyticsService } from '../../services/analytics';
 
@@ -15,7 +34,7 @@ const ReturnsChart: React.FC<ReturnsChartProps> = ({ data, backtestId, className
     queryFn: async () => AnalyticsService.getReturnsChart(backtestId as string),
     enabled: !!backtestId && !data,
     staleTime: 10 * 60 * 1000,
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
     refetchOnWindowFocus: false,
   });
 
@@ -53,7 +72,11 @@ const ReturnsChart: React.FC<ReturnsChartProps> = ({ data, backtestId, className
       try {
         const fig = JSON.parse(chartStr);
         return { traces: fig.data || [], layout: fig.layout || {} };
-      } catch {}
+      } catch (error) {
+        if (typeof import.meta !== 'undefined' && import.meta.env?.DEV) {
+          console.warn('ReturnsChart: failed to parse chart payload', error);
+        }
+      }
     }
     return { traces: [], layout: {} };
   }, [data, apiData]);
@@ -72,3 +95,4 @@ const ReturnsChart: React.FC<ReturnsChartProps> = ({ data, backtestId, className
 };
 
 export default ReturnsChart;
+*/

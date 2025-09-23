@@ -38,6 +38,16 @@ def _etag_for_backtest(backtest_id: int, extra: str = "") -> Dict[str, str]:
         db.close()
 
 
+def _maybe_not_modified(request: Request, response: Response, headers: Dict[str, str]) -> Optional[Response]:
+    etag = headers.get('ETag')
+    if etag and request.headers.get('if-none-match') == etag:
+        response.status_code = 304
+        for key, value in headers.items():
+            response.headers[key] = value
+        return Response(status_code=304, headers=dict(response.headers))
+    return None
+
+
 class CompareStrategiesRequest(BaseModel):
     backtest_ids: List[int]
 
@@ -65,10 +75,12 @@ async def get_performance_summary(
     - Risk metrics (VaR, CVaR, max consecutive losses, etc.)
     - Time analysis (performance by hour, weekday, month)
     """
-    result = analytics_service.get_performance_summary(backtest_id, sections)
-    # Attach caching headers (no conditional 304 to keep clients simple)
     extra = ",".join(sorted(sections)) if sections else "all"
     headers = _etag_for_backtest(backtest_id, extra=extra)
+    cached = _maybe_not_modified(request, response, headers)
+    if cached is not None:
+        return cached
+    result = analytics_service.get_performance_summary(backtest_id, sections)
     for k, v in headers.items():
         response.headers[k] = v
     
@@ -84,7 +96,7 @@ async def get_charts(
     response: Response,
     backtest_id: int,
     chart_types: Optional[List[str]] = Query(None, description="Chart types to generate: equity, drawdown, returns, trades, monthly_returns"),
-    max_points: Optional[int] = Query(None, ge=100, le=200000, description="Maximum points per series (downsampling)"),
+    max_points: Optional[int] = Query(None, ge=10, le=200000, description="Maximum points per series (downsampling)"),
 ) -> Dict[str, Any]:
     """
     Generate charts for a backtest
@@ -98,9 +110,12 @@ async def get_charts(
     
     Returns Plotly JSON that can be rendered directly in frontend
     """
-    result = analytics_service.get_charts(backtest_id, chart_types, max_points=max_points)
     extra = f"{','.join(sorted(chart_types)) if chart_types else 'all'}:{max_points or 'none'}"
     headers = _etag_for_backtest(backtest_id, extra=extra)
+    cached = _maybe_not_modified(request, response, headers)
+    if cached is not None:
+        return cached
+    result = analytics_service.get_charts(backtest_id, chart_types, max_points=max_points)
     for k, v in headers.items():
         response.headers[k] = v
     
@@ -135,10 +150,13 @@ async def compare_strategies(request: CompareStrategiesRequest) -> Dict[str, Any
 
 
 @router.get("/charts/{backtest_id}/equity")
-async def get_equity_chart(request: Request, response: Response, backtest_id: int, max_points: Optional[int] = Query(None, ge=100, le=200000)) -> Dict[str, Any]:
+async def get_equity_chart(request: Request, response: Response, backtest_id: int, max_points: Optional[int] = Query(None, ge=10, le=200000)) -> Dict[str, Any]:
     """Get equity curve chart for a specific backtest"""
-    result = analytics_service.get_charts(backtest_id, ['equity'], max_points=max_points)
     headers = _etag_for_backtest(backtest_id, extra=f"equity:{max_points or 'none'}")
+    cached = _maybe_not_modified(request, response, headers)
+    if cached is not None:
+        return cached
+    result = analytics_service.get_charts(backtest_id, ['equity'], max_points=max_points)
     for k, v in headers.items():
         response.headers[k] = v
     
@@ -153,10 +171,13 @@ async def get_equity_chart(request: Request, response: Response, backtest_id: in
 
 
 @router.get("/charts/{backtest_id}/drawdown")
-async def get_drawdown_chart(request: Request, response: Response, backtest_id: int, max_points: Optional[int] = Query(None, ge=100, le=200000)) -> Dict[str, Any]:
+async def get_drawdown_chart(request: Request, response: Response, backtest_id: int, max_points: Optional[int] = Query(None, ge=10, le=200000)) -> Dict[str, Any]:
     """Get drawdown chart for a specific backtest"""
-    result = analytics_service.get_charts(backtest_id, ['drawdown'], max_points=max_points)
     headers = _etag_for_backtest(backtest_id, extra=f"drawdown:{max_points or 'none'}")
+    cached = _maybe_not_modified(request, response, headers)
+    if cached is not None:
+        return cached
+    result = analytics_service.get_charts(backtest_id, ['drawdown'], max_points=max_points)
     for k, v in headers.items():
         response.headers[k] = v
     
@@ -173,8 +194,11 @@ async def get_drawdown_chart(request: Request, response: Response, backtest_id: 
 @router.get("/charts/{backtest_id}/returns")
 async def get_returns_chart(request: Request, response: Response, backtest_id: int) -> Dict[str, Any]:
     """Get returns distribution chart for a specific backtest"""
-    result = analytics_service.get_charts(backtest_id, ['returns'])
     headers = _etag_for_backtest(backtest_id, extra="returns")
+    cached = _maybe_not_modified(request, response, headers)
+    if cached is not None:
+        return cached
+    result = analytics_service.get_charts(backtest_id, ['returns'])
     for k, v in headers.items():
         response.headers[k] = v
     
@@ -189,10 +213,13 @@ async def get_returns_chart(request: Request, response: Response, backtest_id: i
 
 
 @router.get("/charts/{backtest_id}/trades")
-async def get_trades_chart(request: Request, response: Response, backtest_id: int, max_points: Optional[int] = Query(None, ge=100, le=200000)) -> Dict[str, Any]:
+async def get_trades_chart(request: Request, response: Response, backtest_id: int, max_points: Optional[int] = Query(None, ge=10, le=200000)) -> Dict[str, Any]:
     """Get trades chart overlaid on equity curve"""
-    result = analytics_service.get_charts(backtest_id, ['trades'], max_points=max_points)
     headers = _etag_for_backtest(backtest_id, extra=f"trades:{max_points or 'none'}")
+    cached = _maybe_not_modified(request, response, headers)
+    if cached is not None:
+        return cached
+    result = analytics_service.get_charts(backtest_id, ['trades'], max_points=max_points)
     for k, v in headers.items():
         response.headers[k] = v
     
@@ -209,8 +236,11 @@ async def get_trades_chart(request: Request, response: Response, backtest_id: in
 @router.get("/charts/{backtest_id}/monthly_returns")
 async def get_monthly_returns_chart(request: Request, response: Response, backtest_id: int) -> Dict[str, Any]:
     """Get monthly returns heatmap for a specific backtest"""
-    result = analytics_service.get_charts(backtest_id, ['monthly_returns'])
     headers = _etag_for_backtest(backtest_id, extra="monthly_returns")
+    cached = _maybe_not_modified(request, response, headers)
+    if cached is not None:
+        return cached
+    result = analytics_service.get_charts(backtest_id, ['monthly_returns'])
     for k, v in headers.items():
         response.headers[k] = v
     
@@ -311,7 +341,10 @@ async def get_chart_data(
     max_candles: Optional[int] = Query(None, ge=1, le=200000, description="Maximum number of candles to return (downsampling)"),
     start: Optional[str] = Query(None, description="Start datetime or date (YYYY-MM-DD)"),
     end: Optional[str] = Query(None, description="End datetime or date (YYYY-MM-DD)"),
-    tz: Optional[str] = Query(None, description="Timezone of dataset (e.g., 'Asia/Kolkata') for date parsing and display consistency")
+    tz: Optional[str] = Query(None, description="Timezone of dataset (e.g., 'Asia/Kolkata') for date parsing and display consistency"),
+    single_day: Optional[bool] = Query(None, description="Treat request as a single trading session"),
+    cursor: Optional[str] = Query(None, description="Reference session date for navigation (YYYY-MM-DD)"),
+    navigate: Optional[str] = Query(None, description="Navigation intent: next, previous, or current")
 ) -> Dict[str, Any]:
     """
     Get candlestick chart data with trade overlays for TradingView Lightweight Charts
@@ -331,6 +364,9 @@ async def get_chart_data(
         start=start,
         end=end,
         tz=tz,
+        single_day=single_day,
+        cursor=cursor,
+        navigate=navigate,
     )
     
     if not result['success']:

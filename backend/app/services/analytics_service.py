@@ -49,11 +49,13 @@ class AnalyticsService:
     def get_chart_data(self, backtest_id: int, include_trades: bool = True, 
                       include_indicators: bool = True, max_candles: Optional[int] = None,
                       start: Optional[str] = None, end: Optional[str] = None,
-                      tz: Optional[str] = None):
+                      tz: Optional[str] = None, single_day: Optional[bool] = None,
+                      cursor: Optional[str] = None, navigate: Optional[str] = None):
         """Get chart data - uses legacy service (complex method)"""
         return self.legacy_service.get_chart_data(
             backtest_id, include_trades, include_indicators, max_candles,
-            start=start, end=end, tz=tz
+            start=start, end=end, tz=tz, single_day=single_day,
+            cursor=cursor, navigate=navigate
         )
     
     # Additional methods for enhanced functionality using modular components

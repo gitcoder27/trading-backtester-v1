@@ -1,3 +1,28 @@
+import React from 'react';
+
+interface PlotlyChartProps {
+  data?: unknown[];
+  layout?: Record<string, unknown>;
+  config?: Record<string, unknown>;
+  className?: string;
+  loading?: boolean;
+  error?: string | null;
+}
+
+const PlotlyChart: React.FC<PlotlyChartProps> = ({
+  data: _data,
+  layout: _layout = {},
+  config: _config = {},
+  className = '',
+  loading: _loading = false,
+  error: _error = null,
+}) => (
+  <div className={`w-full min-h-[200px] ${className}`} />
+);
+
+export default PlotlyChart;
+
+/* Original Plotly implementation retained for future reference:
 import React, { useMemo } from 'react';
 import Plot from 'react-plotly.js';
 import { useThemeStore } from '../../stores/themeStore';
@@ -175,3 +200,4 @@ const PlotlyChart: React.FC<PlotlyChartProps> = ({
 };
 
 export default PlotlyChart;
+*/

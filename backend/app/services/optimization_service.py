@@ -1,29 +1,52 @@
-"""
-Optimization Service
-Provides parameter optimization functionality using grid search and genetic algorithms
-"""
+"""Optimization service that orchestrates backtest parameter sweeps."""
 
-import pandas as pd
-import numpy as np
-import itertools
 import concurrent.futures
 from typing import Dict, Any, List, Optional, Tuple, Union
-from datetime import datetime
-import traceback
-import json
 
-from backend.app.database.models import get_session_factory, Backtest, Dataset
+import numpy as np
+import pandas as pd
+import traceback
+
 from backend.app.services.backtest_service import BacktestService
-from backend.app.tasks.job_runner import JobRunner, JobStatus
+from backend.app.services.datasets import DatasetRepository, DatasetStorage
+from backend.app.services.optimization import ParameterGridError, generate_parameter_grid
+from backend.app.tasks import JobStatus, get_job_runner
+
+SUPPORTED_METRICS = {
+    "total_return",
+    "total_return_pct",
+    "sharpe_ratio",
+    "final_equity",
+    "max_drawdown",
+    "max_drawdown_pct",
+    "total_trades",
+    "win_rate",
+    "profit_factor",
+    "largest_winning_trade",
+    "largest_losing_trade",
+    "max_consecutive_wins",
+    "max_consecutive_losses",
+    "average_holding_time",
+    "trading_sessions_days",
+    "data_points",
+}
 
 
 class OptimizationService:
-    """Service for running parameter optimization on trading strategies"""
-    
-    def __init__(self):
-        self.backtest_service = BacktestService()
-        self.job_runner = JobRunner()
-        self.SessionLocal = get_session_factory()
+    """Service for running parameter optimization on trading strategies."""
+
+    def __init__(
+        self,
+        *,
+        backtest_service: Optional[BacktestService] = None,
+        job_runner=None,
+        dataset_repository: Optional[DatasetRepository] = None,
+        storage: Optional[DatasetStorage] = None,
+    ) -> None:
+        self.backtest_service = backtest_service or BacktestService()
+        self.job_runner = job_runner or get_job_runner()
+        self.repository = dataset_repository or DatasetRepository()
+        self.storage = storage or DatasetStorage()
     
     def start_optimization_job(
         self,
@@ -36,26 +59,30 @@ class OptimizationService:
         validation_split: float = 0.3
     ) -> Dict[str, Any]:
         """Start a parameter optimization job"""
-        
-        # Validate inputs
-        db = self.SessionLocal()
+        dataset = self.repository.get(dataset_id)
+        if not dataset:
+            return {'success': False, 'error': 'Dataset not found'}
+
         try:
-            dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-            if not dataset:
-                return {'success': False, 'error': 'Dataset not found'}
-        finally:
-            db.close()
-        
-        # Generate parameter combinations
-        param_combinations = self._generate_parameter_combinations(param_ranges)
-        
-        if len(param_combinations) == 0:
+            param_combinations = generate_parameter_grid(param_ranges)
+        except ParameterGridError as exc:
+            return {'success': False, 'error': str(exc)}
+
+        if not param_combinations:
             return {'success': False, 'error': 'No parameter combinations generated'}
-        
+
         if len(param_combinations) > 1000:
-            return {'success': False, 'error': f'Too many combinations ({len(param_combinations)}). Maximum allowed is 1000.'}
-        
-        # Create optimization job
+            return {
+                'success': False,
+                'error': f'Too many combinations ({len(param_combinations)}). Maximum allowed is 1000.',
+            }
+
+        if optimization_metric not in SUPPORTED_METRICS:
+            return {
+                'success': False,
+                'error': f"Unsupported optimization metric '{optimization_metric}'",
+            }
+
         job_data = {
             'strategy_path': strategy_path,
             'dataset_id': dataset_id,
@@ -67,19 +94,19 @@ class OptimizationService:
             'validation_split': validation_split,
             'total_combinations': len(param_combinations)
         }
-        
-        # Submit job
+
         job_id = self.job_runner.submit_job(
             job_type='optimization',
             job_data=job_data,
             progress_callback=self._optimization_progress_callback
         )
-        
+
+        total = len(param_combinations)
         return {
             'success': True,
             'job_id': job_id,
-            'total_combinations': len(param_combinations),
-            'estimated_time_minutes': self._estimate_optimization_time(len(param_combinations))
+            'total_combinations': total,
+            'estimated_time_minutes': self._estimate_optimization_time(total)
         }
     
     def run_optimization(self, job_data: Dict[str, Any], progress_callback=None) -> Dict[str, Any]:
@@ -89,21 +116,16 @@ class OptimizationService:
             dataset_id = job_data['dataset_id']
             param_combinations = job_data['param_combinations']
             optimization_metric = job_data['optimization_metric']
-            engine_options = job_data['engine_options']
-            max_workers = job_data['max_workers']
-            validation_split = job_data['validation_split']
+            engine_options = job_data.get('engine_options') or {}
+            max_workers = max(1, int(job_data.get('max_workers', 1)))
+            validation_split = job_data.get('validation_split', 0.0)
             
-            # Load dataset
-            db = self.SessionLocal()
-            try:
-                dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
-                if not dataset:
-                    raise ValueError('Dataset not found')
-            finally:
-                db.close()
-            
-            # Load and split data for validation
-            data = pd.read_csv(dataset.file_path)
+            dataset = self.repository.get(dataset_id)
+            if not dataset:
+                raise ValueError('Dataset not found')
+
+            self.repository.touch_last_accessed(dataset)
+            data = self.storage.load_dataframe(dataset.file_path)
             train_data, validation_data = self._split_data(data, validation_split)
             
             # Track results
@@ -122,7 +144,6 @@ class OptimizationService:
                         train_data,
                         params,
                         engine_options,
-                        f"optimization_{i}"
                     )
                     future_to_params[future] = params
                 
@@ -179,7 +200,6 @@ class OptimizationService:
                     validation_data,
                     best_result['parameters'],
                     engine_options,
-                    "validation"
                 )
                 
                 if validation_backtest['success']:
@@ -216,65 +236,27 @@ class OptimizationService:
     def get_optimization_results(self, job_id: str) -> Dict[str, Any]:
         """Get optimization results for a job"""
         job = self.job_runner.get_job_status(job_id)
-        
         if not job:
             return {'success': False, 'error': 'Job not found'}
-        
+
         if job['status'] != JobStatus.COMPLETED:
             return {
                 'success': False,
-                'error': f'Job not completed. Current status: {job["status"].value}',
+                'error': f"Job not completed. Current status: {job['status'].value}",
                 'status': job['status'].value,
-                'progress': job.get('progress', {})
+                'progress': job.get('progress')
             }
-        
+
+        results = self.job_runner.get_job_results(job_id)
         return {
             'success': True,
             'job_id': job_id,
-            'results': job['results']
+            'results': results
         }
-    
+
+    # Backwards compatibility for existing tests/utilities
     def _generate_parameter_combinations(self, param_ranges: Dict[str, Union[List, Dict]]) -> List[Dict[str, Any]]:
-        """Generate all parameter combinations from ranges"""
-        param_lists = {}
-        
-        for param_name, param_config in param_ranges.items():
-            if isinstance(param_config, list):
-                # Direct list of values
-                param_lists[param_name] = param_config
-            elif isinstance(param_config, dict):
-                # Range specification
-                if param_config.get('type') == 'range':
-                    start = param_config['start']
-                    stop = param_config['stop']
-                    step = param_config.get('step', 1)
-                    
-                    if isinstance(start, (int, float)) and isinstance(stop, (int, float)):
-                        if isinstance(step, int):
-                            param_lists[param_name] = list(range(start, stop + 1, step))
-                        else:
-                            param_lists[param_name] = list(np.arange(start, stop + step, step))
-                    else:
-                        raise ValueError(f"Invalid range specification for parameter {param_name}")
-                
-                elif param_config.get('type') == 'choice':
-                    param_lists[param_name] = param_config['values']
-                
-                else:
-                    raise ValueError(f"Unknown parameter type for {param_name}: {param_config.get('type')}")
-            else:
-                raise ValueError(f"Invalid parameter configuration for {param_name}")
-        
-        # Generate cartesian product of all parameter combinations
-        param_names = list(param_lists.keys())
-        param_values = list(param_lists.values())
-        
-        combinations = []
-        for combination in itertools.product(*param_values):
-            param_dict = dict(zip(param_names, combination))
-            combinations.append(param_dict)
-        
-        return combinations
+        return generate_parameter_grid(param_ranges)
     
     def _split_data(self, data: pd.DataFrame, validation_split: float) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """Split data into training and validation sets"""
@@ -292,25 +274,16 @@ class OptimizationService:
         strategy_path: str,
         data: pd.DataFrame,
         params: Dict[str, Any],
-        engine_options: Dict[str, Any],
-        run_name: str
+        engine_options: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Run a single backtest with given parameters"""
         try:
-            # Convert DataFrame to CSV bytes for backtest service
-            csv_data = data.to_csv(index=False).encode('utf-8')
-            
-            # Run backtest
-            result = self.backtest_service.run_backtest_from_data(
-                strategy_path=strategy_path,
-                csv_data=csv_data,
+            return self.backtest_service.run_backtest(
+                data=data,
+                strategy=strategy_path,
                 strategy_params=params,
                 engine_options=engine_options,
-                run_name=run_name
             )
-            
-            return result
-        
         except Exception as e:
             return {
                 'success': False,

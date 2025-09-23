@@ -13,7 +13,7 @@ What it does
 ------------
 - Recursively scans one or more directories (default: `data/`) for
   `*.csv` files.
-- Analyzes each CSV via `DatasetService._analyze_dataset(...)` to populate
+- Analyzes each CSV via the shared `DatasetAnalyzer` to populate
   metadata (rows, timeframe, columns, quality, etc.).
 - Inserts a `Dataset` row for each file that is not already registered.
 - Skips files already present in the DB (by exact `file_path`).
@@ -111,8 +111,8 @@ def register_file(service: DatasetService, db_session, csv_path: Path, verbose: 
     if not abs_path.exists():
         return False, f"MISSING on disk: {abs_path}"
 
-    # Analyze using existing service logic
-    analysis = service._analyze_dataset(abs_path)  # noqa: SLF001 (internal use intended here)
+    # Analyze using shared analyzer
+    analysis = service.analyzer.analyze(abs_path)
 
     # Build Dataset row
     file_size = os.path.getsize(abs_path)
@@ -124,17 +124,17 @@ def register_file(service: DatasetService, db_session, csv_path: Path, verbose: 
         filename=filename,
         file_path=file_path_str,
         file_size=file_size,
-        rows_count=analysis["rows_count"],
-        columns=analysis["columns"],
-        timeframe=analysis["timeframe"],
-        start_date=analysis["start_date"],
-        end_date=analysis["end_date"],
-        missing_data_pct=analysis["missing_data_pct"],
-        data_quality_score=analysis["quality_score"],
-        has_gaps=analysis["has_gaps"],
-        timezone=analysis["timezone"],
+        rows_count=analysis.rows_count,
+        columns=analysis.columns,
+        timeframe=analysis.timeframe,
+        start_date=analysis.start_date,
+        end_date=analysis.end_date,
+        missing_data_pct=analysis.missing_data_pct,
+        data_quality_score=analysis.quality_score,
+        has_gaps=analysis.has_gaps,
+        timezone=analysis.timezone,
         # Optional metadata left as None by default: symbol, exchange, data_source
-        quality_checks=analysis["quality_checks"],
+        quality_checks=analysis.quality_checks,
     )
 
     db_session.add(dataset)
@@ -203,9 +203,9 @@ def main(argv: List[str] | None = None) -> int:
                         print(f"  -> missing on disk: {abs_path}")
                         continue
                     # Analyze only for reporting context
-                    analysis = service._analyze_dataset(abs_path)
+                    analysis = service.analyzer.analyze(abs_path)
                     print(
-                        f"  -> would add: rows={analysis['rows_count']} timeframe={analysis['timeframe']} path={file_path_str}"
+                        f"  -> would add: rows={analysis.rows_count} timeframe={analysis.timeframe} path={file_path_str}"
                     )
                     created += 1
                 else:
@@ -240,4 +240,3 @@ def main(argv: List[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

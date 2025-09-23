@@ -15,7 +15,11 @@ from backend.app.api.v1.datasets import router as datasets_router
 from backend.app.api.v1.strategies import router as strategies_router
 from backend.app.api.v1.analytics import router as analytics_router
 from backend.app.api.v1.optimization import router as optimization_router
+from backend.app.config import configure_logging, get_settings
 from backend.app.tasks.job_runner import shutdown_job_runner
+
+settings = get_settings()
+configure_logging(settings)
 
 app = FastAPI(
     title="Trading Backtester API",
@@ -26,18 +30,7 @@ app = FastAPI(
 # Add CORS middleware for frontend integration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",    # React dev server (default)
-        "http://localhost:3001",    # React dev server (alternative)
-        "http://localhost:5173",    # Vite dev server (default)
-        "http://localhost:5174",    # Vite dev server (alternative)
-        "http://localhost:5175",    # Vite dev server (backup)
-        "http://127.0.0.1:3000",    # Alternative localhost format
-        "http://127.0.0.1:3001",    # Alternative localhost format
-        "http://127.0.0.1:5173",    # Alternative localhost format
-        "http://127.0.0.1:5174",    # Alternative localhost format
-        "http://127.0.0.1:5175"     # Alternative localhost format
-    ],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,7 +45,7 @@ app.include_router(analytics_router)
 app.include_router(optimization_router)
 
 # Enable GZip compression for large analytics responses
-app.add_middleware(GZipMiddleware, minimum_size=500)
+app.add_middleware(GZipMiddleware, minimum_size=settings.gzip_minimum_size)
 
 # Register cleanup on exit
 atexit.register(shutdown_job_runner)

@@ -5,7 +5,6 @@ Backtest API endpoints
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from typing import Optional, Dict, Any
 import json
-from datetime import datetime
 from sqlalchemy import func, cast, Float, Integer
 from sqlalchemy.orm import Session
 
