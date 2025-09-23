@@ -5,6 +5,8 @@ Backtest API endpoints
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from typing import Optional, Dict, Any
 import json
+from datetime import datetime
+from sqlalchemy import func, cast, Float, Integer
 from sqlalchemy.orm import Session
 
 from backend.app.services.backtest_service import BacktestService
@@ -20,9 +22,7 @@ router = APIRouter(prefix="/api/v1/backtests", tags=["backtests"])
 # Service instance
 backtest_service = BacktestService()
 
-# In-memory storage for results (Phase 1 - will be replaced with DB in Phase 3)
-results_store: Dict[str, Dict[str, Any]] = {}
-next_result_id = 1
+
 
 
 @router.post("/", response_model=BacktestResponse)
@@ -257,25 +257,7 @@ async def get_backtest_detail(
         db.close()
 
 
-@router.get("/{result_id}/results", response_model=BacktestResponse)
-async def get_backtest_results(result_id: str):
-    """
-    Get backtest results by ID (legacy endpoint for in-memory results)
-    """
-    if result_id not in results_store:
-        raise HTTPException(status_code=404, detail="Backtest result not found")
-    
-    try:
-        result_data = results_store[result_id]
-        result = BacktestResult(**result_data)
-        
-        return BacktestResponse(
-            success=True,
-            result=result,
-            job_id=result_id
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve results: {str(e)}")
+
 
 
 @router.get("/", response_model=Dict[str, Any])
@@ -298,37 +280,110 @@ async def list_backtests(
         total_count = db.query(Backtest).count()
 
         if compact:
-            # Project only needed columns to avoid fetching large JSON blobs from DB
+            # Only fetch lightweight columns and extract metrics directly in SQL to avoid loading huge JSON blobs
+            metric_extracts = [
+                ('total_return', cast(func.json_extract(Backtest.results, '$.metrics.total_return'), Float)),
+                ('total_return_percent', cast(func.json_extract(Backtest.results, '$.metrics.total_return_percent'), Float)),
+                ('sharpe_ratio', cast(func.json_extract(Backtest.results, '$.metrics.sharpe_ratio'), Float)),
+                ('max_drawdown', cast(func.json_extract(Backtest.results, '$.metrics.max_drawdown'), Float)),
+                ('max_drawdown_percent', cast(func.json_extract(Backtest.results, '$.metrics.max_drawdown_percent'), Float)),
+                ('total_trades', cast(func.json_extract(Backtest.results, '$.metrics.total_trades'), Integer)),
+                ('win_rate', cast(func.json_extract(Backtest.results, '$.metrics.win_rate'), Float)),
+                ('trading_sessions_days', cast(func.json_extract(Backtest.results, '$.metrics.trading_sessions_days'), Float)),
+                ('trading_days', cast(func.json_extract(Backtest.results, '$.metrics.trading_days'), Float)),
+                ('total_trading_days', cast(func.json_extract(Backtest.results, '$.metrics.total_trading_days'), Float)),
+            ]
+            alias_extracts = [
+                ('total_return_pct', cast(func.json_extract(Backtest.results, '$.metrics.total_return_pct'), Float)),
+                ('max_drawdown_pct', cast(func.json_extract(Backtest.results, '$.metrics.max_drawdown_pct'), Float)),
+            ]
+
+            query_columns = [
+                Backtest.id.label('id'),
+                Backtest.strategy_name.label('strategy_name'),
+                Backtest.strategy_params.label('strategy_params'),
+                Backtest.dataset_id.label('dataset_id'),
+                Dataset.name.label('dataset_name'),
+                Backtest.status.label('status'),
+                Backtest.created_at.label('created_at'),
+                Backtest.completed_at.label('completed_at'),
+            ] + [expr.label(label) for label, expr in (metric_extracts + alias_extracts)]
+
             rows = (
-                db.query(
-                    Backtest.id,
-                    Backtest.strategy_name,
-                    Backtest.dataset_id,
-                    Backtest.status,
-                    Backtest.created_at,
-                    Backtest.completed_at,
-                )
+                db.query(*query_columns)
+                .outerjoin(Dataset, Dataset.id == Backtest.dataset_id)
                 .order_by(Backtest.created_at.desc())
                 .offset(offset)
                 .limit(size)
                 .all()
             )
+
+            int_metric_labels = {'total_trades', 'trading_sessions_days', 'trading_days', 'total_trading_days'}
+
+            def _coerce_float(value: Any) -> Optional[float]:
+                if value is None:
+                    return None
+                if isinstance(value, (int, float)):
+                    return float(value)
+                if isinstance(value, str):
+                    try:
+                        return float(value)
+                    except ValueError:
+                        return None
+                return None
+
+            def _coerce_int(value: Any) -> Optional[int]:
+                if value is None:
+                    return None
+                if isinstance(value, int):
+                    return value
+                if isinstance(value, float):
+                    return int(value)
+                if isinstance(value, str):
+                    try:
+                        return int(float(value))
+                    except ValueError:
+                        return None
+                return None
+
             backtest_list = []
-            for r in rows:
+            for row in rows:
+                metrics_out: Dict[str, Any] = {}
+                for label, _ in metric_extracts:
+                    value = getattr(row, label, None)
+                    if label in int_metric_labels:
+                        coerced = _coerce_int(value)
+                    else:
+                        coerced = _coerce_float(value)
+                    if coerced is not None:
+                        metrics_out[label] = coerced
+
+                # Apply common aliases to keep frontend expectations
+                total_return_pct_alias = _coerce_float(getattr(row, 'total_return_pct', None))
+                if 'total_return_percent' not in metrics_out and total_return_pct_alias is not None:
+                    metrics_out['total_return_percent'] = total_return_pct_alias
+
+                max_drawdown_pct_alias = _coerce_float(getattr(row, 'max_drawdown_pct', None))
+                if 'max_drawdown_percent' not in metrics_out and max_drawdown_pct_alias is not None:
+                    metrics_out['max_drawdown_percent'] = max_drawdown_pct_alias
+
                 backtest_list.append({
-                    "id": r[0],
-                    "strategy_name": r[1],
-                    "dataset_id": r[2],
-                    "status": r[3],
-                    "created_at": r[4].isoformat() if r[4] else None,
-                    "completed_at": r[5].isoformat() if r[5] else None,
+                    "id": row.id,
+                    "strategy_name": row.strategy_name,
+                    "strategy_params": row.strategy_params,
+                    "dataset_id": row.dataset_id,
+                    "dataset_name": getattr(row, 'dataset_name', None),
+                    "status": row.status,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+                    "metrics": metrics_out,
                 })
 
             return {
                 "total": total_count,
                 "page": page,
                 "size": size,
-                "results": backtest_list
+                "results": backtest_list,
             }
 
         backtests = (

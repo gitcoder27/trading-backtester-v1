@@ -30,8 +30,28 @@ export class ApiClient {
       const response = await this.fetchImpl(url, config);
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        const contentType = response.headers.get('content-type');
+        let errorBody: any;
+        try {
+          if (contentType && contentType.includes('application/json')) {
+            errorBody = await response.json();
+          } else {
+            errorBody = await response.text();
+          }
+        } catch (e) {
+          errorBody = `(Failed to parse error body): ${response.statusText}`;
+        }
+
+        const errorMessage = typeof errorBody === 'string' 
+          ? errorBody
+          : errorBody.detail || errorBody.message || `HTTP ${response.status}: ${response.statusText}`;
+
+        throw new Error(errorMessage);
+      }
+
+      // Handle successful but empty responses
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return {} as T;
       }
 
       return await response.json();
@@ -88,8 +108,23 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        const contentType = response.headers.get('content-type');
+        let errorBody: any;
+        try {
+          if (contentType && contentType.includes('application/json')) {
+            errorBody = await response.json();
+          } else {
+            errorBody = await response.text();
+          }
+        } catch (e) {
+          errorBody = `(Failed to parse error body): ${response.statusText}`;
+        }
+
+        const errorMessage = typeof errorBody === 'string' 
+          ? errorBody
+          : errorBody.detail || errorBody.message || `HTTP ${response.status}: ${response.statusText}`;
+
+        throw new Error(errorMessage);
     }
 
     return await response.json();
