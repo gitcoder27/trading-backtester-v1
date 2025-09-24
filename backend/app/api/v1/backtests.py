@@ -21,9 +21,7 @@ router = APIRouter(prefix="/api/v1/backtests", tags=["backtests"])
 # Service instance
 backtest_service = BacktestService()
 
-# In-memory storage for results (Phase 1 - will be replaced with DB in Phase 3)
-results_store: Dict[str, Dict[str, Any]] = {}
-next_result_id = 1
+
 
 
 @router.post("/", response_model=BacktestResponse)
@@ -258,25 +256,7 @@ async def get_backtest_detail(
         db.close()
 
 
-@router.get("/{result_id}/results", response_model=BacktestResponse)
-async def get_backtest_results(result_id: str):
-    """
-    Get backtest results by ID (legacy endpoint for in-memory results)
-    """
-    if result_id not in results_store:
-        raise HTTPException(status_code=404, detail="Backtest result not found")
-    
-    try:
-        result_data = results_store[result_id]
-        result = BacktestResult(**result_data)
-        
-        return BacktestResponse(
-            success=True,
-            result=result,
-            job_id=result_id
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve results: {str(e)}")
+
 
 
 @router.get("/", response_model=Dict[str, Any])
