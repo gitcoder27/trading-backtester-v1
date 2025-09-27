@@ -26,3 +26,28 @@ export interface IndicatorLine {
   // Optional pane hint: 'separate' will render in a dedicated pane (e.g., RSI/MACD)
   pane?: 'overlay' | 'separate';
 }
+
+export interface ChartTrade {
+  id?: string | number;
+  symbol?: string | null;
+  side?: string | null;
+  direction?: string | null;
+  quantity?: number | null;
+  qty?: number | null;
+  size?: number | null;
+  entry_time?: string | null;
+  exit_time?: string | null;
+  entry_price?: number | null;
+  exit_price?: number | null;
+  pnl?: number | null;
+  profit_loss?: number | null;
+  [key: string]: unknown;
+}
+
+export interface TradeListMeta {
+  total: number;
+  returned: number;
+  limit: number;
+  has_more: boolean;
+  timezone: string;
+}

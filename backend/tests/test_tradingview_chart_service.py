@@ -137,7 +137,25 @@ def test_build_chart_data_success_with_trades_and_indicators(base_candles):
 
     svc = TradingViewChartService(fetcher, builder, formatter)
 
-    backtest = BT(id="bt-abc", results={"indicator_cfg": [{"name": "SMA", "color": "blue"}]})
+    trade_rows = [
+        {
+            "id": 1,
+            "side": "long",
+            "entry_time": "2024-01-03T09:15:00Z",
+            "exit_time": "2024-01-03T10:00:00Z",
+            "entry_price": 100.0,
+            "exit_price": 110.5,
+            "pnl": 10.5,
+        }
+    ]
+
+    backtest = BT(
+        id="bt-abc",
+        results={
+            "indicator_cfg": [{"name": "SMA", "color": "blue"}],
+            "trades": trade_rows,
+        },
+    )
     session = object()
 
     result = svc.build_chart_data(
@@ -165,6 +183,21 @@ def test_build_chart_data_success_with_trades_and_indicators(base_candles):
     assert result["trade_markers"] == [{"time": base_candles[0]["time"], "position": "buy"}]
     assert result["indicators"] == [{"name": "SMA", "data": [1, 2, 3]}]
     assert result["indicator_config"] == [{"name": "SMA", "color": "blue"}]
+
+    assert result["trades"], "Expected trades list to be included"
+    trade_payload = result["trades"][0]
+    assert trade_payload["id"] == 1
+    assert trade_payload["side"] == "long"
+    assert trade_payload["entry_time"].startswith("2024-01-03T09:15:00")
+    assert trade_payload["exit_price"] == 110.5
+
+    assert result["trades_meta"] == {
+        "total": 1,
+        "returned": 1,
+        "limit": 200,
+        "has_more": False,
+        "timezone": "UTC",
+    }
     # Formatter used
     assert formatter.calls and formatter.calls[-1] is result
     # Builder interactions captured
@@ -360,6 +393,8 @@ def test_build_chart_data_excludes_optional_blocks_when_flags_false(base_candles
     )
     assert res["success"] is True
     assert "trade_markers" not in res
+    assert "trades" not in res
+    assert "trades_meta" not in res
     assert "indicators" not in res
     # indicator_config defaults to empty list when include_indicators False; ensure key absent to avoid confusion
     assert "indicator_config" not in res
