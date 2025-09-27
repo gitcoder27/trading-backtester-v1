@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { BacktestService } from '../../services/backtest';
 import PriceChartWithTrades from './PriceChartWithTrades';
 import type { ChartQueryParams } from './PriceChartWithTrades';
+import TradeList from './TradeList';
+import type { ChartTrade, TradeListMeta } from '../../types/chart';
 
 interface PriceChartPanelProps {
   backtestId: string;
@@ -46,6 +48,9 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
   const [chartParams, setChartParams] = useState<ChartQueryParams | null>(null);
   const [navigation, setNavigation] = useState<ChartNavigation | null>(null);
   const currentRangeEnd = currentRange.end;
+  const [trades, setTrades] = useState<ChartTrade[]>([]);
+  const [tradesMeta, setTradesMeta] = useState<TradeListMeta | null>(null);
+  const [tradesLoading, setTradesLoading] = useState<boolean>(false);
 
   const { data: firstCandleData } = useQuery({
     queryKey: ['chart-first-day', backtestId, defaultTz],
@@ -107,6 +112,14 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
   useEffect(() => {
     if (singleDay && startDateInput) setEndDateInput(startDateInput);
   }, [singleDay, startDateInput]);
+
+  useEffect(() => {
+    if (!chartParams) {
+      setTrades([]);
+      setTradesMeta(null);
+      setTradesLoading(false);
+    }
+  }, [chartParams]);
 
   const canApply = useMemo(() => Boolean(startDateInput && endDateInput), [startDateInput, endDateInput]);
 
@@ -227,64 +240,64 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
   }, [singleDay, chartParams, startDateInput, endDateInput, defaultTz, defaultMaxCandles, currentRangeEnd]);
 
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          {title}
-        </h3>
-        <div className="flex items-center space-x-2">
-          <label className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300">
-            <input type="checkbox" checked={singleDay} onChange={(e) => setSingleDay(e.target.checked)} />
-            <span>Single day</span>
-          </label>
-          {singleDay && (
-            <>
-              <Button
-                variant="nav"
-                size="sm"
-                onClick={() => stepDay(-1)}
-                disabled={!navigation?.previous_date}
-              >
-                Prev Day
-              </Button>
-              <Button
-                variant="nav"
-                size="sm"
-                onClick={() => stepDay(1)}
-                disabled={!navigation?.next_date}
-              >
-                Next Day
-              </Button>
-            </>
-          )}
+    <div className="space-y-6">
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            {title}
+          </h3>
+          <div className="flex items-center space-x-2">
+            <label className="flex items-center space-x-2 text-sm text-gray-700 dark:text-gray-300">
+              <input type="checkbox" checked={singleDay} onChange={(e) => setSingleDay(e.target.checked)} />
+              <span>Single day</span>
+            </label>
+            {singleDay && (
+              <>
+                <Button
+                  variant="nav"
+                  size="sm"
+                  onClick={() => stepDay(-1)}
+                  disabled={!navigation?.previous_date}
+                >
+                  Prev Day
+                </Button>
+                <Button
+                  variant="nav"
+                  size="sm"
+                  onClick={() => stepDay(1)}
+                  disabled={!navigation?.next_date}
+                >
+                  Next Day
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="flex flex-wrap items-end gap-3 mb-4">
-        <div className="flex flex-col">
-          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1">Start Date</label>
-          <input
-            type="date"
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            value={startDateInput || ''}
-            onChange={(e) => setStartDateInput(e.target.value)}
-          />
+        <div className="flex flex-wrap items-end gap-3 mb-4">
+          <div className="flex flex-col">
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1">Start Date</label>
+            <input
+              type="date"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              value={startDateInput || ''}
+              onChange={(e) => setStartDateInput(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col">
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1">End Date</label>
+            <input
+              type="date"
+              disabled={singleDay}
+              className={`px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent ${singleDay ? 'opacity-60 cursor-not-allowed' : ''}`}
+              value={endDateInput || ''}
+              onChange={(e) => setEndDateInput(e.target.value)}
+            />
+          </div>
+          <div className="flex-1" />
+          <Button variant="action" size="sm" onClick={handleApply} disabled={!canApply}>
+            Apply
+          </Button>
         </div>
-        <div className="flex flex-col">
-          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1">End Date</label>
-          <input
-            type="date"
-            disabled={singleDay}
-            className={`px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent ${singleDay ? 'opacity-60 cursor-not-allowed' : ''}`}
-            value={endDateInput || ''}
-            onChange={(e) => setEndDateInput(e.target.value)}
-          />
-        </div>
-        <div className="flex-1" />
-        <Button variant="action" size="sm" onClick={handleApply} disabled={!canApply}>
-          Apply
-        </Button>
-      </div>
-      <div className="h-[600px]">
         {chartParams ? (
           <PriceChartWithTrades
             backtestId={backtestId}
@@ -292,17 +305,29 @@ const PriceChartPanel: React.FC<PriceChartPanelProps> = ({
             title={title}
             queryParams={chartParams}
             onNavigationChange={handleNavigationChange}
+            onTradesChange={(list, meta) => {
+              setTrades(list);
+              setTradesMeta(meta);
+            }}
+            onLoadingChange={setTradesLoading}
           />
         ) : (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center py-24">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
               <p className="text-gray-400">Preparing date range…</p>
             </div>
           </div>
         )}
-      </div>
-    </Card>
+      </Card>
+
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100">Trades Overview</h4>
+        </div>
+        <TradeList trades={trades} meta={tradesMeta ?? undefined} isLoading={tradesLoading} />
+      </Card>
+    </div>
   );
 };
 

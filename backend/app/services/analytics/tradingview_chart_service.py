@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from bisect import bisect_left, bisect_right
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from sqlalchemy.orm import Session
@@ -92,6 +92,14 @@ class TradingViewChartService:
                 end_ts=bundle.end_bound,
             )
 
+            trades_list, trades_meta = self._build_trade_records(
+                results,
+                tz=tz,
+                limit=200,
+            )
+            response['trades'] = trades_list
+            response['trades_meta'] = trades_meta
+
         if include_indicators:
             strategy_params = getattr(backtest, 'strategy_params', None)
             response['indicators'] = self._tradingview_builder.build_indicator_series(
@@ -102,6 +110,69 @@ class TradingViewChartService:
             response['indicator_config'] = results.get('indicator_cfg') or []
 
         return self._formatter.sanitize_json(response)
+
+    def _build_trade_records(
+        self,
+        results: Dict[str, Any],
+        *,
+        tz: Optional[str],
+        limit: int,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """Return a trimmed, JSON-safe list of trades for quick inspection."""
+
+        raw_trades = results.get('trades') or results.get('trade_log') or []
+        total_trades = len(raw_trades) if isinstance(raw_trades, list) else 0
+
+        if not total_trades:
+            return [], {
+                'total': 0,
+                'returned': 0,
+                'limit': limit,
+                'has_more': False,
+                'timezone': tz or 'UTC',
+            }
+
+        trades_df = pd.DataFrame(raw_trades)
+        if trades_df.empty:
+            return [], {
+                'total': total_trades,
+                'returned': 0,
+                'limit': limit,
+                'has_more': total_trades > 0,
+                'timezone': tz or 'UTC',
+            }
+
+        df = trades_df.copy()
+
+        entry_col = next((col for col in ('entry_time', 'entry_timestamp', 'entry_at', 'timestamp') if col in df.columns), None)
+        exit_col = next((col for col in ('exit_time', 'exit_timestamp', 'exit_at', 'close_time') if col in df.columns), None)
+
+        if entry_col:
+            df['_entry_ts'] = pd.to_datetime(df[entry_col], errors='coerce')
+            df = df.sort_values(by='_entry_ts', ascending=False, na_position='last')
+        else:
+            df['_entry_ts'] = range(len(df), 0, -1)
+
+        trimmed_df = df.head(limit).copy()
+
+        if entry_col and entry_col in trimmed_df.columns:
+            trimmed_df.loc[:, entry_col] = trimmed_df[entry_col].apply(self._formatter.format_timestamp)
+        if exit_col and exit_col in trimmed_df.columns:
+            trimmed_df.loc[:, exit_col] = trimmed_df[exit_col].apply(self._formatter.format_timestamp)
+
+        trimmed_df = trimmed_df.drop(columns=['_entry_ts'], errors='ignore')
+
+        records = self._formatter.clean_dataframe_for_json(trimmed_df)
+
+        meta = {
+            'total': total_trades,
+            'returned': len(records),
+            'limit': limit,
+            'has_more': total_trades > len(records),
+            'timezone': tz or 'UTC',
+        }
+
+        return records, meta
 
     # ------------------------------------------------------------------
     # Navigation helpers

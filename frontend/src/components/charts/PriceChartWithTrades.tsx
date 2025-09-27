@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { UTCTimestamp } from 'lightweight-charts';
 import TradingViewChart from './TradingViewChart';
 import { BacktestService } from '../../services/backtest';
-import type { CandleData, TradeMarker } from '../../types/chart';
+import type { CandleData, ChartTrade, TradeListMeta, TradeMarker } from '../../types/chart';
 
 export type ChartQueryParams = {
   start?: string | null;
@@ -21,6 +21,8 @@ interface PriceChartWithTradesProps {
   title?: string;
   queryParams: ChartQueryParams | null;
   onNavigationChange?: (navigation: Record<string, any> | null) => void;
+  onTradesChange?: (trades: ChartTrade[], meta: TradeListMeta | null) => void;
+  onLoadingChange?: (loading: boolean) => void;
 }
 
 const PriceChartWithTrades: React.FC<PriceChartWithTradesProps> = ({
@@ -29,6 +31,8 @@ const PriceChartWithTrades: React.FC<PriceChartWithTradesProps> = ({
   title = 'Price + Trades',
   queryParams,
   onNavigationChange,
+  onTradesChange,
+  onLoadingChange,
 }) => {
   const queryKey = useMemo(() => {
     if (!queryParams) {
@@ -75,6 +79,25 @@ const PriceChartWithTrades: React.FC<PriceChartWithTradesProps> = ({
     const nav = (data as any)?.navigation ?? null;
     onNavigationChange(nav);
   }, [data, onNavigationChange]);
+
+  useEffect(() => {
+    if (!onTradesChange) return;
+    if (!data || (data as any)?.success === false) {
+      onTradesChange([], null);
+      return;
+    }
+
+    const trades = Array.isArray((data as any)?.trades)
+      ? ((data as any).trades as ChartTrade[])
+      : [];
+    const meta = ((data as any)?.trades_meta ?? null) as TradeListMeta | null;
+    onTradesChange(trades, meta);
+  }, [data, onTradesChange]);
+
+  useEffect(() => {
+    if (!onLoadingChange) return;
+    onLoadingChange(isLoading);
+  }, [isLoading, onLoadingChange]);
 
   const candleData = useMemo(() => {
     const candles = Array.isArray(data?.candlestick_data) ? (data!.candlestick_data as Array<Record<string, unknown>>) : [];
