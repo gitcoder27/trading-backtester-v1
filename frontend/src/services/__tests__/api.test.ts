@@ -31,6 +31,7 @@ describe('ApiClient', () => {
       const mockResponse = { data: 'test' };
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: { get: vi.fn().mockReturnValue('application/json') },
         json: () => Promise.resolve(mockResponse),
       });
 
@@ -51,6 +52,7 @@ describe('ApiClient', () => {
       const mockResponse = { data: 'test' };
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: { get: vi.fn().mockReturnValue('application/json') },
         json: () => Promise.resolve(mockResponse),
       });
 
@@ -67,6 +69,7 @@ describe('ApiClient', () => {
       const mockResponse = { data: 'test' };
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: { get: vi.fn().mockReturnValue('application/json') },
         json: () => Promise.resolve(mockResponse),
       });
 
@@ -85,6 +88,7 @@ describe('ApiClient', () => {
         ok: false,
         status: 404,
         statusText: 'Not Found',
+        headers: { get: vi.fn().mockReturnValue('application/json') },
         json: () => Promise.resolve({ message: errorMessage }),
       });
 
@@ -105,6 +109,7 @@ describe('ApiClient', () => {
       
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: { get: vi.fn().mockReturnValue('application/json') },
         json: () => Promise.resolve(mockResponse),
       });
 
@@ -128,6 +133,7 @@ describe('ApiClient', () => {
       
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: { get: vi.fn().mockReturnValue('application/json') },
         json: () => Promise.resolve(mockResponse),
       });
 
@@ -149,6 +155,7 @@ describe('ApiClient', () => {
         ok: false,
         status: 400,
         statusText: 'Bad Request',
+        headers: { get: vi.fn().mockReturnValue('application/json') },
         json: () => Promise.resolve({ message: errorMessage }),
       });
 
@@ -163,6 +170,7 @@ describe('ApiClient', () => {
       
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: { get: vi.fn().mockReturnValue('application/json') },
         json: () => Promise.resolve(mockResponse),
       });
 
@@ -188,6 +196,7 @@ describe('ApiClient', () => {
       
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: { get: vi.fn().mockReturnValue('application/json') },
         json: () => Promise.resolve(mockResponse),
       });
 
@@ -234,6 +243,7 @@ describe('ApiClient', () => {
         ok: false,
         status: 413,
         statusText: 'Payload Too Large',
+        headers: { get: vi.fn().mockReturnValue('application/json') },
         json: () => Promise.resolve({ message: errorMessage }),
       });
 
@@ -247,10 +257,13 @@ describe('ApiClient', () => {
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
+        headers: { get: vi.fn().mockReturnValue('application/json') },
         json: () => Promise.reject(new Error('Invalid JSON')),
       });
 
-      await expect(apiClient.get('/test')).rejects.toThrow('HTTP 500: Internal Server Error');
+      await expect(apiClient.get('/test')).rejects.toThrow(
+        '(Failed to parse error body): Internal Server Error'
+      );
     });
 
     it('should handle non-Error exceptions', async () => {

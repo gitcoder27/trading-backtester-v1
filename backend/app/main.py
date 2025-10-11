@@ -3,11 +3,13 @@ FastAPI backend for trading backtester
 Wraps existing backtester framework with web API
 """
 
+import atexit
+import logging
+
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 import uvicorn
-import atexit
 
 from backend.app.api.v1.backtests import router as backtests_router
 from backend.app.api.v1.jobs import router as jobs_router
@@ -20,12 +22,25 @@ from backend.app.tasks.job_runner import shutdown_job_runner
 
 settings = get_settings()
 configure_logging(settings)
+logger = logging.getLogger("backend.app.main")
+
+logger.info("Initializing Trading Backtester API")
+logger.debug(
+    "Runtime configuration: log_level=%s, cors_origins_count=%d, gzip_minimum_size=%d, job_runner_max_workers=%d",
+    settings.log_level,
+    len(settings.cors_origins),
+    settings.gzip_minimum_size,
+    settings.job_runner_max_workers,
+)
+logger.debug("CORS origins: %s", settings.cors_origins)
 
 app = FastAPI(
     title="Trading Backtester API",
     description="High-performance backtesting API for trading strategies",
     version="1.0.0"
 )
+
+logger.info("FastAPI application instantiated")
 
 # Add CORS middleware for frontend integration
 app.add_middleware(
@@ -36,19 +51,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+logger.info("CORS middleware configured with %d origins", len(settings.cors_origins))
+
 # Include routers
-app.include_router(backtests_router)
-app.include_router(jobs_router)
-app.include_router(datasets_router)
-app.include_router(strategies_router)
-app.include_router(analytics_router)
-app.include_router(optimization_router)
+routers = {
+    "backtests": backtests_router,
+    "jobs": jobs_router,
+    "datasets": datasets_router,
+    "strategies": strategies_router,
+    "analytics": analytics_router,
+    "optimization": optimization_router,
+}
+
+for name, router in routers.items():
+    app.include_router(router)
+    logger.info("Router registered: %s (prefix=%s)", name, router.prefix or "/")
 
 # Enable GZip compression for large analytics responses
 app.add_middleware(GZipMiddleware, minimum_size=settings.gzip_minimum_size)
 
+logger.info(
+    "GZip middleware enabled with minimum size %d bytes",
+    settings.gzip_minimum_size,
+)
+
 # Register cleanup on exit
-atexit.register(shutdown_job_runner)
+def _shutdown_job_runner() -> None:
+    logger.info("Job runner shutdown invoked")
+    shutdown_job_runner()
+
+
+atexit.register(_shutdown_job_runner)
+
+
+@app.on_event("startup")
+async def on_startup() -> None:
+    logger.info("Application startup completed")
+
+
+@app.on_event("shutdown")
+async def on_shutdown() -> None:
+    logger.info("Application shutdown initiated")
 
 
 @app.get("/health")
@@ -79,6 +122,7 @@ async def root():
 
 
 if __name__ == "__main__":
+    logger.info("Starting development server on %s:%s (reload=%s)", "0.0.0.0", 8000, True)
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
 
 # Generic OPTIONS handler to satisfy preflight checks in tests without Origin header

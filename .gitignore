@@ -25,6 +25,7 @@ logs
 
 # Python virtual environments
 .venv/
+.venv.bak/
 venv/
 backend/venv/
 

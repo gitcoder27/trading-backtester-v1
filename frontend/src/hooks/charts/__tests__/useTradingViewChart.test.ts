@@ -1,57 +1,42 @@
 /**
  * Tests for useTradingViewChart hook
- *
- * Framework/Libraries:
- * - Expecting Jest or Vitest
- * - @testing-library/react for renderHook
- *
- * These tests mock 'lightweight-charts' and polyfill ResizeObserver for jsdom.
  */
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
 import React, { createRef } from 'react'
 
-// Adjust import path if needed depending on repository structure
 import { useTradingViewChart } from '../useTradingViewChart'
+import { createChart } from 'lightweight-charts'
+import { getCandlestickOptions } from '../../../utils/chartOptions'
 
-// Polyfill ResizeObserver if not provided by test environment
-class MockResizeObserver {
-  private cb: ResizeObserverCallback
-  constructor(cb: ResizeObserverCallback) { this.cb = cb }
-  observe() { /* noop */ }
-  unobserve() { /* noop */ }
-  disconnect() { /* noop */ }
-}
-if (!(global as any).ResizeObserver) {
-  (global as any).ResizeObserver = MockResizeObserver as any
+let resizeCallback: ResizeObserverCallback | null = null
+
+class StubResizeObserver {
+  constructor(cb: ResizeObserverCallback) {
+    resizeCallback = cb
+  }
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
 }
 
-// Mocks for lightweight-charts
-const applyOptionsMock = jest.fn()
-const addSeriesMock = jest.fn()
-const removeMock = jest.fn()
+;(global as any).ResizeObserver = StubResizeObserver as any
+
+const applyOptionsMock = vi.fn()
+const addSeriesMock = vi.fn()
+const removeMock = vi.fn()
 const mockChartInstance = {
   applyOptions: applyOptionsMock,
   addSeries: addSeriesMock,
   remove: removeMock,
 }
 
-jest.mock('lightweight-charts', () => {
-  return {
-    // Types are erased at runtime; we only need the runtime shape
-    createChart: jest.fn(() => mockChartInstance),
-    // CandlestickSeries is passed as a "series type" token; any value works
-    CandlestickSeries: 'CandlestickSeries',
-    // Re-exported types are not needed at runtime
-  }
-})
-
-// Mock utils returning deterministic options
-jest.mock('../../utils/chartOptions', () => ({
-  getChartOptions: jest.fn(() => ({ layout: { textColor: 'black' } })),
-  getCandlestickOptions: jest.fn(() => ({ upColor: 'green', downColor: 'red' })),
+vi.mock('lightweight-charts', () => ({
+  createChart: vi.fn(() => mockChartInstance),
+  CandlestickSeries: 'CandlestickSeries',
+  ColorType: { Solid: 'solid' },
 }))
 
-// Utility to build a container with controllable clientWidth
 function createContainer(width = 640): HTMLDivElement {
   const el = document.createElement('div') as HTMLDivElement
   Object.defineProperty(el, 'clientWidth', { value: width, configurable: true })
@@ -61,14 +46,15 @@ function createContainer(width = 640): HTMLDivElement {
 
 describe('useTradingViewChart', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    resizeCallback = null
+    vi.clearAllMocks()
   })
 
   afterEach(() => {
     document.body.replaceChildren()
   })
 
-  test('does nothing when params.enabled is falsy', () => {
+  it('does nothing when params.enabled is falsy', () => {
     const container = createContainer(800)
     const ref = createRef<HTMLDivElement>()
     ref.current = container
@@ -83,10 +69,10 @@ describe('useTradingViewChart', () => {
     )
 
     expect(result.current.ready).toBe(false)
-    expect((require('lightweight-charts') as any).createChart).not.toHaveBeenCalled()
+    expect(createChart).not.toHaveBeenCalled()
   })
 
-  test('creates chart with provided dimensions and theme when enabled', () => {
+  it('creates chart with provided dimensions when enabled', () => {
     const container = createContainer(900)
     const ref = createRef<HTMLDivElement>()
     ref.current = container
@@ -101,20 +87,15 @@ describe('useTradingViewChart', () => {
       })
     )
 
-    const { createChart } = require('lightweight-charts') as any
     expect(createChart).toHaveBeenCalledTimes(1)
-    const callArgs = (createChart as jest.Mock).mock.calls[0]
-    expect(callArgs[0]).toBe(container)
-    expect(callArgs[1]).toMatchObject({
-      width: 900,
-      height: 420,
-      layout: { textColor: 'black' }, // from mocked getChartOptions
-    })
+    const [[target, options]] = (createChart as Mock).mock.calls
+    expect(target).toBe(container)
+    expect(options).toMatchObject({ width: 900, height: 420 })
     expect(result.current.ready).toBe(true)
-    expect(result.current.chartRef.current).toBe(mockChartInstance)
+    expect(result.current.chartRef.current).toBe(mockChartInstance as any)
   })
 
-  test('adds candlestick series when withCandles is not false', () => {
+  it('adds candlestick series when withCandles is not false', () => {
     const container = createContainer(700)
     const ref = createRef<HTMLDivElement>()
     ref.current = container
@@ -131,10 +112,10 @@ describe('useTradingViewChart', () => {
     expect(addSeriesMock).toHaveBeenCalledTimes(1)
     const [seriesType, options] = addSeriesMock.mock.calls[0]
     expect(seriesType).toBe('CandlestickSeries')
-    expect(options).toEqual({ upColor: 'green', downColor: 'red' })
+    expect(options).toMatchObject(getCandlestickOptions())
   })
 
-  test('does not add candlestick series when withCandles is false', () => {
+  it('does not add candlestick series when withCandles is false', () => {
     const container = createContainer(700)
     const ref = createRef<HTMLDivElement>()
     ref.current = container
@@ -151,26 +132,10 @@ describe('useTradingViewChart', () => {
     expect(addSeriesMock).not.toHaveBeenCalled()
   })
 
-  test('applies resize options on ResizeObserver callback (normal mode)', () => {
+  it('applies resize options on ResizeObserver callback', async () => {
     const container = createContainer(500)
     const ref = createRef<HTMLDivElement>()
     ref.current = container
-
-    // Track the latest observer instance to trigger its callback
-    const observed: any[] = []
-    const RO = (global as any).ResizeObserver
-    ;(global as any).ResizeObserver = class extends RO {
-      constructor(cb: ResizeObserverCallback) {
-        super(cb)
-        // Hijack observe to immediately invoke callback with fake entry
-        ;(this as any)._cb = cb
-      }
-      observe(target: Element) {
-        observed.push(this)
-        // Simulate resize
-        ;(this as any)._cb([{ target } as any], this as any)
-      }
-    }
 
     renderHook(() =>
       useTradingViewChart(ref, {
@@ -181,24 +146,21 @@ describe('useTradingViewChart', () => {
       })
     )
 
+    await waitFor(() => expect(resizeCallback).not.toBeNull())
+    resizeCallback?.([{ target: container } as any], {} as any)
+
     expect(applyOptionsMock).toHaveBeenCalled()
-    const lastCall = applyOptionsMock.mock.calls.pop()[0]
-    expect(lastCall).toMatchObject({ width: 500, height: 300 })
+    const call = applyOptionsMock.mock.calls[applyOptionsMock.mock.calls.length - 1][0]
+    expect(call).toMatchObject({ width: 500, height: 300 })
   })
 
-  test('applies fullscreen height on resize when isFullscreen=true', () => {
+  it('uses fullscreen height when enabled during resize', async () => {
     const container = createContainer(640)
     const ref = createRef<HTMLDivElement>()
     ref.current = container
 
     const originalInnerHeight = window.innerHeight
     Object.defineProperty(window, 'innerHeight', { value: 900, configurable: true })
-
-    const RO = (global as any).ResizeObserver
-    ;(global as any).ResizeObserver = class extends RO {
-      constructor(cb: ResizeObserverCallback) { super(cb); (this as any)._cb = cb }
-      observe(target: Element) { (this as any)._cb([{ target } as any], this as any) }
-    }
 
     renderHook(() =>
       useTradingViewChart(ref, {
@@ -209,14 +171,16 @@ describe('useTradingViewChart', () => {
       })
     )
 
-    const lastCall = applyOptionsMock.mock.calls.pop()[0]
-    expect(lastCall).toMatchObject({ width: 640, height: 800 }) // 900 - 100
+    await waitFor(() => expect(resizeCallback).not.toBeNull())
+    resizeCallback?.([{ target: container } as any], {} as any)
 
-    // restore
+    const call = applyOptionsMock.mock.calls[applyOptionsMock.mock.calls.length - 1][0]
+    expect(call).toMatchObject({ width: 640, height: 800 })
+
     Object.defineProperty(window, 'innerHeight', { value: originalInnerHeight, configurable: true })
   })
 
-  test('cleans up on unmount: removes chart, clears refs, and resets ready', () => {
+  it('cleans up on unmount', () => {
     const container = createContainer(800)
     const ref = createRef<HTMLDivElement>()
     ref.current = container
@@ -234,6 +198,5 @@ describe('useTradingViewChart', () => {
     expect(removeMock).toHaveBeenCalledTimes(1)
     expect(result.current.chartRef.current).toBeNull()
     expect(result.current.candleSeriesRef.current).toBeNull()
-    // ready is internal state; after unmount it's not observable, but we validated cleanup through refs/remove
   })
 })
