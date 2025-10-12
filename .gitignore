@@ -43,7 +43,8 @@ frontend/coverage/
 
 # Data artifacts (avoid committing large/private data)
 data/**/*.csv
-data/market_data/
+!data/market_data/
+!data/market_data/**/*.csv
 
 # Local SQLite databases (dev-only)
 backend/database/*.db

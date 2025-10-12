@@ -10,22 +10,43 @@ import os
 url = 'https://ticks.dhan.co/getData'
 
 # Headers you want to send with the request
+# headers = {
+#     # 'Auth': 'myAuthCode',  # TODO: Replace with your actual Auth code
+#     # 'Authorization': 'myAuthorizeCode',  # TODO: Replace with your actual Authorization code
+#     # 'Bid': 'DHN7897',
+#     # 'Cid': '9999999999',
+#     'Content-Type': 'application/json'
+# }
 headers = {
-    'Auth': 'myAuthCode',  # TODO: Replace with your actual Auth code
-    'Authorization': 'myAuthorizeCode',  # TODO: Replace with your actual Authorization code
-    # 'Bid': 'DHN7897',
-    # 'Cid': '9999999999',
-    'Content-Type': 'application/json'
+    'accept': '*/*',
+    'accept-language': 'en-US,en;q=0.9',
+    'access-control-allow-origin': 'true',
+    'auth': 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpc3MiOiJkaGFuIiwiZXhwIjoxNzYwMzQzMTk2LCJjbGllbnRfaWQiOiIxMTAwNjAyNDQ4In0.zfmhiZGK-Q07rjwMpYJ2MJjPQWpJqDl-BUcuG8pRBOLNSz57x_TxazZyhDUmROxKyCtzkF7YCeVMeJzK8rE_pQ',
+    'authorization': 'gxWP6ogdO1N7uw0Dh3IEKqgKB3Dxz1EH7pOT4Qek7Os+of4poHtMyVpdCQ2zguDHbZx/ZpcbRf27wXWTqCTjGA==',
+    'bid': 'DHN1804',
+    'cid': '1231231231',
+    'content-type': 'application/json',
+    'origin': 'https://tv.dhan.co',
+    'priority': 'u=1, i',
+    'referer': 'https://tv.dhan.co/',
+    'sec-ch-ua': '"Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"',
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"macOS"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-site',
+    'src': 'T',
+    'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
 }
 
 # Start and end dates (modify as needed)
 # format will be yyyy, mm, dd
-start_date = datetime(2021, 1, 1, tzinfo=pytz.timezone('Asia/Kolkata'))
-end_date = datetime(2021, 12, 31, tzinfo=pytz.timezone('Asia/Kolkata'))
+start_date = datetime(2025, 1, 1, tzinfo=pytz.timezone('Asia/Kolkata'))
+end_date = datetime(2025, 12, 31, tzinfo=pytz.timezone('Asia/Kolkata'))
 # end_date = datetime.now(pytz.timezone('Asia/Kolkata')) # fetch todays date
 
 # File location to save the CSV (local 'data' folder)
-file_name = f"nifty_2021_1min_{start_date.strftime('%d%b')}_{end_date.strftime('%d%b')}.csv"
+file_name = f"nifty_2025_1min_{start_date.strftime('%d%b')}_{end_date.strftime('%d%b')}.csv"
 file_path = os.path.join(os.path.dirname(__file__), file_name)
 
 # Initialize empty list to store all data
