@@ -9,14 +9,7 @@ from pandas.testing import assert_frame_equal
 from unittest.mock import Mock
 
 
-# Try common import paths for the service under test
-try:  # most likely
-    from backend.services.chart_payload_service import ChartPayloadService  # type: ignore
-except ImportError:
-    try:
-        from services.chart_payload_service import ChartPayloadService  # type: ignore
-    except ImportError:
-        from chart_payload_service import ChartPayloadService  # type: ignore
+from backend.app.services.analytics.chart_payload_service import ChartPayloadService
 
 
 class DummyBacktest:

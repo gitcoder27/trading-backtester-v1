@@ -6,13 +6,7 @@ import pytest
 # Using pytest with unittest.mock for mocking (preferred per existing repo conventions if present).
 
 # Import target function and model. Adjust module path if needed to match repo structure.
-try:
-    from backend.app.backtest_utils import load_backtest  # common utils location
-except ModuleNotFoundError:
-    try:
-        from backend.app.backtests.utils import load_backtest  # alternative path
-    except ModuleNotFoundError:
-        from backend.tests.test_backtest_utils import load_backtest  # fallback for inline snippet during PR review
+from backend.app.services.analytics.backtest_utils import load_backtest
 
 # Backtest model import for type reference and to pass into session.query assertions.
 try:

@@ -155,14 +155,21 @@ class TradingViewChartService:
 
         trimmed_df = df.head(limit).copy()
 
-        if entry_col and entry_col in trimmed_df.columns:
-            trimmed_df.loc[:, entry_col] = trimmed_df[entry_col].apply(self._formatter.format_timestamp)
-        if exit_col and exit_col in trimmed_df.columns:
-            trimmed_df.loc[:, exit_col] = trimmed_df[exit_col].apply(self._formatter.format_timestamp)
+        formatter = getattr(self, "_formatter", None)
+        format_ts = getattr(formatter, "format_timestamp", None)
+
+        if callable(format_ts):
+            if entry_col and entry_col in trimmed_df.columns:
+                trimmed_df.loc[:, entry_col] = trimmed_df[entry_col].apply(format_ts)
+            if exit_col and exit_col in trimmed_df.columns:
+                trimmed_df.loc[:, exit_col] = trimmed_df[exit_col].apply(format_ts)
 
         trimmed_df = trimmed_df.drop(columns=['_entry_ts'], errors='ignore')
-
-        records = self._formatter.clean_dataframe_for_json(trimmed_df)
+        clean_df = getattr(formatter, "clean_dataframe_for_json", None)
+        if callable(clean_df):
+            records = clean_df(trimmed_df)
+        else:
+            records = trimmed_df.to_dict(orient='records')
 
         meta = {
             'total': total_trades,

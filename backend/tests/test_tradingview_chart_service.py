@@ -8,20 +8,27 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-# Attempt to import the service from common candidate paths.
-# Adjust if project structure differs; tests try multiple paths for resilience.
-try:
-    from backend.services.tradingview_chart_service import TradingViewChartService  # typical location
-except ImportError:
-    from services.tradingview_chart_service import TradingViewChartService     # fallback
+from backend.app.services.analytics.tradingview_chart_service import TradingViewChartService
 
 
 class DummyFormatter:
     def __init__(self):
         self.calls = []
+
     def sanitize_json(self, payload):
         self.calls.append(payload)
         return payload
+
+    @staticmethod
+    def format_timestamp(value):
+        if value is None:
+            return None
+        ts = pd.to_datetime(value, errors="coerce")
+        return ts.isoformat() if ts is not None else None
+
+    @staticmethod
+    def clean_dataframe_for_json(df):
+        return df.to_dict(orient="records")
 
 class DummyBuilder:
     def __init__(self, candles=None, trade_markers=None, indicators=None):
@@ -118,11 +125,11 @@ def _install_dummy_price_data_error(module_under_test_pkg: str):
 def _detect_pkg_root():
     # Infer package root from the imported service module for relative import behavior
     mod = TradingViewChartService.__module__
-    # Expected "backend.services.tradingview_chart_service"
+    # Expected "backend.app.services.analytics.tradingview_chart_service"
     parts = mod.split(".")
     if len(parts) >= 2:
-        return ".".join(parts[:-1])  # backend.services
-    return "backend.services"
+        return ".".join(parts[:-1])
+    return "backend.app.services.analytics"
 
 def test_build_chart_data_success_with_trades_and_indicators(base_candles):
     df = pd.DataFrame({"t": [1, 2, 3]})
