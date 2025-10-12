@@ -11,6 +11,8 @@ const ExecutionSection: React.FC<ExecutionSectionProps> = ({
   config,
   onConfigChange
 }) => {
+  const dailyTargetDisabled = !config.use_daily_profit_target;
+
   return (
     <div className="space-y-6">
       {/* Portfolio Settings */}
@@ -36,16 +38,28 @@ const ExecutionSection: React.FC<ExecutionSectionProps> = ({
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Daily Profit Target
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Daily Profit Target
+              </label>
+              <label className="flex items-center text-xs text-gray-600 dark:text-gray-400">
+                <input
+                  type="checkbox"
+                  checked={config.use_daily_profit_target}
+                  onChange={(e) => onConfigChange('use_daily_profit_target', e.target.checked)}
+                  className="mr-1"
+                />
+                Enable
+              </label>
+            </div>
             <input
               type="number"
               value={config.daily_profit_target}
               onChange={(e) => onConfigChange('daily_profit_target', parseFloat(e.target.value))}
               min={0}
               step={10}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              disabled={dailyTargetDisabled}
+              className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white ${dailyTargetDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
             />
           </div>
         </div>

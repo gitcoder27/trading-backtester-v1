@@ -81,6 +81,7 @@ export interface BacktestConfig {
   position_size: number;
   commission: number;
   slippage: number;
+  use_daily_profit_target?: boolean;
   start_date?: string;
   end_date?: string;
   parameters?: Record<string, any>;

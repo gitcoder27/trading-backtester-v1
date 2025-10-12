@@ -28,6 +28,7 @@ export interface EnhancedBacktestConfig extends BaseBacktestConfig {
   option_price_per_unit: number;
   fee_per_trade: number;
   daily_profit_target: number;
+  use_daily_profit_target: boolean;
   intraday_mode: boolean;
   session_close_time: string;
   // Trading filters

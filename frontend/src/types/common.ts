@@ -57,6 +57,7 @@ export interface UserPreferences {
   default_initial_capital: number;
   default_lot_size: number;
   default_fee_per_trade: number;
+  default_use_daily_profit_target: boolean;
   default_daily_profit_target: number;
   default_option_delta: number;
   default_option_price_per_unit: number;

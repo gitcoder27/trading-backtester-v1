@@ -27,6 +27,7 @@ interface DefaultsFormState {
   default_fee_per_trade: string;
   default_slippage: string;
   default_daily_profit_target: string;
+  default_use_daily_profit_target: boolean;
   default_option_delta: string;
   default_option_price_per_unit: string;
   default_intraday_mode: boolean;
@@ -62,6 +63,7 @@ const SettingsPage: React.FC = () => {
     default_fee_per_trade,
     default_slippage,
     default_daily_profit_target,
+    default_use_daily_profit_target,
     default_option_delta,
     default_option_price_per_unit,
     default_intraday_mode,
@@ -76,6 +78,8 @@ const SettingsPage: React.FC = () => {
     resetToDefaults,
   } = useSettingsStore();
 
+  const effectiveUseDailyProfitTarget = default_use_daily_profit_target ?? true;
+
   const [formState, setFormState] = useState<DefaultsFormState>({
     default_initial_capital: default_initial_capital.toString(),
     default_lot_size: default_lot_size.toString(),
@@ -83,6 +87,7 @@ const SettingsPage: React.FC = () => {
     default_fee_per_trade: default_fee_per_trade.toString(),
     default_slippage: default_slippage.toString(),
     default_daily_profit_target: default_daily_profit_target.toString(),
+    default_use_daily_profit_target: effectiveUseDailyProfitTarget,
     default_option_delta: default_option_delta.toString(),
     default_option_price_per_unit: default_option_price_per_unit.toString(),
     default_intraday_mode: default_intraday_mode,
@@ -107,6 +112,7 @@ const SettingsPage: React.FC = () => {
       default_fee_per_trade: default_fee_per_trade.toString(),
       default_slippage: default_slippage.toString(),
       default_daily_profit_target: default_daily_profit_target.toString(),
+      default_use_daily_profit_target: effectiveUseDailyProfitTarget,
       default_option_delta: default_option_delta.toString(),
       default_option_price_per_unit: default_option_price_per_unit.toString(),
       default_intraday_mode: default_intraday_mode,
@@ -135,6 +141,7 @@ const SettingsPage: React.FC = () => {
     default_end_hour,
     default_apply_weekday_filter,
     default_weekdays,
+    effectiveUseDailyProfitTarget,
   ]);
 
   const handleFieldChange = (field: DefaultsFormField) => (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,6 +155,13 @@ const SettingsPage: React.FC = () => {
     setFormState((prev) => ({
       ...prev,
       default_intraday_mode: checked,
+    }));
+  };
+
+  const handleToggleDailyTarget = (checked: boolean) => {
+    setFormState((prev) => ({
+      ...prev,
+      default_use_daily_profit_target: checked,
     }));
   };
 
@@ -231,6 +245,7 @@ const SettingsPage: React.FC = () => {
       feePerTrade,
       slippage,
       dailyProfit,
+      useDailyProfitTarget: formState.default_use_daily_profit_target,
       optionDelta,
       optionPricePerUnit,
       startHour,
@@ -241,14 +256,14 @@ const SettingsPage: React.FC = () => {
         Number.isNaN(commission) ||
         Number.isNaN(feePerTrade) ||
         Number.isNaN(slippage) ||
-        Number.isNaN(dailyProfit) ||
+        (formState.default_use_daily_profit_target && Number.isNaN(dailyProfit)) ||
         Number.isNaN(optionDelta) ||
         Number.isNaN(optionPricePerUnit) ||
         capital <= 0 ||
         lots <= 0 ||
         optionDelta <= 0 ||
         optionPricePerUnit <= 0 ||
-        dailyProfit < 0 ||
+        (formState.default_use_daily_profit_target && dailyProfit < 0) ||
         feePerTrade < 0 ||
         slippage < 0 ||
         timeFilterInvalid || directionInvalid || weekdayInvalid,
@@ -271,6 +286,7 @@ const SettingsPage: React.FC = () => {
         default_fee_per_trade: parsedDefaults.feePerTrade,
         default_slippage: parsedDefaults.slippage,
         default_daily_profit_target: parsedDefaults.dailyProfit,
+        default_use_daily_profit_target: parsedDefaults.useDailyProfitTarget,
         default_option_delta: parsedDefaults.optionDelta,
         default_option_price_per_unit: parsedDefaults.optionPricePerUnit,
         default_intraday_mode: formState.default_intraday_mode,
@@ -418,15 +434,30 @@ const SettingsPage: React.FC = () => {
             onChange={handleFieldChange('default_commission')}
             helpText={`Current default: ${default_commission}`}
           />
-          <Input
-            label="Daily Profit Target"
-            type="number"
-            min="0"
-            step="1"
-            value={formState.default_daily_profit_target}
-            onChange={handleFieldChange('default_daily_profit_target')}
-            helpText={`Current default: ${default_daily_profit_target}`}
-          />
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="form-label">Daily Profit Target</label>
+              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5"
+                  checked={formState.default_use_daily_profit_target}
+                  onChange={(e) => handleToggleDailyTarget(e.target.checked)}
+                />
+                Enable
+              </label>
+            </div>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={formState.default_daily_profit_target}
+              onChange={handleFieldChange('default_daily_profit_target')}
+              disabled={!formState.default_use_daily_profit_target}
+              className={`input ${!formState.default_use_daily_profit_target ? 'opacity-60 cursor-not-allowed' : ''}`}
+            />
+            <p className="form-help">Current default: {default_daily_profit_target}</p>
+          </div>
         </div>
 
         <div className="mt-6">

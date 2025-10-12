@@ -44,6 +44,7 @@ class ExecutionEngine:
             'fee_per_trade': 4.0,
             'slippage': 0.0,
             'intraday': True,
+            'use_daily_profit_target': True,
             'daily_target': 30.0
         }
     
@@ -211,10 +212,12 @@ class ExecutionEngine:
             'lots': (1, 1000),
             'option_delta': (0.01, 1.0),
             'fee_per_trade': (0.0, 1000.0),
-            'slippage': (0.0, 1.0),
-            'daily_target': (0.0, float('inf'))
+            'slippage': (0.0, 1.0)
         }
         
+        use_daily_target = bool(config.get('use_daily_profit_target', self.default_config['use_daily_profit_target']))
+        validated_config['use_daily_profit_target'] = use_daily_target
+
         for field, (min_val, max_val) in numeric_fields.items():
             value = config.get(field, self.default_config[field])
             try:
@@ -226,6 +229,20 @@ class ExecutionEngine:
                 logger.warning(f"Invalid {field} value: {value}, using default: {self.default_config[field]}")
                 validated_config[field] = self.default_config[field]
         
+        if use_daily_target:
+            daily_value = config.get('daily_target', config.get('daily_profit_target', self.default_config['daily_target']))
+            try:
+                validated_daily = float(daily_value)
+                if validated_daily < 0:
+                    logger.warning(f"daily_target={validated_daily} below minimum 0.0; clamping to 0.0")
+                    validated_daily = 0.0
+                validated_config['daily_target'] = validated_daily
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid daily_target value: {daily_value}, using default: {self.default_config['daily_target']}")
+                validated_config['daily_target'] = self.default_config['daily_target']
+        else:
+            validated_config['daily_target'] = None
+
         # Validate boolean fields
         validated_config['intraday'] = bool(config.get('intraday', self.default_config['intraday']))
         
@@ -248,7 +265,7 @@ class ExecutionEngine:
                 fee_per_trade=config['fee_per_trade'],
                 slippage=config['slippage'],
                 intraday=config['intraday'],
-                daily_profit_target=config['daily_target']
+                daily_profit_target=config['daily_target'] if config.get('use_daily_profit_target', True) else None
             )
             
             logger.debug("Backtest engine created successfully")

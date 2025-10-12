@@ -90,8 +90,14 @@ def test_load_backtest_uses_filter_on_id_once():
     assert kwargs == {}
     # The expression should reference Backtest.id or similar; do a loose string check
     # to avoid coupling to SQLAlchemy internals.
-    expr_repr = repr(args[0])
-    assert 'id' in expr_repr or 'Backtest' in expr_repr
+    expr = args[0]
+    expr_repr = repr(expr)
+    if 'id' not in expr_repr and 'Backtest' not in expr_repr:
+        # SQLAlchemy 2.x binary expressions may not include the column name in repr.
+        # Fall back to inspecting common attributes to ensure the filter targets the id column.
+        column = getattr(expr, 'left', None)
+        column_name = getattr(column, 'name', None) or getattr(column, 'key', None)
+        assert column_name == 'id', f"Unexpected filter expression: {expr_repr}"
 
 def test_error_payloads_are_clean_and_do_not_include_results_or_instance():
     # Missing backtest

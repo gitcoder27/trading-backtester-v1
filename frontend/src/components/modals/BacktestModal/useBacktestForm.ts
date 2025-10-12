@@ -19,6 +19,7 @@ const BASE_CONFIG: EnhancedBacktestConfig = {
   option_price_per_unit: 1.0,
   fee_per_trade: 0.0,
   daily_profit_target: 30.0,
+  use_daily_profit_target: true,
   intraday_mode: true,
   session_close_time: '15:15',
   direction_filter: ['long', 'short'],
@@ -41,6 +42,7 @@ export const useBacktestForm = (
   const defaultFeePerTrade = useSettingsStore((state) => state.default_fee_per_trade);
   const defaultSlippage = useSettingsStore((state) => state.default_slippage);
   const defaultDailyProfitTarget = useSettingsStore((state) => state.default_daily_profit_target);
+  const defaultUseDailyProfitTarget = useSettingsStore((state) => state.default_use_daily_profit_target ?? true);
   const defaultOptionDelta = useSettingsStore((state) => state.default_option_delta);
   const defaultOptionPricePerUnit = useSettingsStore((state) => state.default_option_price_per_unit);
   const defaultIntradayMode = useSettingsStore((state) => state.default_intraday_mode);
@@ -64,6 +66,7 @@ export const useBacktestForm = (
     commission: defaultFeePerTrade,
     slippage: defaultSlippage,
     daily_profit_target: defaultDailyProfitTarget,
+    use_daily_profit_target: defaultUseDailyProfitTarget,
     option_delta: defaultOptionDelta,
     option_price_per_unit: defaultOptionPricePerUnit,
     intraday_mode: defaultIntradayMode,
@@ -80,6 +83,7 @@ export const useBacktestForm = (
     defaultFeePerTrade,
     defaultSlippage,
     defaultDailyProfitTarget,
+    defaultUseDailyProfitTarget,
     defaultOptionDelta,
     defaultOptionPricePerUnit,
     defaultIntradayMode,
@@ -186,12 +190,12 @@ export const useBacktestForm = (
       position_size: config.lots,
       commission: config.fee_per_trade,
       slippage: config.slippage,
+      use_daily_profit_target: config.use_daily_profit_target,
       parameters: {
         ...config.strategy_params,
         // Add enhanced parameters to the parameters object for backend processing
         option_delta: config.option_delta,
         option_price_per_unit: config.option_price_per_unit,
-        daily_profit_target: config.daily_profit_target,
         intraday_mode: config.intraday_mode,
         session_close_time: config.session_close_time,
         direction_filter: config.direction_filter,
@@ -202,6 +206,10 @@ export const useBacktestForm = (
         weekdays: config.weekdays
       }
     };
+
+    if (config.use_daily_profit_target) {
+      baseConfig.parameters!.daily_profit_target = config.daily_profit_target;
+    }
 
     return baseConfig;
   };

@@ -16,7 +16,8 @@ class EngineOptions(BaseModel):
     fee_per_trade: float = Field(default=0.0, description="Fee per trade")
     slippage: float = Field(default=0.0, description="Slippage amount")
     intraday: bool = Field(default=True, description="Enable intraday trading")
-    daily_profit_target: float = Field(default=30.0, description="Daily profit target")
+    use_daily_profit_target: bool = Field(default=True, description="Enable daily profit target override")
+    daily_profit_target: Optional[float] = Field(default=30.0, description="Daily profit target")
 
 
 class BacktestRequest(BaseModel):

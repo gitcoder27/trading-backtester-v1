@@ -37,8 +37,14 @@ async def run_backtest(request: BacktestRequest):
         engine_options = request.engine_options.model_dump() if request.engine_options else {}
         # Bridge naming differences: map daily_profit_target -> daily_target for engine
         try:
-            if 'daily_profit_target' in engine_options and 'daily_target' not in engine_options:
-                engine_options['daily_target'] = engine_options.get('daily_profit_target')
+            use_daily = engine_options.get('use_daily_profit_target', True)
+            if not use_daily:
+                engine_options.pop('daily_target', None)
+                if 'daily_profit_target' in engine_options:
+                    engine_options['daily_profit_target'] = None
+            else:
+                if 'daily_profit_target' in engine_options and 'daily_target' not in engine_options:
+                    engine_options['daily_target'] = engine_options.get('daily_profit_target')
         except Exception:
             pass
         
@@ -119,8 +125,14 @@ async def run_backtest_with_upload(
         try:
             engine_options_dict = json.loads(engine_options)
             # Bridge naming differences for upload as well
-            if 'daily_profit_target' in engine_options_dict and 'daily_target' not in engine_options_dict:
-                engine_options_dict['daily_target'] = engine_options_dict.get('daily_profit_target')
+            use_daily = engine_options_dict.get('use_daily_profit_target', True)
+            if not use_daily:
+                engine_options_dict.pop('daily_target', None)
+                if 'daily_profit_target' in engine_options_dict:
+                    engine_options_dict['daily_profit_target'] = None
+            else:
+                if 'daily_profit_target' in engine_options_dict and 'daily_target' not in engine_options_dict:
+                    engine_options_dict['daily_target'] = engine_options_dict.get('daily_profit_target')
         except json.JSONDecodeError as e:
             raise HTTPException(status_code=400, detail=f"Invalid JSON in engine_options: {e}")
         

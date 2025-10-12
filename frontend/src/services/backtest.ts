@@ -13,6 +13,7 @@ interface EngineOptions {
   fee_per_trade: number;
   slippage: number;
   intraday?: boolean;
+  use_daily_profit_target?: boolean;
   daily_target?: number;
   daily_profit_target?: number;
   option_delta?: number;
@@ -23,6 +24,12 @@ export class BacktestService {
   static async runBacktest(config: BacktestConfig): Promise<BacktestResult> {
     // Map to BacktestRequest schema: strategy, strategy_params, dataset, engine_options
     const p = config.parameters || {};
+    const useDailyTarget = config.use_daily_profit_target ?? true;
+    const rawDailyTarget = (p as any).daily_profit_target;
+    const resolvedDailyTarget =
+      typeof rawDailyTarget === 'number' && Number.isFinite(rawDailyTarget)
+        ? rawDailyTarget
+        : 30.0;
     const engineOptions: EngineOptions = {
       initial_cash: config.initial_capital,
       lots: config.position_size,
@@ -30,11 +37,17 @@ export class BacktestService {
       slippage: config.slippage,
       // Map enhanced params if present
       intraday: (p as any).intraday_mode ?? true,
-      daily_target: (p as any).daily_profit_target ?? 30.0,
-      daily_profit_target: (p as any).daily_profit_target ?? 30.0,
       option_delta: (p as any).option_delta ?? 0.5,
       option_price_per_unit: (p as any).option_price_per_unit ?? 1.0,
     };
+
+    if (useDailyTarget) {
+      engineOptions.use_daily_profit_target = true;
+      engineOptions.daily_target = resolvedDailyTarget;
+      engineOptions.daily_profit_target = resolvedDailyTarget;
+    } else {
+      engineOptions.use_daily_profit_target = false;
+    }
 
     const backtestRequest = {
       strategy: config.strategy_id.toString(),
@@ -66,17 +79,29 @@ export class BacktestService {
     formData.append('file', file);
     
     const p = config.parameters || {};
+    const useDailyTarget = config.use_daily_profit_target ?? true;
+    const rawDailyTarget = (p as any).daily_profit_target;
+    const resolvedDailyTarget =
+      typeof rawDailyTarget === 'number' && Number.isFinite(rawDailyTarget)
+        ? rawDailyTarget
+        : 30.0;
     const engineOptions: EngineOptions = {
       initial_cash: config.initial_capital!,
       lots: config.position_size!,
       fee_per_trade: config.commission || 0,
       slippage: config.slippage || 0,
       intraday: (p as any).intraday_mode ?? true,
-      daily_target: (p as any).daily_profit_target ?? 30.0,
-      daily_profit_target: (p as any).daily_profit_target ?? 30.0,
       option_delta: (p as any).option_delta ?? 0.5,
       option_price_per_unit: (p as any).option_price_per_unit ?? 1.0,
     };
+
+    if (useDailyTarget) {
+      engineOptions.use_daily_profit_target = true;
+      engineOptions.daily_target = resolvedDailyTarget;
+      engineOptions.daily_profit_target = resolvedDailyTarget;
+    } else {
+      engineOptions.use_daily_profit_target = false;
+    }
 
     formData.append('strategy', String(config.strategy_id ?? ''));
     formData.append('strategy_params', JSON.stringify(config.parameters || {}));
@@ -141,17 +166,29 @@ export class BacktestService {
 export class JobService {
   static async submitBackgroundJob(config: BacktestConfig): Promise<Job> {
     // Map to BacktestRequest schema for jobs endpoint
+    const useDailyTarget = config.use_daily_profit_target ?? true;
+    const rawDailyTarget = (config.parameters as any)?.daily_profit_target;
+    const resolvedDailyTarget =
+      typeof rawDailyTarget === 'number' && Number.isFinite(rawDailyTarget)
+        ? rawDailyTarget
+        : 30.0;
     const engineOptions: any = {
       initial_cash: config.initial_capital,
       lots: config.position_size,
       fee_per_trade: config.commission,
       slippage: config.slippage,
       intraday: (config.parameters as any)?.intraday_mode ?? true,
-      daily_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
-      daily_profit_target: (config.parameters as any)?.daily_profit_target ?? 30.0,
       option_delta: (config.parameters as any)?.option_delta ?? 0.5,
       option_price_per_unit: (config.parameters as any)?.option_price_per_unit ?? 1.0,
     };
+
+    if (useDailyTarget) {
+      engineOptions.use_daily_profit_target = true;
+      engineOptions.daily_target = resolvedDailyTarget;
+      engineOptions.daily_profit_target = resolvedDailyTarget;
+    } else {
+      engineOptions.use_daily_profit_target = false;
+    }
 
     const jobRequest = {
       strategy: config.strategy_id.toString(),

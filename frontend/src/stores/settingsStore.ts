@@ -20,6 +20,7 @@ const defaultPreferences: UserPreferences = {
   default_initial_capital: 100000,
   default_lot_size: 1,
   default_fee_per_trade: 0,
+  default_use_daily_profit_target: true,
   default_daily_profit_target: 30,
   default_option_delta: 0.5,
   default_option_price_per_unit: 1,

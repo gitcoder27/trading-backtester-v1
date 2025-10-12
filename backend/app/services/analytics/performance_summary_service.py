@@ -73,11 +73,14 @@ class PerformanceSummaryService:
         ]
 
         if 'daily_target_stats' in missing_sections:
-            try:
-                daily_target = float(engine_config.get('daily_target', 30.0))
-            except Exception:
-                daily_target = 30.0
-            performance_payload['daily_target_stats'] = daily_profit_target_stats(trades, daily_target)
+            use_daily_target = engine_config.get('use_daily_profit_target', True)
+            daily_target_value = engine_config.get('daily_target')
+            if use_daily_target and daily_target_value is not None:
+                try:
+                    daily_target = float(daily_target_value)
+                except Exception:
+                    daily_target = 30.0
+                performance_payload['daily_target_stats'] = daily_profit_target_stats(trades, daily_target)
 
         if 'drawdown_analysis' in missing_sections:
             performance_payload['drawdown_analysis'] = self._risk_calc.compute_drawdown_analysis(equity_curve)
