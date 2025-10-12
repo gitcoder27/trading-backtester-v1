@@ -3,8 +3,9 @@ import { showToast } from '../../ui/Toast';
 import { apiClient } from '../../../services/api';
 import type { EnhancedBacktestConfig, Strategy, Dataset } from './types';
 import type { BacktestConfig as BaseBacktestConfig } from '../../../types';
+import { useSettingsStore } from '../../../stores/settingsStore';
 
-const DEFAULT_CONFIG: EnhancedBacktestConfig = {
+const BASE_CONFIG: EnhancedBacktestConfig = {
   strategy_id: '',
   dataset_id: '',
   initial_capital: 100000,
@@ -35,7 +36,63 @@ export const useBacktestForm = (
 ) => {
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [config, setConfig] = useState<EnhancedBacktestConfig>(DEFAULT_CONFIG);
+  const defaultInitialCapital = useSettingsStore((state) => state.default_initial_capital);
+  const defaultLotSize = useSettingsStore((state) => state.default_lot_size);
+  const defaultFeePerTrade = useSettingsStore((state) => state.default_fee_per_trade);
+  const defaultSlippage = useSettingsStore((state) => state.default_slippage);
+  const defaultDailyProfitTarget = useSettingsStore((state) => state.default_daily_profit_target);
+  const defaultOptionDelta = useSettingsStore((state) => state.default_option_delta);
+  const defaultOptionPricePerUnit = useSettingsStore((state) => state.default_option_price_per_unit);
+  const defaultIntradayMode = useSettingsStore((state) => state.default_intraday_mode);
+  const defaultSessionCloseTime = useSettingsStore((state) => state.default_session_close_time);
+  const defaultDirectionFilter = useSettingsStore((state) => state.default_direction_filter);
+  const defaultApplyTimeFilter = useSettingsStore((state) => state.default_apply_time_filter);
+  const defaultStartHour = useSettingsStore((state) => state.default_start_hour);
+  const defaultEndHour = useSettingsStore((state) => state.default_end_hour);
+  const defaultApplyWeekdayFilter = useSettingsStore((state) => state.default_apply_weekday_filter);
+  const defaultWeekdays = useSettingsStore((state) => state.default_weekdays);
+
+  const buildDefaultConfig = useCallback((): EnhancedBacktestConfig => ({
+    ...BASE_CONFIG,
+    strategy_params: { ...BASE_CONFIG.strategy_params },
+    parameters: { ...BASE_CONFIG.parameters },
+    direction_filter: [...BASE_CONFIG.direction_filter],
+    weekdays: [...BASE_CONFIG.weekdays],
+    initial_capital: defaultInitialCapital,
+    lots: defaultLotSize,
+    fee_per_trade: defaultFeePerTrade,
+    commission: defaultFeePerTrade,
+    slippage: defaultSlippage,
+    daily_profit_target: defaultDailyProfitTarget,
+    option_delta: defaultOptionDelta,
+    option_price_per_unit: defaultOptionPricePerUnit,
+    intraday_mode: defaultIntradayMode,
+    session_close_time: defaultSessionCloseTime,
+    direction_filter: [...defaultDirectionFilter],
+    apply_time_filter: defaultApplyTimeFilter,
+    start_hour: defaultStartHour,
+    end_hour: defaultEndHour,
+    apply_weekday_filter: defaultApplyWeekdayFilter,
+    weekdays: [...defaultWeekdays],
+  }), [
+    defaultInitialCapital,
+    defaultLotSize,
+    defaultFeePerTrade,
+    defaultSlippage,
+    defaultDailyProfitTarget,
+    defaultOptionDelta,
+    defaultOptionPricePerUnit,
+    defaultIntradayMode,
+    defaultSessionCloseTime,
+    defaultDirectionFilter,
+    defaultApplyTimeFilter,
+    defaultStartHour,
+    defaultEndHour,
+    defaultApplyWeekdayFilter,
+    defaultWeekdays,
+  ]);
+
+  const [config, setConfig] = useState<EnhancedBacktestConfig>(() => buildDefaultConfig());
 
   const loadStrategies = useCallback(async () => {
     try {
@@ -80,17 +137,26 @@ export const useBacktestForm = (
   useEffect(() => {
     if (!isOpen) return;
 
-    if (preselectedStrategyId) {
-      setConfig(prev => ({
-        ...prev,
-        strategy_id: preselectedStrategyId.toString(),
-        strategy_params: preselectedParameters || prev.strategy_params
-      }));
-    }
+    setConfig(prev => {
+      const defaults = buildDefaultConfig();
+      return {
+        ...defaults,
+        strategy_id: preselectedStrategyId ? preselectedStrategyId.toString() : defaults.strategy_id,
+        strategy_params: preselectedParameters || defaults.strategy_params,
+        dataset_id: prev.dataset_id || defaults.dataset_id,
+      };
+    });
 
     void loadStrategies();
     void loadDatasets();
-  }, [isOpen, preselectedStrategyId, preselectedParameters, loadStrategies, loadDatasets]);
+  }, [
+    isOpen,
+    preselectedStrategyId,
+    preselectedParameters,
+    buildDefaultConfig,
+    loadStrategies,
+    loadDatasets,
+  ]);
 
   const handleConfigChange = (key: keyof EnhancedBacktestConfig, value: any) => {
     setConfig(prev => ({ ...prev, [key]: value }));
@@ -141,7 +207,7 @@ export const useBacktestForm = (
   };
 
   const resetForm = () => {
-    setConfig(DEFAULT_CONFIG);
+    setConfig(buildDefaultConfig());
   };
 
   return {

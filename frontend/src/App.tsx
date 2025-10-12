@@ -7,6 +7,7 @@ import Datasets from './pages/Datasets/Datasets';
 import Backtests from './pages/Backtests/Backtests';
 import BacktestDetail from './pages/Backtests/BacktestDetail';
 import Analytics from './pages/Analytics/Analytics';
+import SettingsPage from './pages/Settings/Settings';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import ToastProvider from './components/ui/Toast';
 import { useThemeStore } from './stores/themeStore';
@@ -31,6 +32,7 @@ function App() {
           <Route path="/backtests" element={<Backtests />} />
           <Route path="/backtests/:id" element={<BacktestDetail />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </Layout>
       <ToastProvider />

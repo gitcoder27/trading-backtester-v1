@@ -55,6 +55,19 @@ export interface UserPreferences {
   default_commission: number;
   default_slippage: number;
   default_initial_capital: number;
+  default_lot_size: number;
+  default_fee_per_trade: number;
+  default_daily_profit_target: number;
+  default_option_delta: number;
+  default_option_price_per_unit: number;
+  default_intraday_mode: boolean;
+  default_session_close_time: string;
+  default_direction_filter: Array<'long' | 'short'>;
+  default_apply_time_filter: boolean;
+  default_start_hour: number;
+  default_end_hour: number;
+  default_apply_weekday_filter: boolean;
+  default_weekdays: number[];
   chart_preferences: {
     show_trades: boolean;
     show_signals: boolean;

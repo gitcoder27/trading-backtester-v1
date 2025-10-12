@@ -17,6 +17,7 @@ from backend.app.api.v1.datasets import router as datasets_router
 from backend.app.api.v1.strategies import router as strategies_router
 from backend.app.api.v1.analytics import router as analytics_router
 from backend.app.api.v1.optimization import router as optimization_router
+from backend.app.api.v1.admin import router as admin_router
 from backend.app.config import configure_logging, get_settings
 from backend.app.tasks.job_runner import shutdown_job_runner
 
@@ -61,6 +62,7 @@ routers = {
     "strategies": strategies_router,
     "analytics": analytics_router,
     "optimization": optimization_router,
+    "admin": admin_router,
 }
 
 for name, router in routers.items():
