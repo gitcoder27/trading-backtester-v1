@@ -296,6 +296,9 @@ async def list_backtests(
                 ('total_return_pct', cast(func.json_extract(Backtest.results, '$.metrics.total_return_pct'), Float)),
                 ('max_drawdown_pct', cast(func.json_extract(Backtest.results, '$.metrics.max_drawdown_pct'), Float)),
             ]
+            engine_config_extracts = [
+                ('engine_config_lots', cast(func.json_extract(Backtest.results, '$.engine_config.lots'), Float)),
+            ]
 
             query_columns = [
                 Backtest.id.label('id'),
@@ -306,7 +309,7 @@ async def list_backtests(
                 Backtest.status.label('status'),
                 Backtest.created_at.label('created_at'),
                 Backtest.completed_at.label('completed_at'),
-            ] + [expr.label(label) for label, expr in (metric_extracts + alias_extracts)]
+            ] + [expr.label(label) for label, expr in (metric_extracts + alias_extracts + engine_config_extracts)]
 
             rows = (
                 db.query(*query_columns)
@@ -366,7 +369,12 @@ async def list_backtests(
                 if 'max_drawdown_percent' not in metrics_out and max_drawdown_pct_alias is not None:
                     metrics_out['max_drawdown_percent'] = max_drawdown_pct_alias
 
-                backtest_list.append({
+                engine_config_out: Dict[str, Any] = {}
+                lots_value = _coerce_int(getattr(row, 'engine_config_lots', None))
+                if lots_value is not None:
+                    engine_config_out['lots'] = lots_value
+
+                row_data = {
                     "id": row.id,
                     "strategy_name": row.strategy_name,
                     "strategy_params": row.strategy_params,
@@ -376,7 +384,12 @@ async def list_backtests(
                     "created_at": row.created_at.isoformat() if row.created_at else None,
                     "completed_at": row.completed_at.isoformat() if row.completed_at else None,
                     "metrics": metrics_out,
-                })
+                }
+
+                if engine_config_out:
+                    row_data['engine_config'] = engine_config_out
+
+                backtest_list.append(row_data)
 
             return {
                 "total": total_count,

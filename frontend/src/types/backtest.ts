@@ -126,4 +126,5 @@ export interface BacktestDisplay {
   createdAt: string;
   createdAtTs: number;
   duration: string;
+  lots?: number | null;
 }

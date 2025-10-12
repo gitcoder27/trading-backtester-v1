@@ -36,6 +36,37 @@ const mapToDisplay = (bt: any): BacktestDisplay => {
     ? strategyName.split('.').pop() || strategyName
     : strategyName;
 
+  const parseNumeric = (value: unknown): number | null => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+
+  const resolveLots = (): number | null => {
+    const candidates = [
+      bt.engine_config?.lots,
+      bt.results?.engine_config?.lots,
+      bt.execution_info?.engine_config?.lots,
+      bt.engine_options?.lots,
+      bt.strategy_params?.position_size,
+      bt.strategy_params?.lots,
+      bt.position_size,
+      bt.lots,
+    ];
+
+    for (const candidate of candidates) {
+      const parsed = parseNumeric(candidate);
+      if (parsed !== null) {
+        return parsed;
+      }
+    }
+    return null;
+  };
+
   const deriveReturnPercent = (): string => {
     let pct: number | null = null;
     if (typeof metrics.total_return_percent === 'number') {
@@ -86,6 +117,7 @@ const mapToDisplay = (bt: any): BacktestDisplay => {
     createdAt: createdAtDate ? createdAtDate.toLocaleDateString() : '—',
     createdAtTs: createdAtDate ? createdAtDate.getTime() : 0,
     duration: durationDisplay,
+    lots: resolveLots(),
   };
 };
 

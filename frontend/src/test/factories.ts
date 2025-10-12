@@ -21,6 +21,7 @@ export function createBacktestDisplay(overrides: Partial<BacktestDisplay> = {}):
     createdAt: '2024-01-01',
     createdAtTs: 1704067200000,
     duration: '2h 10m',
+    lots: 2,
     ...overrides,
   };
 }

@@ -32,6 +32,12 @@ const BacktestCard: React.FC<Props> = ({ backtest, onView, onDownload, onDelete 
               <span>Backtest: {backtest.id}</span>
               {backtest.jobId && <span>Job: {backtest.jobId}</span>}
               <span>Dataset: {backtest.dataset}</span>
+              <span>
+                Lots:{' '}
+                <span className="font-medium text-gray-700 dark:text-gray-200">
+                  {typeof backtest.lots === 'number' && Number.isFinite(backtest.lots) ? backtest.lots : '—'}
+                </span>
+              </span>
               <span>Created: {backtest.createdAt}</span>
               <span>Duration: {backtest.duration}</span>
             </div>

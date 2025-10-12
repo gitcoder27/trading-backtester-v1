@@ -34,6 +34,32 @@ const Analytics: React.FC = () => {
     return backtestId ? `Backtest #${backtestId}` : 'No Backtest Selected';
   }, [backtest?.strategy_name, backtestId]);
 
+  const lotsUsed = React.useMemo(() => {
+    if (!backtest) return null;
+    const candidates = [
+      (backtest as any)?.engine_config?.lots,
+      (backtest as any)?.results?.engine_config?.lots,
+      (backtest as any)?.execution_info?.engine_config?.lots,
+      (backtest as any)?.engine_options?.lots,
+      (backtest as any)?.strategy_params?.position_size,
+      (backtest as any)?.strategy_params?.lots,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === 'number' && Number.isFinite(candidate)) {
+        return candidate;
+      }
+      if (typeof candidate === 'string') {
+        const parsed = Number(candidate);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+    }
+
+    return null;
+  }, [backtest]);
+
   // status variants centralized in utils/status
 
   const tabs = [
@@ -79,6 +105,13 @@ const Analytics: React.FC = () => {
                   <span className="mx-2 text-gray-400">•</span>
                   <span className="font-normal">Dataset:</span>
                   <span className="ml-1 text-gray-700 dark:text-gray-300">{backtest.dataset_name}</span>
+                </div>
+              )}
+              {lotsUsed !== null && (
+                <div className="hidden lg:flex items-center text-sm text-gray-600 dark:text-gray-400">
+                  <span className="mx-2 text-gray-400">•</span>
+                  <span className="font-normal">Lots:</span>
+                  <span className="ml-1 text-gray-700 dark:text-gray-300">{lotsUsed}</span>
                 </div>
               )}
               {backtest?.status && (
