@@ -27,7 +27,7 @@ const formatDate = (value: unknown) => {
   if (!value) return '—';
   try {
     return new Date(String(value)).toLocaleString();
-  } catch (error) {
+  } catch {
     return String(value);
   }
 };

@@ -3,7 +3,7 @@
  */
 import { renderHook, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest'
-import React, { createRef } from 'react'
+import { createRef } from 'react'
 
 import { useTradingViewChart } from '../useTradingViewChart'
 import { createChart } from 'lightweight-charts'

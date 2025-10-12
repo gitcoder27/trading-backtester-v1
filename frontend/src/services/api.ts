@@ -38,7 +38,7 @@ export class ApiClient {
           } else {
             errorBody = await response.text();
           }
-        } catch (e) {
+        } catch {
           errorBody = `(Failed to parse error body): ${response.statusText}`;
         }
 
@@ -116,7 +116,7 @@ export class ApiClient {
           } else {
             errorBody = await response.text();
           }
-        } catch (e) {
+        } catch {
           errorBody = `(Failed to parse error body): ${response.statusText}`;
         }
 
