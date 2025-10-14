@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, User, Settings } from 'lucide-react';
+import { Menu, User } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
 import Button from '../ui/Button';
 import { ThemeToggle } from '../ui/ThemeToggle';
@@ -32,15 +32,6 @@ const Header: React.FC = () => {
         <div className="flex items-center space-x-3">
           {/* Theme toggle */}
           <ThemeToggle size="sm" />
-
-          {/* Settings */}
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Settings}
-            className="text-slate-300 hover:text-slate-100 hover:bg-slate-800"
-            aria-label="Settings"
-          />
 
           {/* User menu */}
           <div className="flex items-center space-x-2">
