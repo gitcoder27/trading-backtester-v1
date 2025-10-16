@@ -58,8 +58,6 @@ export const useBacktestForm = (
     ...BASE_CONFIG,
     strategy_params: { ...BASE_CONFIG.strategy_params },
     parameters: { ...BASE_CONFIG.parameters },
-    direction_filter: [...BASE_CONFIG.direction_filter],
-    weekdays: [...BASE_CONFIG.weekdays],
     initial_capital: defaultInitialCapital,
     lots: defaultLotSize,
     fee_per_trade: defaultFeePerTrade,
@@ -71,12 +69,16 @@ export const useBacktestForm = (
     option_price_per_unit: defaultOptionPricePerUnit,
     intraday_mode: defaultIntradayMode,
     session_close_time: defaultSessionCloseTime,
-    direction_filter: [...defaultDirectionFilter],
+    direction_filter: Array.isArray(defaultDirectionFilter)
+      ? [...defaultDirectionFilter]
+      : [...BASE_CONFIG.direction_filter],
     apply_time_filter: defaultApplyTimeFilter,
     start_hour: defaultStartHour,
     end_hour: defaultEndHour,
     apply_weekday_filter: defaultApplyWeekdayFilter,
-    weekdays: [...defaultWeekdays],
+    weekdays: Array.isArray(defaultWeekdays)
+      ? [...defaultWeekdays]
+      : [...BASE_CONFIG.weekdays],
   }), [
     defaultInitialCapital,
     defaultLotSize,
